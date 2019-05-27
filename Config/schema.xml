@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<database defaultIdMethod="native" name="thelia" namespace="PayzenEmbedded\Model">
+    <table name="payzen_embedded_customer_token">
+        <column autoIncrement="true" name="id" primaryKey="true" required="true" type="INTEGER" />
+        <column name="payment_token" type="LONGVARCHAR" />
+        <column name="customer_id" required="true" type="INTEGER" />
+
+        <foreign-key foreignTable="customer" name="fk_payzen_embedded_customer_token_customer_id" onDelete="CASCADE" onUpdate="RESTRICT">
+            <reference foreign="id" local="customer_id"/>
+        </foreign-key>
+    </table>
+
+    <external-schema filename="local/config/schema.xml" referenceOnly="true" />
+</database>

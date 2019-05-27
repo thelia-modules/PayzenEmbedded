@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<config xmlns="http://thelia.net/schema/dic/config"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://thelia.net/schema/dic/config http://thelia.net/schema/dic/config/thelia-1.0.xsd">
+
+    <forms>
+        <form name="payzen_embedded.configuration.form" class="PayzenEmbedded\Form\ConfigurationForm" />
+    </forms>
+
+    <hooks>
+        <hook id="payzen_embedded.configuration.back.hook" class="PayzenEmbedded\Hook\BackHookManager">
+            <tag name="hook.event_listener" event="module.configuration" type="back" method="onModuleConfigure" />
+        </hook>
+        <hook id="payzen_embedded.configuration.back.hook" class="PayzenEmbedded\Hook\FrontHookManager">
+            <tag name="hook.event_listener" event="order-payment-gateway.stylesheet" type="front" method="onOrderPaymentGatewayStylesheet" />
+        </hook>
+    </hooks>
+</config>

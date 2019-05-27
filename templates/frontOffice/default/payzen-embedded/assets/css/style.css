@@ -1,0 +1,9 @@
+#payzen-embedded-payment-form {
+        display: flex;
+        justify-content: center;
+        padding: 40px 0;
+}
+
+#payzen-embedded-payment-form .kr-payment-button {
+        background-color: #f49a17 !important;
+}

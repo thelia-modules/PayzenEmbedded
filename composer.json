@@ -1,0 +1,12 @@
+{
+  "name": "your-vendor/payzen-embedded-module",
+  "license": "LGPL-3.0+",
+  "type": "thelia-module",
+  "require": {
+    "thelia/installer": "~1.1",
+    "lyracom/rest-php-sdk": "4.0.*"
+  },
+  "extra": {
+    "installer-name": "PayzenEmbedded"
+  }
+}

@@ -1,0 +1,28 @@
+{extends file="email-layout.tpl"}
+
+{* Open in browser  *}
+{block name="browser"}{/block}
+
+{* No big image header *}
+{block name="image-header"}{/block}
+
+{* No pre-header *}
+{block name="pre-header"}{/block}
+
+{* Subject  *}
+{block name="email-subject"}{intl l="The payment of your order is confirmed" d="payzenembedded.email.default"}{/block}
+
+{* Title  *}
+{block name="email-title"}{intl l="The payment of your order is confirmed" d="payzenembedded.email.default"}{/block}
+
+{* Content  *}
+{block name="email-content"}
+    <p>{intl l='Your invoice is now available <a href="%account_url">in your customer account</a> on %store_name'}
+        account_url={url path="/account"}
+        store_name={config key="store_name"}
+        d="payzenembedded.email.default"}</p>
+
+<p>{intl l="Thank you again for your purchase." d="payzenembedded.email.default"}</p>
+
+<p>{intl l="The %store_name team" store_name={config key="store_name"} d="payzenembedded.email.default"}</p>
+{/block}

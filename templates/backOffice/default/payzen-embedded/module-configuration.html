@@ -1,0 +1,117 @@
+{$_d = 'payzenembedded.bo.default'}
+<div class="row">
+    <div class="col-md-12 general-block-decorator">
+        <div class="row">
+            <div class="col-md-12 title title-without-tabs">
+                {intl d=$_d l="Payzen Configuration"}
+            </div>
+        </div>
+
+        <div class="form-container">
+            <div class="row">
+                <div class="col-md-12">
+                {form name="payzen_embedded.configuration.form"}
+
+                <form action="{url path="/admin/module/payzen-embedded/configure"}" method="post">
+                    {form_hidden_fields}
+
+                    {include file = "includes/inner-form-toolbar.html"
+                        hide_flags = true
+                        page_url   = "{url path='/admin/module/PayzenEmbedded'}"
+                        close_url  = "{url path='/admin/modules'}"
+                    }
+
+                    {if $form_error}
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="alert alert-danger">{$form_error_message}</div>
+                            </div>
+                        </div>
+                    {/if}
+
+                    <div class="row">
+                        <div class="col-md-4">
+                            <p class="title title-without-tabs">{intl d=$_d l="Access to Payzen Platform"}</p>
+
+                            {render_form_field field="site_id"}
+
+                            {render_form_field field="webservice_endpoint"}
+
+                            {render_form_field field="mode"}
+                            {render_form_field field="allowed_ip_list"}
+
+                            <div class="form-group">
+                                <label class="control-label">
+                                    {intl d=$_d l="Return URL in the back-office"}
+                                </label>
+
+                                <div class="well well-sm">{url path='/payzen-embedded/ipn-callback'}</div>
+
+                                <span class="help-block">
+                                    {intl d=$_d l="Copy this URL in the 'URL to notify in TEST mode' and 'URL to notify in PRODUCTION mode' (which must not be mistaken with the 'Return URL of the shop') in 'Notification rules' fields in the PayZen back-office"}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <p class="title title-without-tabs">{intl d=$_d l="Test parameters"}</p>
+
+                            {render_form_field field="test_password"}
+                            {render_form_field field="javascript_test_key"}
+                            {render_form_field field="signature_test_key"}
+
+                            <p class="title title-without-tabs">{intl d=$_d l="Production parameters"}</p>
+
+                            {render_form_field field="production_password"}
+                            {render_form_field field="javascript_production_key"}
+                            {render_form_field field="signature_production_key"}
+
+                        </div>
+
+                        <div class="col-md-4">
+                            <p class="title title-without-tabs">{intl d=$_d l="Payment configuration"}</p>
+
+                            {render_form_field field="allow_one_click_payments"}
+                            {render_form_field field="payment_source"}
+                            {render_form_field field="capture_delay"}
+                            {render_form_field field="validation_mode"}
+                            {render_form_field field="strong_authentication"}
+
+                            <p class="title title-without-tabs">{intl d=$_d l="One time payment"}</p>
+
+                            {custom_render_form_field field="minimum_amount"}
+                                <div class="input-group">
+                                    <input type="number" {form_field_attributes field="minimum_amount"}>
+                                    <span class="input-group-addon">{currency attr='symbol'}</span>
+                                </div>
+                            {/custom_render_form_field}
+
+                            {custom_render_form_field field="maximum_amount"}
+                                <div class="input-group">
+                                    <input type="number" {form_field_attributes field="maximum_amount"}>
+                                    <span class="input-group-addon">{currency attr='symbol'}</span>
+                                </div>
+                            {/custom_render_form_field}
+
+                            <p class="title title-without-tabs">{intl d=$_d l="Email configuration"}</p>
+
+                            {render_form_field field="send_confirmation_message_only_if_paid"}
+                            {render_form_field field="send_payment_confirmation_message"}
+
+                            <div class="well well-sm">
+                                <span class="glyphicon glyphicon-info-sign"></span>
+                                {loop type="message" name="find-message"}
+                                {if $NAME === 'payzen_embedded_payment_confirmation'}
+                                    {intl d=$_d l='You can <a href="%url">edit the payment confirmation email</a> sent to the customer after a successful payment.' url={url path="/admin/configuration/messages/update" message_id=$ID}}
+                                {/if}
+                                {/loop}
+                            </div>
+
+                        </div>
+                    </div>
+                </form>
+                {/form}
+            </div>
+        </div>
+    </div>
+</div>

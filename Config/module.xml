@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module xmlns="http://thelia.net/schema/dic/module"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://thelia.net/schema/dic/module http://thelia.net/schema/dic/module/module-2_2.xsd">
+    <fullnamespace>PayzenEmbedded\PayzenEmbedded</fullnamespace>
+    <descriptive locale="en_US">
+        <title>Pay with the embedded payment form of Payzen or SystemPay</title>
+        <subtitle>Your customers can enter their credit card information without leaving your shop</subtitle>
+    </descriptive>
+    <descriptive locale="fr_FR">
+        <title>Payez avec le formulaire embarqué de Payzen ou SystemPay</title>
+        <subtitle>Vos client saisissent les informations de leur carte de paiement sans sortir de votre boutique.</subtitle>
+    </descriptive>
+
+    <languages>
+        <language>en_US</language>
+        <language>fr_FR</language>
+    </languages>
+    <version>1.0.0</version>
+    <authors>
+        <author>
+            <name>Franck Allimant</name>
+            <company>CQFDev</company>
+            <email>thelia@cqfdev.fr</email>
+            <website>www.cqfdev.fr</website>
+        </author>
+    </authors>
+    <type>payment</type>
+    <thelia>2.3.0</thelia>
+    <stability>prod</stability>
+    <mandatory>0</mandatory>
+    <hidden>0</hidden>
+</module>

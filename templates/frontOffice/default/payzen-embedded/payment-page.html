@@ -1,0 +1,95 @@
+{extends file="layout.tpl"}
+
+{* Security *}
+{block name="no-return-functions" prepend}
+    {check_auth role="CUSTOMER" login_tpl="login"}
+{/block}
+
+{* Body Class *}
+{block name="body-class"}page-order-payment{/block}
+
+{* Breadcrumb *}
+{block name='no-return-functions' append}
+    {$breadcrumbs = [
+    ['title' => {intl l="Cart"}, 'url'=>{url path="/cart"}],
+    ['title' => {intl l="Secure Payment"}, 'url'=>{url path="/order/pay"}]
+    ]}
+{/block}
+
+
+{block name="main-content"}
+    {$dmn = 'payzenembedded.fo.default'}
+    <div class="main">
+        <article class="col-main clearfix" role="main" aria-labelledby="main-label">
+
+            <h1 id="main-label" class="page-header">{intl l="Secure payment"}</h1>
+
+            {include file="misc/checkout-progress.tpl"  step="last"}
+
+            {loop type="order" name="placed-order" id=$order_id}
+                <div id="payment-success" class="panel panel-default">
+                    <div class="panel-heading">
+                        <h3 class="panel-title">{intl l="You choose to pay by"} : <span class="payment-method label label-primary">{loop name="payment-module" type="module" id=$PAYMENT_MODULE}{$TITLE}{/loop}</span></h3>
+                    </div>
+
+                    <div class="panel-body">
+                        {if $cart_count > 0}
+                            {if $success}
+                                {* Display PayZen embedded payment form *}
+                                <div id="payzen-embedded-payment-form" >
+                                    <div class="kr-embedded" kr-form-token="{$form_token}">
+                                        <div class="kr-pan"></div>
+                                        <div class="kr-expiry"></div>
+                                        <div class="kr-security-code"></div>
+
+                                        <button class="kr-payment-button"></button>
+
+                                        <div class="kr-form-error"></div>
+                                    </div>
+                                </div>
+                                <div class="pull-right">
+                                    <a href="{url path="/payzen-embedded/cancel-payment/%order_id" order_id=$order_id}" class="btn btn-default">{intl l="Cancel payment" d=$dmn}</a>
+                                </div>
+                            {else}
+                                {* Display error information *}
+                                <div class="alert alert-danger">
+                                    {intl l="We're sorry, the payment form could not be displayed." d=$dmn}
+                                </div>
+
+                                <h4>{intl l='Error details :' d=$dmn}</h4>
+
+                                <dl class="dl-horizontal">
+                                    <dt>{intl l='Error code' d=$dmn}</dt>
+                                    <dd>{$errorCode}{if $detailedErrorCode}({$detailedErrorCode}){/if}</dd>
+                                    <dt>{intl l='Error message' d=$dmn}</dt>
+                                    <dd>{$errorMessage}{if $detailedErrorMessage}({$detailedErrorMessage}){/if}</dd>
+                                </dl>
+
+                                <p><a href="{url path="/payzen-embedded/cancel-payment/%order_id" order_id=$order_id}" class="btn btn-primary">{intl l="Try again your payment" d=$dmn}</a></p>
+
+                                <p>{intl l='You may also <a href="%url">contact us</a> to get help or more information.' url={url path="/contact"} d=$dmn}</p>
+                            {/if}
+                        {else}
+                            {intl l="Sorry, your cart is empty. There's nothing to pay."}
+                        {/if}
+                    </div>
+                </div>
+            {/loop}
+        </article>
+    </div>
+{/block}
+
+{block name="stylesheet"}
+    <script type="text/javascript"
+            src="https://api.lyra.com/static/js/krypton-client/V4.0/stable/kr-payment-form.min.js"
+            kr-public-key="{$public_key}"
+            kr-post-url-success="{url path="/order/placed/%order_id" order_id=$order_id}"
+            kr-post-url-refused="{url path="/payzen-embedded/cancel-payment/%order_id" order_id=$order_id}"
+            kr-language="{$lang_code|lower}">
+    </script>
+
+    <link rel="stylesheet" href="https://api.lyra.com/static/js/krypton-client/V4.0/ext/classic.css">
+    <script type="text/javascript" src="https://api.lyra.com/static/js/krypton-client/V4.0/ext/classic.js"></script>
+
+    {hook name="order-payment-gateway.stylesheet"}
+{/block}
