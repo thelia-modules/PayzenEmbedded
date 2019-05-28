@@ -8,12 +8,28 @@
         <default key="_controller">PayzenEmbedded\Controller\ConfigurationController::configure</default>
     </route>
 
-    <route id="payzen-embedded.payment.confirmation" path="/payzen-embedded/ipn-callback" methods="post">
-        <default key="_controller">PayzenEmbedded\Controller\PaymentController::processIpn</default>
+    <route id="payzen-embedded.payment.confirmation" path="/payzen-embedded/ipn-callback">
+        <default key="_controller">PayzenEmbedded\Controller\IpnController::processIpn</default>
     </route>
 
     <route id="payzen-embedded.payment.abort" path="/payzen-embedded/cancel-payment/{orderId}">
-        <default key="_controller">PayzenEmbedded\Controller\PaymentController::abortPayment</default>
+        <default key="_controller">PayzenEmbedded\Controller\IpnController::abortPayment</default>
+        <requirement key="orderId">\d+</requirement>
+    </route>
+
+    <route id="payzen-embedded.one-click-payment.success" path="/payzen-embedded/alias-success/{orderId}">
+        <default key="_controller">PayzenEmbedded\Controller\IpnController::notifyOneClickPaymentSuccess</default>
+        <requirement key="orderId">\d+</requirement>
+    </route>
+
+    <route id="payzen-embedded.one-click-payment.failure" path="/payzen-embedded/alias-failure/{orderId}/{message}">
+        <default key="_controller">PayzenEmbedded\Controller\IpnController::notifyOneClickPaymentFailure</default>
+        <requirement key="orderId">\d+</requirement>
+        <requirement key="message">.*</requirement>
+    </route>
+
+    <route id="payzen-embedded.one-click-payment.clear" path="/payzen-embedded/alias-clear">
+        <default key="_controller">PayzenEmbedded\Controller\IpnController::clearCustomerToken</default>
         <requirement key="orderId">\d+</requirement>
     </route>
 </routes>

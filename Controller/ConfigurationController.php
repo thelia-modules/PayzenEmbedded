@@ -18,7 +18,6 @@
  */
 namespace PayzenEmbedded\Controller;
 
-use Payzen\Form\ConfigurationForm;
 use PayzenEmbedded\PayzenEmbedded;
 use Thelia\Controller\Admin\BaseAdminController;
 use Thelia\Core\Security\AccessManager;

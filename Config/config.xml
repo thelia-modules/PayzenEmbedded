@@ -8,12 +8,21 @@
         <form name="payzen_embedded.configuration.form" class="PayzenEmbedded\Form\ConfigurationForm" />
     </forms>
 
+
+    <services>
+        <service id="payzen_embedded.confirmation.email" class="PayzenEmbedded\EventListener\SendConfirmationEmail">
+            <argument type="service" id="mailer"/>
+            <tag name="kernel.event_subscriber"/>
+        </service>
+    </services>
+
     <hooks>
         <hook id="payzen_embedded.configuration.back.hook" class="PayzenEmbedded\Hook\BackHookManager">
             <tag name="hook.event_listener" event="module.configuration" type="back" method="onModuleConfigure" />
         </hook>
-        <hook id="payzen_embedded.configuration.back.hook" class="PayzenEmbedded\Hook\FrontHookManager">
+        <hook id="payzen_embedded.configuration.front.hook" class="PayzenEmbedded\Hook\FrontHookManager">
             <tag name="hook.event_listener" event="order-payment-gateway.stylesheet" type="front" method="onOrderPaymentGatewayStylesheet" />
+            <tag name="hook.event_listener" event="order-invoice.payment-extra" type="front" method="onOrderInvoicePayementExtra" />
         </hook>
     </hooks>
 </config>

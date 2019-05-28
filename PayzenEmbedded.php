@@ -12,15 +12,14 @@
 
 namespace PayzenEmbedded;
 
-use Lyra\Client;
+use PayzenEmbedded\LyraClient\LyraJavascriptClientWrapper;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
 use Propel\Runtime\Connection\ConnectionInterface;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 use Thelia\Core\HttpFoundation\Response;
 use Thelia\Core\Template\ParserInterface;
 use Thelia\Core\Translation\Translator;
 use Thelia\Install\Database;
-use Thelia\Log\Tlog;
-use Thelia\Model\ConfigQuery;
 use Thelia\Model\Lang;
 use Thelia\Model\LangQuery;
 use Thelia\Model\Message;
@@ -41,120 +40,31 @@ class PayzenEmbedded extends AbstractPaymentModule
 
     /**
      * @param Order $order
-     * @return \Thelia\Core\HttpFoundation\Response
+     *
+     * @return \Symfony\Component\HttpFoundation\Response
      * @throws \Lyra\Exceptions\LyraException
      * @throws \Propel\Runtime\Exception\PropelException
      */
     public function pay(Order $order)
     {
-        $currency = $order->getCurrency();
+        return $this->processJavascriptClientPayment($order);
+    }
 
-        $mode = self::getConfigValue('mode', false);
+    /**
+     * Process a payment using the PayZen javascript client
+     *
+     * @param Order $order
+     *
+     * @return \Thelia\Core\HttpFoundation\Response
+     * @throws \Lyra\Exceptions\LyraException
+     * @throws \Propel\Runtime\Exception\PropelException
+     */
+    protected function processJavascriptClientPayment(Order $order)
+    {
+        // Use the embedded javascript client
+        $lyraClient = new LyraJavascriptClientWrapper($this->getDispatcher());
 
-        if ('TEST' == $mode) {
-            $varMode = 'test';
-        } else {
-            $varMode = 'production';
-        }
-
-        try {
-            $lyraClient = new Client();
-
-            $publicKey = self::getConfigValue('javascript_' . $varMode . '_key');
-
-            // Inilialize PayZen client
-            $lyraClient->setUsername(self::getConfigValue('site_id'));
-            $lyraClient->setEndpoint(self::getConfigValue('webservice_endpoint'));
-
-            // Test / Productiuon variable
-            $lyraClient->setPassword(self::getConfigValue($varMode . '_password'));
-            $lyraClient->setPublicKey($publicKey);
-            $lyraClient->setSHA256Key(self::getConfigValue('signature_' . $varMode . '_key'));
-
-            $customer = $order->getCustomer();
-
-            $oneClickAllowed = self::getConfigValue('allow_one_click_payments');
-
-            if ($oneClickAllowed) {
-                $formAction = 'ASK_REGISTER_PAY';
-            } else {
-                $formAction = 'PAYMENT';
-            }
-
-            // Request parameters (see https://payzen.io/en-EN/rest/V4.0/api/playground.html?ws=Charge/CreatePayment)
-            $store = [
-                "amount" => intval(strval($order->getTotalAmount() * 100)),
-                'contrib' => 'Thelia version ' . ConfigQuery::read('thelia_version'),
-                'currency' => strtoupper($currency->getCode()),
-                'orderId' => $order->getId(),
-                'formAction' => $formAction,
-
-                'customer' => [
-                    'email' => $customer->getEmail(),
-                    'reference' => $customer->getRef()
-                ],
-
-                'strongAuthentication' => self::getConfigValue('strong_authentication', 'AUTO'),
-                'ipnTargetUrl' => URL::getInstance()->absoluteUrl('/payzen-embedded/ipn-callback'),
-
-                'transactionOptions' => [
-                    'cardOptions' => [
-                        'captureDelay' => self::getConfigValue('capture_delay', 0),
-                        'manualValidation' => self::getConfigValue('validation_mode', null) ?: null,
-                        'paymentSource' => self::getConfigValue('payment_source', null) ?: null
-                    ]
-                ],
-            ];
-
-            // Add 1-click payment token if we have one, and if it is allowed
-            if ($oneClickAllowed && (null !== $tokenData = PayzenEmbeddedCustomerTokenQuery::create()->findOneByCustomerId($customer->getId()))) {
-                $store['paymentMethodToken'] = $tokenData->getPaymentToken();
-            }
-
-            $response = $lyraClient->post("V4/Charge/CreatePayment", $store);
-
-            if ($response['status'] !== 'SUCCESS') {
-                $error = $response['answer'];
-
-                // Pass the error details and the order ID to the javascript client
-                $resultData = [
-                    'success' => false,
-                    'order_id' => $order->getId(),
-                    'errorCode' => $error['errorCode'],
-                    'errorMessage' => $error['errorMessage'],
-                    'detailedErrorCode' => $error['detailedErrorCode'],
-                    'detailedErrorMessage' => $error['detailedErrorMessage'],
-                ];
-
-                // Log the problem
-                Tlog::getInstance()->error(
-                    "PayZen CreatePayment failed, payement form could not be displayed. Error details : "
-                    . 'errorCode:' . $error['errorCode']
-                    . ', errorMessage:' . $error['errorMessage']
-                    . ', detailedErrorCode:' . $error['detailedErrorCode']
-                    . ', detailedErrorMessage:' . $error['detailedErrorMessage']
-                );
-
-            } else {
-                // Pass the form token and the order ID to the javascript client
-                $resultData = [
-                    'success' => true,
-                    'form_token' => $response["answer"]["formToken"],
-                    'public_key' => $publicKey,
-                    'order_id' => $order->getId()
-                ];
-            }
-        } catch (\Exception $ex) {
-            // Generate an error response.
-            $resultData = [
-                'success' => false,
-                'order_id' => $order->getId(),
-                'errorCode' => '0000',
-                'errorMessage' => $ex->getMessage(),
-                'detailedErrorCode' => '',
-                'detailedErrorMessage' => '',
-            ];
-        }
+        $resultData = $lyraClient->payOrder($order);
 
         /** @var ParserInterface $parser */
         $parser = $this->getContainer()->get("thelia.parser");
@@ -163,12 +73,13 @@ class PayzenEmbedded extends AbstractPaymentModule
             $parser->getTemplateHelper()->getActiveFrontTemplate()
         );
 
+        // Display the payement page which includes teh javascript form.
         $renderedTemplate = $parser->render(
             "payzen-embedded/payment-page.html",
             array_merge(
                 [
-                    "order_id"          => $order->getId(),
-                    "cart_count"        => $this->getRequest()->getSession()->getSessionCart($this->getDispatcher())->getCartItems()->count(),
+                    "order_id"   => $order->getId(),
+                    "cart_count" => $this->getRequest()->getSession()->getSessionCart($this->getDispatcher())->getCartItems()->count(),
                 ],
                 $resultData
             )

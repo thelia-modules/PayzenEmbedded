@@ -18,8 +18,6 @@
  */
 namespace PayzenEmbedded\EventListener;
 
-use Payzen\Model\PayzenConfigQuery;
-use Payzen\Payzen;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -68,10 +66,10 @@ class SendConfirmationEmail extends BaseAction implements EventSubscriberInterfa
     {
         $order = $event->getOrder();
 
-        if ($order->isPaid() && $order->getPaymentModuleId() === Payzen::getModuleId()) {
+        if ($order->isPaid() && $order->getPaymentModuleId() === PayzenEmbedded::getModuleId()) {
             if (PayzenEmbedded::getConfigValue('send_payment_confirmation_message')) {
                 $this->mailer->sendEmailToCustomer(
-                    Payzen::CONFIRMATION_MESSAGE_NAME,
+                    PayzenEmbedded::CONFIRMATION_MESSAGE_NAME,
                     $order->getCustomer(),
                     [
                         'order_id'  => $order->getId(),

@@ -16,6 +16,8 @@
  */
 namespace PayzenEmbedded\Hook;
 
+use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
+use PayzenEmbedded\PayzenEmbedded;
 use Thelia\Core\Event\Hook\HookRenderEvent;
 use Thelia\Core\Hook\BaseHook;
 
@@ -31,5 +33,23 @@ class FrontHookManager extends BaseHook
         $event->add(
             $this->addCSS('payzen-embedded/assets/css/style.css')
         );
+    }
+
+    public function onOrderInvoicePayementExtra(HookRenderEvent $event)
+    {
+        $moduleId = intval($event->getArgument('module'));
+
+        if ($moduleId === PayzenEmbedded::getModuleId()) {
+            // Check if the customer has a registered one click payment
+            $customerId = $this->getSession()->getCustomerUser()->getId();
+
+            if (null !== PayzenEmbeddedCustomerTokenQuery::create()->findOneByCustomerId($customerId)) {
+                $event->add(
+                    $this->render(
+                        'payzen-embedded/one_click-token-info.html'
+                    )
+                );
+            }
+        }
     }
 }
