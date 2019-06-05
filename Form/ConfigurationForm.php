@@ -24,11 +24,6 @@ use Thelia\Form\BaseForm;
  */
 class ConfigurationForm extends BaseForm
 {
-    protected function trans($string, $args = [])
-    {
-        return $this->translator->trans($string, $args);
-    }
-
     protected function buildForm()
     {
         $this->formBuilder
@@ -334,6 +329,11 @@ class ConfigurationForm extends BaseForm
                 ]
             )
         ;
+    }
+
+    protected function trans($string, $args = [])
+    {
+        return $this->translator->trans($string, $args, PayzenEmbedded::DOMAIN_NAME);
     }
 
     public function getName()

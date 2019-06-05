@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<database defaultIdMethod="native" name="thelia" namespace="PayzenEmbedded\Model">
-    <table name="payzen_embedded_customer_token">
+<database defaultIdMethod="native" name="thelia">
+
+    <table name="payzen_embedded_customer_token" namespace="PayzenEmbedded\Model">
         <column autoIncrement="true" name="id" primaryKey="true" required="true" type="INTEGER" />
         <column name="payment_token" type="LONGVARCHAR" />
         <column name="customer_id" required="true" type="INTEGER" />
@@ -8,6 +9,41 @@
         <foreign-key foreignTable="customer" name="fk_payzen_embedded_customer_token_customer_id" onDelete="CASCADE" onUpdate="RESTRICT">
             <reference foreign="id" local="customer_id"/>
         </foreign-key>
+    </table>
+
+    <table name="payzen_embedded_transaction_history" namespace="PayzenEmbedded\Model">
+        <column name="id" type="INTEGER" required="true" primaryKey="true" autoIncrement="true" />
+
+        <column name="customer_id" type="INTEGER" required="true" />
+        <column name="order_id" type="INTEGER" required="false" />
+        <column name="admin_id" type="INTEGER" required="false" />
+
+        <column name="uuid" type="VARCHAR" size="128" />
+        <column name="status" type="VARCHAR" size="10" />
+        <column name="detailedStatus" type="VARCHAR" size="32" />
+        <column name="amount" type="INTEGER" size="11" />
+        <column name="currency_id" type="INTEGER" required="true" />
+        <column name="creationDate" type="TIMESTAMP" />
+        <column name="errorCode" type="VARCHAR" size="10" />
+        <column name="errorMessage" type="VARCHAR" size="255" />
+        <column name="detailedErrorCode" type="VARCHAR" size="10" />
+        <column name="detailedErrorMessage" type="VARCHAR" size="255" />
+        <column name="finished" type="BOOLEAN" required="true" />
+
+        <foreign-key foreignTable="customer" onDelete="RESTRICT" onUpdate="RESTRICT">
+            <reference local="customer_id" foreign="id" />
+        </foreign-key>
+        <foreign-key foreignTable="order" onDelete="RESTRICT" onUpdate="RESTRICT">
+            <reference local="order_id" foreign="id" />
+        </foreign-key>
+        <foreign-key foreignTable="admin" onDelete="RESTRICT" onUpdate="RESTRICT">
+            <reference local="admin_id" foreign="id" />
+        </foreign-key>
+        <foreign-key foreignTable="currency" onDelete="RESTRICT" onUpdate="RESTRICT">
+            <reference local="currency_id" foreign="id" />
+        </foreign-key>
+
+        <behavior name="timestampable" />
     </table>
 
     <external-schema filename="local/config/schema.xml" referenceOnly="true" />

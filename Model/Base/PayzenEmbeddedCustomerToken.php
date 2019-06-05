@@ -6,8 +6,6 @@ use \Exception;
 use \PDO;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery as ChildPayzenEmbeddedCustomerTokenQuery;
 use PayzenEmbedded\Model\Map\PayzenEmbeddedCustomerTokenTableMap;
-use PayzenEmbedded\Model\Thelia\Model\Customer as ChildCustomer;
-use PayzenEmbedded\Model\Thelia\Model\CustomerQuery;
 use Propel\Runtime\Propel;
 use Propel\Runtime\ActiveQuery\Criteria;
 use Propel\Runtime\ActiveQuery\ModelCriteria;
@@ -18,6 +16,8 @@ use Propel\Runtime\Exception\BadMethodCallException;
 use Propel\Runtime\Exception\PropelException;
 use Propel\Runtime\Map\TableMap;
 use Propel\Runtime\Parser\AbstractParser;
+use Thelia\Model\Customer as ChildCustomer;
+use Thelia\Model\CustomerQuery;
 
 abstract class PayzenEmbeddedCustomerToken implements ActiveRecordInterface
 {

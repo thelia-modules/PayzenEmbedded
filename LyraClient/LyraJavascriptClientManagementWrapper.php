@@ -11,7 +11,6 @@
 namespace PayzenEmbedded\LyraClient;
 
 use PayzenEmbedded\PayzenEmbedded;
-use Symfony\Component\Routing\Router;
 use Thelia\Core\HttpKernel\Exception\RedirectException;
 use Thelia\Core\Translation\Translator;
 use Thelia\Log\Tlog;
@@ -25,7 +24,7 @@ use Thelia\Tools\URL;
  * Date: 27/05/2019 17:33
  */
 
-class LyraJavascriptClientWrapper extends LyraCreatePaymentWrapper
+class LyraJavascriptClientManagementWrapper extends LyraPaymentManagementWrapper
 {
     /**
      * Request payment of order.
@@ -34,39 +33,6 @@ class LyraJavascriptClientWrapper extends LyraCreatePaymentWrapper
      * @return array an array containing payment result.
      */
     public function payOrder(Order $order)
-    {
-        try {
-            // Send the payment request
-            $response = $this->sendCreatePayementRequest($order);
-
-            // Process the payment response.
-            $resultData = $this->processCreatePaymentResponse($order, $response);
-        } catch (RedirectException $ex) {
-            throw $ex;
-        } catch (\Exception $ex) {
-            // Generate an error response.
-            $resultData = [
-                'success' => false,
-                'order_id' => $order->getId(),
-                'errorCode' => '0000',
-                'errorMessage' => $ex->getMessage(),
-                'detailedErrorCode' => '',
-                'detailedErrorMessage' => '',
-            ];
-        }
-
-        return $resultData;
-    }
-
-    /**
-     * Process the CreatePayement web service response.
-     *
-     * @param Order $order the current order
-     * @param array $response the CreatePayement response
-     * @return array the result data
-     * @throws \Propel\Runtime\Exception\PropelException
-     */
-    protected function processCreatePaymentResponse(Order $order, array $response)
     {
         $resultData = [
             'success' => false,
@@ -77,8 +43,36 @@ class LyraJavascriptClientWrapper extends LyraCreatePaymentWrapper
             'detailedErrorMessage' => '',
         ];
 
+        try {
+            // Send the payment request
+            $response = $this->sendCreatePayementRequest($order);
+
+            // Process the payment response.
+            $resultData = $this->processCreatePaymentResponse($order, $response, $resultData);
+        } catch (RedirectException $ex) {
+            throw $ex;
+        } catch (\Exception $ex) {
+            // Generate an error response.
+            $resultData['errorCode'] = '0000';
+            $resultData['errorMessage'] = $ex->getMessage();
+        }
+
+        return $resultData;
+    }
+
+    /**
+     * Process the CreatePayement web service response.
+     *
+     * @param Order $order the current order
+     * @param array $response the CreatePayement response
+     * @param array $resultData the result data to be enriched by response data
+     * @return array the result data
+     * @throws \Propel\Runtime\Exception\PropelException
+     */
+    protected function processCreatePaymentResponse(Order $order, array $response, array $resultData)
+    {
         if ($response['status'] === 'SUCCESS') {
-            // This is the Paymenet response (see https://payzen.io/fr-FR/rest/V4.0/api/playground.html?ws=Payment)
+            // This is the Payment response (see https://payzen.io/fr-FR/rest/V4.0/api/playground.html?ws=Payment)
             $answer = $response["answer"];
 
             if (isset($answer["formToken"])) {
@@ -90,11 +84,10 @@ class LyraJavascriptClientWrapper extends LyraCreatePaymentWrapper
             } else {
                 // No form token means a one click payment. A this point, we will redirect the customer either to
                 // the order success or order failure page. Let's decide now !
-
                 $errorMessage = false;
 
                 if ($this->oneClickEnabled) {
-                    // Check if the order is paid or unpaid.
+                    // Check if the order is paid or unpaid, and update order accordingly.
                     $paymentStatus = $this->processPaymentResponse($answer);
 
                     if ($paymentStatus === self::PAYEMENT_STATUS_NOT_PAID) {

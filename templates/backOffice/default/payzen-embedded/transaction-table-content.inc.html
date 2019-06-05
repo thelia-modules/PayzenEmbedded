@@ -1,0 +1,59 @@
+{if $curr_trans != $TRANSACTION_REF}
+    {if $curr_trans !== ''}
+        <tr class="active"><td colspan="99"></td></tr>
+    {/if}
+    {$curr_trans = $TRANSACTION_REF}
+{/if}
+<tr>
+    <td>{$TRANSACTION_REF}</td>
+    <td>
+        {if $ORDER_ID}
+            {loop type="order" name="pz-order" id=$ORDER_ID visible="*" backend_context=true}
+                <a href="{url path="/admin/order/update/%id" id=$ID}">{$REF}</a>
+            {/loop}
+        {else}
+            {intl l='None' d=$dmn}
+        {/if}
+    </td>
+    <td>{format_date date=$CREATION_DATE}</td>
+    <td>{format_date date=$CREATE_DATE}</td>
+    <td>
+        {if $STATUS == 'PAID'}
+            {$mode = 'success'}
+        {elseif $STATUS == 'UNPAID'}
+            {$mode = 'danger'}
+        {else}
+            {$mode = 'info'}
+        {/if}
+        <div class="label label-{$mode}">{$STATUS}</div>
+        {if $DETAILED_STATUS} ({$DETAILED_STATUS}){/if}
+    </td>
+    <td>
+        {loop type="currency" name="cur" id=$CURRENCY_ID}
+        {$symbol = $SYMBOL}
+        {/loop}
+        {format_money number=$AMOUNT/100 symbol=$symbol}
+    </td>
+    <td>
+        {if $ERROR_CODE}
+            {$ERROR_CODE}{if $DETAILED_ERROR_CODE} ({$DETAILED_ERROR_CODE}){/if}
+        {else}
+            <div class="text-center">-</div>
+        {/if}
+    </td>
+    <td>
+        {if $ERROR_MESSAGE}
+            {$ERROR_MESSAGE}{if $DETAILED_ERROR_MESSAGE} ({$DETAILED_ERROR_MESSAGE}){/if}
+        {else}
+            <div class="text-center">-</div>
+        {/if}
+    </td>
+    <td>
+        {if $IS_FINISHED}
+            <div class="label label-success">{intl l='Finished' d=$dmn}</div>
+        {else}
+            <div class="label label-info">{intl l='In progress' d=$dmn}</div>
+        {/if}
+    </td>
+    <td>{$DETAILED_STATUS}</td>
+</tr>

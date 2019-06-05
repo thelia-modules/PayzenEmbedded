@@ -4,10 +4,15 @@
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:schemaLocation="http://thelia.net/schema/dic/config http://thelia.net/schema/dic/config/thelia-1.0.xsd">
 
+    <loops>
+        <loop name="payzen_embedded_history" class="PayzenEmbedded\Loop\TransactionHistoryLoop"/>
+    </loops>
+
     <forms>
         <form name="payzen_embedded.configuration.form" class="PayzenEmbedded\Form\ConfigurationForm" />
+        <form name="payzen_embedded.order-edit.form" class="PayzenEmbedded\Form\TransactionUpdateForm" />
+        <form name="payzen_embedded.get.form" class="PayzenEmbedded\Form\TransactionGetForm" />
     </forms>
-
 
     <services>
         <service id="payzen_embedded.confirmation.email" class="PayzenEmbedded\EventListener\SendConfirmationEmail">
@@ -19,7 +24,10 @@
     <hooks>
         <hook id="payzen_embedded.configuration.back.hook" class="PayzenEmbedded\Hook\BackHookManager">
             <tag name="hook.event_listener" event="module.configuration" type="back" method="onModuleConfigure" />
+            <tag name="hook.event_listener" event="order-edit.bottom" type="back" method="onOrderEditBottom"/>
+            <tag name="hook.event_listener" event="customer-edit.bottom" type="back" method="onCustomerEditBottom"/>
         </hook>
+
         <hook id="payzen_embedded.configuration.front.hook" class="PayzenEmbedded\Hook\FrontHookManager">
             <tag name="hook.event_listener" event="order-payment-gateway.stylesheet" type="front" method="onOrderPaymentGatewayStylesheet" />
             <tag name="hook.event_listener" event="order-invoice.payment-extra" type="front" method="onOrderInvoicePayementExtra" />

@@ -4,11 +4,11 @@
         xsi:schemaLocation="http://thelia.net/schema/dic/module http://thelia.net/schema/dic/module/module-2_2.xsd">
     <fullnamespace>PayzenEmbedded\PayzenEmbedded</fullnamespace>
     <descriptive locale="en_US">
-        <title>Pay with the embedded payment form of Payzen or SystemPay</title>
+        <title>Pay by credit card with PayZen</title>
         <subtitle>Your customers can enter their credit card information without leaving your shop</subtitle>
     </descriptive>
     <descriptive locale="fr_FR">
-        <title>Payez avec le formulaire embarqué de Payzen ou SystemPay</title>
+        <title>Payez par carte bancaire avec PayZen</title>
         <subtitle>Vos client saisissent les informations de leur carte de paiement sans sortir de votre boutique.</subtitle>
     </descriptive>
 

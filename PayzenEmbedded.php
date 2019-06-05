@@ -12,7 +12,7 @@
 
 namespace PayzenEmbedded;
 
-use PayzenEmbedded\LyraClient\LyraJavascriptClientWrapper;
+use PayzenEmbedded\LyraClient\LyraJavascriptClientManagementWrapper;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
 use Propel\Runtime\Connection\ConnectionInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -62,7 +62,7 @@ class PayzenEmbedded extends AbstractPaymentModule
     protected function processJavascriptClientPayment(Order $order)
     {
         // Use the embedded javascript client
-        $lyraClient = new LyraJavascriptClientWrapper($this->getDispatcher());
+        $lyraClient = new LyraJavascriptClientManagementWrapper($this->getDispatcher());
 
         $resultData = $lyraClient->payOrder($order);
 
@@ -194,15 +194,8 @@ class PayzenEmbedded extends AbstractPaymentModule
 
     public function preActivation(ConnectionInterface $con = null)
     {
-        try {
-            PayzenEmbeddedCustomerTokenQuery::create()->findOne();
-
-            // Table is already initialized.
-        } catch (\Exception $ex) {
-            // No table -> create it
-            $database = new Database($con);
-            $database->insertSql(null, array(__DIR__ . '/Config/thelia.sql'));
-        }
+        $database = new Database($con);
+        $database->insertSql(null, array(__DIR__ . '/Config/create.sql'));
 
         return true;
     }

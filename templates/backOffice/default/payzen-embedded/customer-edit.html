@@ -1,0 +1,44 @@
+{$dmn = 'payzenembedded.bo.default'}
+<div id="payzen-embedded">
+    <div class="row">
+        <div class="col-md-12 general-block-decorator">
+            <div class="row">
+                <div class="col-md-12 title title-without-tabs">
+                    {intl l='Customer PayZen transaction history' d=$dmn}
+                </div>
+
+                <div class="col-md-12">
+                    {ifloop rel="transaction-history"}
+                        <table class="table table-condensed table-hover">
+                            <thead>
+                            <tr>
+                                <th>{intl l='Transaction ID' d=$dmn}</th>
+                                <th>{intl l='Order' d=$dmn}</th>
+                                <th>{intl l='Creation date' d=$dmn}</th>
+                                <th>{intl l='Update date' d=$dmn}</th>
+                                <th>{intl l='Status' d=$dmn}</th>
+                                <th>{intl l='Amount' d=$dmn}</th>
+                                <th>{intl l='Error code' d=$dmn}</th>
+                                <th>{intl l='Error message' d=$dmn}</th>
+                                <th>&nbsp;</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {loop type="payzen_embedded_history" name="transaction-history" customer_id=$customer_id order="order_id,created,transaction_ref"}
+                                {include file="payzen-embedded/transaction-table-content.inc.html" scope=parent}
+                            {/loop}
+                            </tbody>
+                        </table>
+                    {/ifloop}
+
+                    {elseloop rel="transaction-history"}
+                        <div class="alert alert-info">
+                            {intl l='There is no transaction history for this customer.' d=$dmn}
+                        </div>
+                    {/elseloop}
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>

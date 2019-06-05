@@ -7,7 +7,6 @@ use \PDO;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerToken as ChildPayzenEmbeddedCustomerToken;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery as ChildPayzenEmbeddedCustomerTokenQuery;
 use PayzenEmbedded\Model\Map\PayzenEmbeddedCustomerTokenTableMap;
-use PayzenEmbedded\Model\Thelia\Model\Customer;
 use Propel\Runtime\Propel;
 use Propel\Runtime\ActiveQuery\Criteria;
 use Propel\Runtime\ActiveQuery\ModelCriteria;
@@ -16,6 +15,7 @@ use Propel\Runtime\Collection\Collection;
 use Propel\Runtime\Collection\ObjectCollection;
 use Propel\Runtime\Connection\ConnectionInterface;
 use Propel\Runtime\Exception\PropelException;
+use Thelia\Model\Customer;
 
 /**
  * Base class that represents a query for the 'payzen_embedded_customer_token' table.
@@ -339,16 +339,16 @@ abstract class PayzenEmbeddedCustomerTokenQuery extends ModelCriteria
     }
 
     /**
-     * Filter the query by a related \PayzenEmbedded\Model\Thelia\Model\Customer object
+     * Filter the query by a related \Thelia\Model\Customer object
      *
-     * @param \PayzenEmbedded\Model\Thelia\Model\Customer|ObjectCollection $customer The related object(s) to use as filter
+     * @param \Thelia\Model\Customer|ObjectCollection $customer The related object(s) to use as filter
      * @param string $comparison Operator to use for the column comparison, defaults to Criteria::EQUAL
      *
      * @return ChildPayzenEmbeddedCustomerTokenQuery The current query, for fluid interface
      */
     public function filterByCustomer($customer, $comparison = null)
     {
-        if ($customer instanceof \PayzenEmbedded\Model\Thelia\Model\Customer) {
+        if ($customer instanceof \Thelia\Model\Customer) {
             return $this
                 ->addUsingAlias(PayzenEmbeddedCustomerTokenTableMap::CUSTOMER_ID, $customer->getId(), $comparison);
         } elseif ($customer instanceof ObjectCollection) {
@@ -359,7 +359,7 @@ abstract class PayzenEmbeddedCustomerTokenQuery extends ModelCriteria
             return $this
                 ->addUsingAlias(PayzenEmbeddedCustomerTokenTableMap::CUSTOMER_ID, $customer->toKeyValue('PrimaryKey', 'Id'), $comparison);
         } else {
-            throw new PropelException('filterByCustomer() only accepts arguments of type \PayzenEmbedded\Model\Thelia\Model\Customer or Collection');
+            throw new PropelException('filterByCustomer() only accepts arguments of type \Thelia\Model\Customer or Collection');
         }
     }
 
@@ -404,13 +404,13 @@ abstract class PayzenEmbeddedCustomerTokenQuery extends ModelCriteria
      *                                   to be used as main alias in the secondary query
      * @param     string $joinType Accepted values are null, 'left join', 'right join', 'inner join'
      *
-     * @return   \PayzenEmbedded\Model\Thelia\Model\CustomerQuery A secondary query class using the current class as primary query
+     * @return   \Thelia\Model\CustomerQuery A secondary query class using the current class as primary query
      */
     public function useCustomerQuery($relationAlias = null, $joinType = Criteria::INNER_JOIN)
     {
         return $this
             ->joinCustomer($relationAlias, $joinType)
-            ->useQuery($relationAlias ? $relationAlias : 'Customer', '\PayzenEmbedded\Model\Thelia\Model\CustomerQuery');
+            ->useQuery($relationAlias ? $relationAlias : 'Customer', '\Thelia\Model\CustomerQuery');
     }
 
     /**

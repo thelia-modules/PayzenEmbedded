@@ -1,0 +1,149 @@
+{$dmn = 'payzenembedded.bo.default'}
+<div id="payzen-embedded">
+    <div class="col-md-12 general-block-decorator">
+        {$finished = false}
+        {$last_transaction_amount = 0}
+
+        <div class="row">
+            <div class="col-md-12 title title-without-tabs">
+                {intl l='PayZen transaction history' d=$dmn}
+            </div>
+
+            <div class="col-md-12">
+                {ifloop rel="transaction-history"}
+                    <table class="table table-condensed table-hover">
+                        <thead>
+                            <tr>
+                                <th>{intl l='Transaction ID' d=$dmn}</th>
+                                <th>{intl l='Creation date' d=$dmn}</th>
+                                <th>{intl l='Update date' d=$dmn}</th>
+                                <th>{intl l='Status' d=$dmn}</th>
+                                <th>{intl l='Amount' d=$dmn}</th>
+                                <th>{intl l='Error code' d=$dmn}</th>
+                                <th>{intl l='Error message' d=$dmn}</th>
+                                <th>&nbsp;</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {loop type="payzen_embedded_history" name="transaction-history" order_id=$order_id}
+                                {$finished = $IS_FINISHED}
+                                {$last_transaction_amount = $AMOUNT / 100}
+
+                                {include file="payzen-embedded/transaction-table-content.inc.html" scope=parent}
+                            {/loop}
+                        </tbody>
+                    </table>
+                {/ifloop}
+
+                {elseloop rel="transaction-history"}
+                    {form name="payzen_embedded.get.form"}
+                        {if $form_error}
+                            <div class="alert alert-danger">{$form_error_message}</div>
+                        {/if}
+
+                        <div class="alert alert-info">
+                            <form method="post" action="{url path="/admin/module/payzen-embedded/refresh-transaction/$order_id"}">
+                                {form_hidden_fields}
+
+                                {form_field field="order_id"}
+                                    <input type="hidden" name="{$name}" value="{$order_id}">
+                                {/form_field}
+
+                                <p>{intl l='There is no history for this transaction.' d=$dmn}</p>
+
+                                <button type="submit" class="btn btn-info">{intl l='Refresh history' d=$dmn}</button>
+                            </form>
+                        </div>
+                    {/form}
+                {/elseloop}
+            </div>
+
+            {ifloop rel="transaction-history"}
+                {if ! $finished}
+                <div class="col-md-12 title title-without-tabs">
+                    {intl l='Update PayZen transaction' d=$dmn}
+                </div>
+                <div class="col-md-12">
+                    <div class="alert alert-info">
+                        {intl l='You can update here the PayZen transaction related to this order. You can change the transaction amount (it should be greater or eaqual to the current amount), define the capture date (the date at which the payment is done), and the validation mode, to change manual validation to automatic validation of the transaction' d=$dmn}
+                    </div>
+                    {loop type="order" name="order" customer="*" id=$order_id}
+                        {form name="payzen_embedded.order-edit.form"}
+                            <form method="post" action="{url path="/admin/module/payzen-embedded/update-transaction/%order_id" order_id=$ID}">
+                                {if $form_error}
+                                    <div class="alert alert-danger">{$form_error_message}</div>
+                                {/if}
+
+                                {form_hidden_fields exclude="order_id"}
+
+                                {form_field field="order_id"}
+                                    <input type="hidden" name="{$name}" value="{$ID}">
+                                {/form_field}
+
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        {loop type="currency" name="cur" id=$CURRENCY}
+                                            {$currency_symbol = $SYMBOL}
+                                        {/loop}
+
+                                        {custom_render_form_field field="amount"}
+                                            <div class="input-group">
+                                                <input type="text" {form_field_attributes field="amount" value=$last_transaction_amount}>
+                                                <span class="input-group-addon">{$currency_symbol}</span>
+                                            </div>
+                                        {/custom_render_form_field}
+                                    </div>
+                                    <div class="col-md-4">
+                                        {$thisYear = {$smarty.now|date_format:'%Y'}}
+                                        {form_field field="capture_date"}
+                                            <div class="row">
+                                                <div class="col-md-12">
+                                                    <label for="{$label_attr.for}">
+                                                        {$label}
+                                                    </label>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <select id="{$label_attr.for}_year" class="form-control" name="{$name}[year]">
+                                                        {for $year = $thisYear to $thisYear+1}
+                                                            <option value="{$year}"{if {$smarty.now|date_format:'%Y'} == $year} selected{/if}>{$year}</option>
+                                                        {/for}
+                                                    </select>
+                                                </div>
+
+                                                <div class="col-md-4">
+                                                    <select id="{$label_attr.for}_month" class="form-control" name="{$name}[month]">
+                                                        {for $month = 1 to 12}
+                                                            <option value="{$month}"{if {$smarty.now|date_format:'%m'} == $month} selected{/if}>{$month}</option>
+                                                        {/for}
+                                                    </select>
+                                                </div>
+
+                                                <div class="col-md-4">
+                                                    <select id="{$label_attr.for}_day" class="form-control" name="{$name}[day]">
+                                                        {for $days = 1 to 31}
+                                                            <option value="{$days}"{if {$smarty.now|date_format:'%d'} == $days} selected{/if}>{$days}</option>
+                                                        {/for}
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <span class="help-block">{$label_attr.help}</span>
+                                        {/form_field}
+                                    </div>
+                                    <div class="col-md-4">
+                                        {render_form_field field="automatic_validation"}
+                                    </div>
+                                </div>
+
+                                <div class="text-right">
+                                    <button type="submit" class="btn btn-primary">{intl l="Update transaction" d=$dmn}</button>
+                                </div>
+                            </form>
+                        {/form}
+                    {/loop}
+                </div>
+            {/if}
+            {/ifloop}
+        </div>
+    </div>
+</div>

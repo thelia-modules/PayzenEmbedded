@@ -4,9 +4,23 @@
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:schemaLocation="http://symfony.com/schema/routing http://symfony.com/schema/routing/routing-1.0.xsd">
 
+    <!-- Back office routes -->
+
     <route id="payzen-embedded.configure" path="/admin/module/payzen-embedded/configure" methods="post">
         <default key="_controller">PayzenEmbedded\Controller\ConfigurationController::configure</default>
     </route>
+
+    <route id="payzen-embedded.order-edit" path="/admin/module/payzen-embedded/update-transaction/{orderId}" methods="post">
+        <default key="_controller">PayzenEmbedded\Controller\OrderEditController::updateTransaction</default>
+        <requirement key="orderId">\d+</requirement>
+    </route>
+
+    <route id="payzen-embedded.refresh-history" path="/admin/module/payzen-embedded/refresh-transaction/{orderId}" methods="post">
+        <default key="_controller">PayzenEmbedded\Controller\OrderEditController::refreshTransaction</default>
+        <requirement key="orderId">\d+</requirement>
+    </route>
+
+    <!-- Front office routes -->
 
     <route id="payzen-embedded.payment.confirmation" path="/payzen-embedded/ipn-callback">
         <default key="_controller">PayzenEmbedded\Controller\IpnController::processIpn</default>

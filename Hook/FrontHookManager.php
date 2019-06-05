@@ -37,18 +37,20 @@ class FrontHookManager extends BaseHook
 
     public function onOrderInvoicePayementExtra(HookRenderEvent $event)
     {
-        $moduleId = intval($event->getArgument('module'));
+        if (boolval(PayzenEmbedded::getConfigValue('allow_one_click_payments'))) {
+            $moduleId = intval($event->getArgument('module'));
 
-        if ($moduleId === PayzenEmbedded::getModuleId()) {
-            // Check if the customer has a registered one click payment
-            $customerId = $this->getSession()->getCustomerUser()->getId();
+            if ($moduleId === PayzenEmbedded::getModuleId()) {
+                // Check if the customer has a registered one click payment
+                $customerId = $this->getSession()->getCustomerUser()->getId();
 
-            if (null !== PayzenEmbeddedCustomerTokenQuery::create()->findOneByCustomerId($customerId)) {
-                $event->add(
-                    $this->render(
-                        'payzen-embedded/one_click-token-info.html'
-                    )
-                );
+                if (null !== PayzenEmbeddedCustomerTokenQuery::create()->findOneByCustomerId($customerId)) {
+                    $event->add(
+                        $this->render(
+                            'payzen-embedded/one_click-token-info.html'
+                        )
+                    );
+                }
             }
         }
     }

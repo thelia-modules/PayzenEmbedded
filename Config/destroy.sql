@@ -4,6 +4,7 @@
 SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS `payzen_embedded_customer_token`;
+DROP TABLE IF EXISTS `payzen_embedded_transaction_history`;
 
 # This restores the fkey checks, after having unset them earlier
 SET FOREIGN_KEY_CHECKS = 1;

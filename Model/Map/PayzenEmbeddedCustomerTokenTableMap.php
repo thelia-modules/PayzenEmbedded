@@ -146,7 +146,7 @@ class PayzenEmbeddedCustomerTokenTableMap extends TableMap
      */
     public function buildRelations()
     {
-        $this->addRelation('Customer', '\\PayzenEmbedded\\Model\\Thelia\\Model\\Customer', RelationMap::MANY_TO_ONE, array('customer_id' => 'id', ), 'CASCADE', 'RESTRICT');
+        $this->addRelation('Customer', '\\Thelia\\Model\\Customer', RelationMap::MANY_TO_ONE, array('customer_id' => 'id', ), 'CASCADE', 'RESTRICT');
     } // buildRelations()
 
     /**
