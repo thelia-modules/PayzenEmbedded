@@ -1,20 +1,23 @@
 {if $curr_trans != $TRANSACTION_REF}
-    {if $curr_trans !== ''}
+    {if ! empty($curr_trans)}
         <tr class="active"><td colspan="99"></td></tr>
     {/if}
     {$curr_trans = $TRANSACTION_REF}
 {/if}
 <tr>
     <td>{$TRANSACTION_REF}</td>
-    <td>
-        {if $ORDER_ID}
-            {loop type="order" name="pz-order" id=$ORDER_ID visible="*" backend_context=true}
-                <a href="{url path="/admin/order/update/%id" id=$ID}">{$REF}</a>
-            {/loop}
-        {else}
-            {intl l='None' d=$dmn}
-        {/if}
-    </td>
+    {if ! $hide_order_ref}
+        <td>
+            {if $ORDER_ID}
+                {loop type="order" name="pz-order" id=$ORDER_ID visible="*" backend_context=true}
+                    <a href="{url path="/admin/order/update/%id" id=$ID}">{$REF}</a>
+                {/loop}
+            {else}
+                {intl l='None' d=$dmn}
+            {/if}
+        </td>
+    {/if}
+
     <td>{format_date date=$CREATION_DATE}</td>
     <td>{format_date date=$CREATE_DATE}</td>
     <td>
