@@ -127,10 +127,10 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         if (isset($response['transactions'])) {
             $orderRef = $response['orderDetails']['orderId'];
 
-            $this->log->addInfo(Translator::getInstance()->trans("Payzen response received for order %ref.", ['%ref' => $orderRef], PayzenEmbedded::DOMAIN_NAME));
+            $this->log->addInfo(Translator::getInstance()->trans("PayZen response received for order %ref.", ['%ref' => $orderRef], PayzenEmbedded::DOMAIN_NAME));
 
             if (null !== $order = $this->getOrderByRef($orderRef)) {
-                $this->processOrderStatus($order, $response['transactions'][0]);
+                $status = $this->processOrderStatus($order, $response['transactions'][0]);
             }
 
             $this->log->info(Translator::getInstance()->trans("PayZen payment response for order %ref processing teminated.", ['%ref' => $orderRef], PayzenEmbedded::DOMAIN_NAME));
@@ -141,8 +141,11 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
 
 
     /**
+     * Process PayZen response and update order status
+     *
      * @param Order $order
      * @param $answer
+     * @return int
      * @throws \Exception
      */
     protected function processOrderStatus(Order $order, $answer)
@@ -161,45 +164,42 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         $this->dispatcher->dispatch(TheliaEvents::ORDER_UPDATE_TRANSACTION_REF, $event);
 
         if ($orderStatus === 'PAID') {
-            if ($order->isPaid()) {
-                $this->log->addInfo(Translator::getInstance()->trans("Order %ref is already paid.", ['%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
-            } else {
-                $this->log->addInfo(Translator::getInstance()->trans("Order %ref payment was successful.", ['%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
+            $this->log->addInfo(Translator::getInstance()->trans("Order %ref payment was successful.", ['%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
 
-                // Payment OK !
-                $this->setOrderStatus($order, OrderStatusQuery::getPaidStatus());
+            // Payment OK !
+            $this->setOrderStatus($order, OrderStatusQuery::getPaidStatus());
 
-                // Check if customer has registered its card for 1-click payment
-                if (isset($transaction['paymentMethodToken']) && !empty($transaction['paymentMethodToken'])) {
-                    if (null === $tokenData = PayzenEmbeddedCustomerTokenQuery::create()->findOneByCustomerId($order->getCustomerId())) {
-                        $tokenData = (new PayzenEmbeddedCustomerToken())
-                            ->setCustomerId($order->getCustomerId());
-                    }
-
-                    // Update customer payment token
-                    $tokenData
-                        ->setPaymentToken($transaction['paymentMethodToken'])
-                        ->save();
-                }
-
-                $status = self::PAYEMENT_STATUS_PAID;
-            }
+            $status = self::PAYEMENT_STATUS_PAID;
         } else if ($orderStatus === 'UNPAID') {
             $this->log->addInfo(Translator::getInstance()->trans("Order %ref payment was not successful.", ['%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
 
-            // Cancel the order (be sure that the status is "not paid")
-            if ($order->getStatusId() !== OrderStatusQuery::getNotPaidStatus()->getId()) {
-                $this->setOrderStatus($order, OrderStatusQuery::getNotPaidStatus());
-            }
-        } else if ($orderStatus === 'RUNNING' || $orderStatus === 'PARTIALLY_PAID') {
+            // Cancel the order
+            $this->setOrderStatus($order, OrderStatusQuery::getCancelledStatus());
+        } else if ($orderStatus === 'RUNNING') {
             $this->log->addInfo(Translator::getInstance()->trans("Order %ref payment is in progress (%status).", ['%status' => $orderStatus, '%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
 
-            // Be sure that the status is "not paid"
-            if ($order->getStatusId() !== OrderStatusQuery::getNotPaidStatus()->getId()) {
-                $this->setOrderStatus($order, OrderStatusQuery::getNotPaidStatus());
-            }
+            // Consider order as paid.
+            $this->setOrderStatus($order, OrderStatusQuery::getPaidStatus());
 
             $status = self::PAYEMENT_STATUS_IN_PROGRESS;
+        } else {
+            // This payment is not supported.
+            $this->log->addInfo(Translator::getInstance()->trans("Order %ref payment is unsupported (%status).", ['%status' => $orderStatus, '%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
+
+            $status = self::PAYEMENT_STATUS_ERROR;
+        }
+
+        // Check if customer has registered its card for 1-click payment
+        if (isset($answer['paymentMethodToken']) && !empty($answer['paymentMethodToken'])) {
+            if (null === $tokenData = PayzenEmbeddedCustomerTokenQuery::create()->findOneByCustomerId($order->getCustomerId())) {
+                $tokenData = (new PayzenEmbeddedCustomerToken())
+                    ->setCustomerId($order->getCustomerId());
+            }
+
+            // Update customer payment token
+            $tokenData
+                ->setPaymentToken($answer['paymentMethodToken'])
+                ->save();
         }
 
         return $status;

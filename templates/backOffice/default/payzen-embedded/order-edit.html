@@ -1,4 +1,4 @@
-{$dmn = 'payzenembedded.bo.default'}
+{$_d = 'payzenembedded.bo.default'}
 <div id="payzen-embedded">
     <div class="col-md-12 general-block-decorator">
         {$finished = false}
@@ -6,7 +6,7 @@
 
         <div class="row">
             <div class="col-md-12 title title-without-tabs">
-                {intl l='PayZen transaction history' d=$dmn}
+                {intl l='PayZen transaction history' d=$_d}
             </div>
 
             <div class="col-md-12">
@@ -14,13 +14,13 @@
                     <table class="table table-condensed table-hover">
                         <thead>
                             <tr>
-                                <th>{intl l='Transaction ID' d=$dmn}</th>
-                                <th>{intl l='Creation date' d=$dmn}</th>
-                                <th>{intl l='Update date' d=$dmn}</th>
-                                <th>{intl l='Status' d=$dmn}</th>
-                                <th>{intl l='Amount' d=$dmn}</th>
-                                <th>{intl l='Error code' d=$dmn}</th>
-                                <th>{intl l='Error message' d=$dmn}</th>
+                                <th>{intl l='Transaction ID' d=$_d}</th>
+                                <th>{intl l='Creation date' d=$_d}</th>
+                                <th>{intl l='Update date' d=$_d}</th>
+                                <th>{intl l='Status' d=$_d}</th>
+                                <th>{intl l='Amount' d=$_d}</th>
+                                <th>{intl l='Error code' d=$_d}</th>
+                                <th>{intl l='Error message' d=$_d}</th>
                                 <th>&nbsp;</th>
                             </tr>
                         </thead>
@@ -50,9 +50,9 @@
                                     <input type="hidden" name="{$name}" value="{$order_id}">
                                 {/form_field}
 
-                                <p>{intl l='There is no history for this transaction.' d=$dmn}</p>
+                                <p>{intl l='There is no history for this transaction.' d=$_d}</p>
 
-                                <button type="submit" class="btn btn-info">{intl l='Refresh history' d=$dmn}</button>
+                                <button type="submit" class="btn btn-info">{intl l='Refresh history' d=$_d}</button>
                             </form>
                         </div>
                     {/form}
@@ -62,11 +62,11 @@
             {ifloop rel="transaction-history"}
                 {if ! $finished}
                 <div class="col-md-12 title title-without-tabs">
-                    {intl l='Update PayZen transaction' d=$dmn}
+                    {intl l='Update PayZen transaction' d=$_d}
                 </div>
                 <div class="col-md-12">
                     <div class="alert alert-info">
-                        {intl l='You can update here the PayZen transaction related to this order. You can change the transaction amount (it should be greater or eaqual to the current amount), define the capture date (the date at which the payment is done), and the validation mode, to change manual validation to automatic validation of the transaction' d=$dmn}
+                        {intl l='You can update here the PayZen transaction related to this order. You can change the transaction amount (it should be greater or eaqual to the current amount), define the capture date (the date at which the payment is done), and the validation mode, to change manual validation to automatic validation of the transaction' d=$_d}
                     </div>
                     {loop type="order" name="order" customer="*" id=$order_id}
                         {form name="payzen_embedded.order-edit.form"}
@@ -137,7 +137,7 @@
                                 </div>
 
                                 <div class="text-right">
-                                    <button type="submit" class="btn btn-primary">{intl l="Update transaction" d=$dmn}</button>
+                                    <button type="submit" class="btn btn-primary">{intl l="Update transaction" d=$_d}</button>
                                 </div>
                             </form>
                         {/form}

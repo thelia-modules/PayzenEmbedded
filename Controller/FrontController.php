@@ -30,13 +30,14 @@ use Thelia\Model\Order;
 use Thelia\Model\OrderQuery;
 use Thelia\Model\OrderStatusQuery;
 use Thelia\Module\BasePaymentModuleController;
+use Thelia\Tools\URL;
 
 /**
  * Payzen payment module
  *
  * @author Franck Allimant <franck@cqfdev.fr>
  */
-class IpnController extends BasePaymentModuleController
+class FrontController extends BasePaymentModuleController
 {
     protected function getModuleCode()
     {
@@ -51,7 +52,7 @@ class IpnController extends BasePaymentModuleController
      */
     public function processIpn()
     {
-        $this->getLog()->info($this->getTranslator()->trans("Starting processing Payzen IPN request", [], PayzenEmbedded::DOMAIN_NAME));
+        $this->getLog()->info($this->getTranslator()->trans("Starting processing PayZen IPN request", [], PayzenEmbedded::DOMAIN_NAME));
 
         // The response code to the server
         $gateway_response_code = 'KO';
@@ -118,9 +119,9 @@ class IpnController extends BasePaymentModuleController
      */
     public function clearCustomerToken()
     {
-        $cutomerId = $this->getSession()->getCustomerUser()->getId();
+        $customerId = $this->getSession()->getCustomerUser()->getId();
 
-        if (null !== $token = PayzenEmbeddedCustomerTokenQuery::create()->findOneByCustomerId($cutomerId)) {
+        if (null !== $token = PayzenEmbeddedCustomerTokenQuery::create()->findOneByCustomerId($customerId)) {
            $token->delete();
         }
 

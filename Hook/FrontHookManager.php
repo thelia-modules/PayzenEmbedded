@@ -18,6 +18,7 @@ namespace PayzenEmbedded\Hook;
 
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
 use PayzenEmbedded\PayzenEmbedded;
+use Thelia\Core\Event\Hook\HookRenderBlockEvent;
 use Thelia\Core\Event\Hook\HookRenderEvent;
 use Thelia\Core\Hook\BaseHook;
 
@@ -52,6 +53,24 @@ class FrontHookManager extends BaseHook
                     );
                 }
             }
+        }
+    }
+
+    public function onAccountAdditional(HookRenderBlockEvent $event)
+    {
+        $content = trim(
+            $this->render(
+            "payzen-embedded/customer-account.html",
+                [ 'customer_id' => $this->getSession()->getCustomerUser()->getId() ]
+            )
+        );
+
+        if (! empty($content)){
+            $event->add(array(
+                "id" => "payzen-one-click",
+                "title" => $this->trans("One click payment with PayZen", [], PayzenEmbedded::DOMAIN_NAME),
+                "content" => $content
+            ));
         }
     }
 }

@@ -13,9 +13,7 @@
 namespace PayzenEmbedded;
 
 use PayzenEmbedded\LyraClient\LyraJavascriptClientManagementWrapper;
-use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
 use Propel\Runtime\Connection\ConnectionInterface;
-use Symfony\Component\HttpFoundation\RedirectResponse;
 use Thelia\Core\HttpFoundation\Response;
 use Thelia\Core\Template\ParserInterface;
 use Thelia\Core\Translation\Translator;
@@ -27,7 +25,6 @@ use Thelia\Model\MessageQuery;
 use Thelia\Model\ModuleImageQuery;
 use Thelia\Model\Order;
 use Thelia\Module\AbstractPaymentModule;
-use Thelia\Tools\URL;
 
 class PayzenEmbedded extends AbstractPaymentModule
 {
@@ -41,27 +38,14 @@ class PayzenEmbedded extends AbstractPaymentModule
     const TRANSACTION_UPDATE_EVENT = "payzenembedded.transaction_update_event";
 
     /**
-     * @param Order $order
-     *
-     * @return \Symfony\Component\HttpFoundation\Response
-     * @throws \Lyra\Exceptions\LyraException
-     * @throws \Propel\Runtime\Exception\PropelException
-     */
-    public function pay(Order $order)
-    {
-        return $this->processJavascriptClientPayment($order);
-    }
-
-    /**
      * Process a payment using the PayZen javascript client
      *
      * @param Order $order
      *
-     * @return \Thelia\Core\HttpFoundation\Response
-     * @throws \Lyra\Exceptions\LyraException
+     * @return \Symfony\Component\HttpFoundation\Response
      * @throws \Propel\Runtime\Exception\PropelException
      */
-    protected function processJavascriptClientPayment(Order $order)
+    public function pay(Order $order)
     {
         // Use the embedded javascript client
         $lyraClient = new LyraJavascriptClientManagementWrapper($this->getDispatcher());
@@ -75,9 +59,9 @@ class PayzenEmbedded extends AbstractPaymentModule
             $parser->getTemplateHelper()->getActiveFrontTemplate()
         );
 
-        // Display the payement page which includes teh javascript form.
+        // Display the payement page which includes the javascript form.
         $renderedTemplate = $parser->render(
-            "payzen-embedded/payment-page.html",
+            "payzen-embedded/embedded-payment-page.html",
             array_merge(
                 [
                     "order_id"   => $order->getId(),

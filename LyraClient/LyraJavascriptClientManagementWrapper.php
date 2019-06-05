@@ -11,6 +11,8 @@
 namespace PayzenEmbedded\LyraClient;
 
 use PayzenEmbedded\PayzenEmbedded;
+use Thelia\Core\Event\Order\OrderEvent;
+use Thelia\Core\Event\TheliaEvents;
 use Thelia\Core\HttpKernel\Exception\RedirectException;
 use Thelia\Core\Translation\Translator;
 use Thelia\Log\Tlog;
@@ -67,7 +69,7 @@ class LyraJavascriptClientManagementWrapper extends LyraPaymentManagementWrapper
      * @param array $response the CreatePayement response
      * @param array $resultData the result data to be enriched by response data
      * @return array the result data
-     * @throws \Propel\Runtime\Exception\PropelException
+     * @throws \Exception
      */
     protected function processCreatePaymentResponse(Order $order, array $response, array $resultData)
     {
@@ -97,20 +99,22 @@ class LyraJavascriptClientManagementWrapper extends LyraPaymentManagementWrapper
                             PayzenEmbedded::DOMAIN_NAME
                         );
                     } elseif ($paymentStatus === self::PAYEMENT_STATUS_IN_PROGRESS) {
-                        // Tell the customer the payment is in progress.
-                        throw new RedirectException(
-                            URL::getInstance()->absoluteUrl("/payzen-embedded/alias-in-progress/" . $order->getId())
+                        // The cart was processed, let's clear it.
+                        $this->dispatcher->dispatch(
+                            TheliaEvents::ORDER_CART_CLEAR,
+                            new OrderEvent($order)
                         );
                     }
                 } else {
                     // Should not happen. Theorically :)
                     $errorMessage = Translator::getInstance()->trans(
-                        "Sorry, the one click payement option is disabled.",
+                        "Sorry, the one click payment option is disabled.",
                         [],
                         PayzenEmbedded::DOMAIN_NAME
                     );
                 }
 
+                // Redirect the customer to the succes or failure page
                 if ($errorMessage) {
                     $redirectUrl = URL::getInstance()->absoluteUrl("/payzen-embedded/alias-failure/" . $order->getId() . '/' . $errorMessage);
                 } else {

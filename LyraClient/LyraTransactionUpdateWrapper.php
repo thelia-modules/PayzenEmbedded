@@ -103,7 +103,7 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
         if (isset($response['answer']['uuid'])) {
             $orderTransaction = $response['answer']['uuid'];
 
-            $this->log->addInfo(Translator::getInstance()->trans("Payzen response received for transaction %ref.", ['%ref' => $orderTransaction], PayzenEmbedded::DOMAIN_NAME));
+            $this->log->addInfo(Translator::getInstance()->trans("PayZen response received for transaction %ref.", ['%ref' => $orderTransaction], PayzenEmbedded::DOMAIN_NAME));
 
             if (null !== $order = $this->getOrderByTransaction($orderTransaction)) {
                 $paymentStatus = $this->processOrderStatus($order, $response['answer']);
@@ -113,7 +113,7 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
         } else {
             throw new TheliaProcessException(
                 Translator::getInstance()->trans(
-                    'Cannnot change transaction. Error is : %message (code %code)',
+                    'Cannot change transaction. Error is : %message (code %code)',
                     [
                         '%code' => isset($response['answer']['errorCode']) ? $response['answer']['errorCode'] : 'undefined error code',
                         '%message' => isset($response['answer']['errorMessage']) ? $response['answer']['errorMessage'] : 'undefined error message',

@@ -20,7 +20,6 @@ namespace PayzenEmbedded\Controller;
 
 use PayzenEmbedded\Event\TransactionUpdateEvent;
 use PayzenEmbedded\LyraClient\LyraTransactionGetWrapper;
-use PayzenEmbedded\LyraClient\LyraTransactionUpdateWrapper;
 use PayzenEmbedded\PayzenEmbedded;
 use Thelia\Controller\Admin\BaseAdminController;
 use Thelia\Core\Security\AccessManager;
@@ -43,7 +42,7 @@ class OrderEditController extends BaseAdminController
             return $response;
         }
 
-        $errorMsg = false;
+        $errorMsg = $ex = false;
 
         // Create the Form from the request
         $updateForm = $this->createForm('payzen_embedded.order-edit.form');
@@ -97,7 +96,7 @@ class OrderEditController extends BaseAdminController
             return $response;
         }
 
-        $errorMsg = false;
+        $errorMsg = $ex = false;
 
         // Create the Form from the request
         $getForm = $this->createForm('payzen_embedded.get.form');

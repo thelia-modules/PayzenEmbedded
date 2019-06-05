@@ -6,6 +6,7 @@
 
     <loops>
         <loop name="payzen_embedded_history" class="PayzenEmbedded\Loop\TransactionHistoryLoop"/>
+        <loop name="payzen_embedded_token" class="PayzenEmbedded\Loop\OneClickPaymentLoop"/>
     </loops>
 
     <forms>
@@ -35,6 +36,7 @@
         <hook id="payzen_embedded.configuration.front.hook" class="PayzenEmbedded\Hook\FrontHookManager">
             <tag name="hook.event_listener" event="order-payment-gateway.stylesheet" type="front" method="onOrderPaymentGatewayStylesheet" />
             <tag name="hook.event_listener" event="order-invoice.payment-extra" type="front" method="onOrderInvoicePayementExtra" />
+            <tag name="hook.event_listener" event="account.additional" type="front" method="onAccountAdditional" />
         </hook>
     </hooks>
 </config>

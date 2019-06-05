@@ -1,10 +1,10 @@
-{$dmn = 'payzenembedded.bo.default'}
+{$_d = 'payzenembedded.bo.default'}
 <div id="payzen-embedded">
     <div class="row">
         <div class="col-md-12 general-block-decorator">
             <div class="row">
                 <div class="col-md-12 title title-without-tabs">
-                    {intl l='Customer PayZen transaction history' d=$dmn}
+                    {intl l='Customer PayZen transaction history' d=$_d}
                 </div>
 
                 <div class="col-md-12">
@@ -12,14 +12,14 @@
                         <table class="table table-condensed table-hover">
                             <thead>
                             <tr>
-                                <th>{intl l='Transaction ID' d=$dmn}</th>
-                                <th>{intl l='Order' d=$dmn}</th>
-                                <th>{intl l='Creation date' d=$dmn}</th>
-                                <th>{intl l='Update date' d=$dmn}</th>
-                                <th>{intl l='Status' d=$dmn}</th>
-                                <th>{intl l='Amount' d=$dmn}</th>
-                                <th>{intl l='Error code' d=$dmn}</th>
-                                <th>{intl l='Error message' d=$dmn}</th>
+                                <th>{intl l='Transaction ID' d=$_d}</th>
+                                <th>{intl l='Order' d=$_d}</th>
+                                <th>{intl l='Creation date' d=$_d}</th>
+                                <th>{intl l='Update date' d=$_d}</th>
+                                <th>{intl l='Status' d=$_d}</th>
+                                <th>{intl l='Amount' d=$_d}</th>
+                                <th>{intl l='Error code' d=$_d}</th>
+                                <th>{intl l='Error message' d=$_d}</th>
                                 <th>&nbsp;</th>
                             </tr>
                             </thead>
@@ -33,7 +33,7 @@
 
                     {elseloop rel="transaction-history"}
                         <div class="alert alert-info">
-                            {intl l='There is no transaction history for this customer.' d=$dmn}
+                            {intl l='There is no transaction history for this customer.' d=$_d}
                         </div>
                     {/elseloop}
                 </div>

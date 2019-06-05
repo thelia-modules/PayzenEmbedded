@@ -1,0 +1,9 @@
+{loop type="payzen_embedded_token" name='has-payment-alias' customer_id=$customer_id}
+    {$_d = 'payzenembedded.fo.default'}
+    <div class="panel-body table-responsive">
+        <p class="fn">{intl l='One click payment is available on our shop when you pay your order with PayZen.' d=$_d}</p>
+        <p>{intl l='Your credit cards details has been registred by PayZen at your request. You no longer have to enter them to pay on our shop.' d=$_d}</p>
+        <p>{intl l='If you want to clear your credit card details, <a href="%url">please click here</a>' url={url path='/payzen-embedded/alias-clear'}  d=$_d}.</p>
+
+    </div>
+{/loop}

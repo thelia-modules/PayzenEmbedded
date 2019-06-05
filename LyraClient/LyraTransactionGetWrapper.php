@@ -11,17 +11,10 @@
 namespace PayzenEmbedded\LyraClient;
 
 use Lyra\Exceptions\LyraException;
-use PayzenEmbedded\Model\PayzenEmbeddedCustomerToken;
-use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
 use PayzenEmbedded\PayzenEmbedded;
-use Symfony\Component\EventDispatcher\EventDispatcherInterface;
-use Thelia\Core\Event\Order\OrderEvent;
-use Thelia\Core\Event\TheliaEvents;
 use Thelia\Core\Translation\Translator;
 use Thelia\Exception\TheliaProcessException;
-use Thelia\Log\Tlog;
 use Thelia\Model\Order;
-use Thelia\Model\OrderStatusQuery;
 
 /**
  * A wrapper around CreatePayment service to manage bith Javascript Client and PCI-DSS calls
@@ -35,6 +28,7 @@ class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
     /**
      * Perform a Get request to get transaction info and store it in the history table
      *
+     * @param Order $order
      * @throws LyraException
      * @throws \Exception
      */
@@ -53,7 +47,6 @@ class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
      * @return array the web service result Common/ResponseCodeAnswer (see https://payzen.io/fr-FR/rest/V4.0/api/playground.html?ws=Common/ResponseCodeAnswer)
      *
      * @throws LyraException
-     * @throws \Propel\Runtime\Exception\PropelException
      */
     public function sendTransactionGetRequest(Order $order)
     {
