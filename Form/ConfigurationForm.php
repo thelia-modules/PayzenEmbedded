@@ -61,7 +61,7 @@ class ConfigurationForm extends BaseForm
                     'constraints' => array(new NotBlank()),
                     'required' => true,
                     'label' => $this->trans('Production password'),
-                    'data' => PayzenEmbedded::getConfigValue('production_password', 'To be generated'),
+                    'data' => PayzenEmbedded::getConfigValue('production_password', $this->trans('To be generated')),
                     'label_attr' => array(
                         'help' => $this->trans('The password used in production. This is the "Production Password" in the PayZen Expert Back Office')
                     )
@@ -88,7 +88,7 @@ class ConfigurationForm extends BaseForm
                     'constraints' => array(new NotBlank()),
                     'required' => true,
                     'label' => $this->trans('Public production key'),
-                    'data' => PayzenEmbedded::getConfigValue('javascript_production_key', 'To be generated'),
+                    'data' => PayzenEmbedded::getConfigValue('javascript_production_key', $this->trans('To be generated')),
                     'label_attr' => array(
                         'help' => $this->trans('This key is the "Public production key" in the PayZen Expert Back Office')
                     )
@@ -115,7 +115,7 @@ class ConfigurationForm extends BaseForm
                     'constraints' => array(new NotBlank()),
                     'required' => true,
                     'label' => $this->trans('Server to server production key'),
-                    'data' => PayzenEmbedded::getConfigValue('signature_production_key', 'To be generated'),
+                    'data' => PayzenEmbedded::getConfigValue('signature_production_key', $this->trans('To be generated')),
                     'label_attr' => array(
                         'help' => $this->trans('This key is the "HMAC-SHA-256 production key" in the PayZen Expert Back Office')
                     )
