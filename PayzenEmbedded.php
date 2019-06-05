@@ -59,7 +59,7 @@ class PayzenEmbedded extends AbstractPaymentModule
             $parser->getTemplateHelper()->getActiveFrontTemplate()
         );
 
-        // Display the payement page which includes the javascript form.
+        // Display the payment page which includes the javascript form.
         $renderedTemplate = $parser->render(
             "payzen-embedded/embedded-payment-page.html",
             array_merge(

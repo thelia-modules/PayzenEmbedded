@@ -117,7 +117,7 @@ class TransactionUpdateEvent extends ActionEvent
     }
 
     /**
-     * The payement status, one of
+     * The payment status, one of
      * @param int $paymentStatus
      * @return $this
      */

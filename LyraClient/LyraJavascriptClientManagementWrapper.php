@@ -78,7 +78,7 @@ class LyraJavascriptClientManagementWrapper extends LyraPaymentManagementWrapper
             $answer = $response["answer"];
 
             if (isset($answer["formToken"])) {
-                // If we have a form token, we have to show the payement form.
+                // If we have a form token, we have to show the payment form.
                 // Pass the form token and the order ID to the javascript client
                 $resultData['success'] = true;
                 $resultData['form_token'] = $answer["formToken"];
@@ -94,7 +94,7 @@ class LyraJavascriptClientManagementWrapper extends LyraPaymentManagementWrapper
 
                     if ($paymentStatus === self::PAYEMENT_STATUS_NOT_PAID) {
                         $errorMessage = Translator::getInstance()->trans(
-                            "Sorry, your one click payement failed.",
+                            "Sorry, your one click payment failed.",
                             [],
                             PayzenEmbedded::DOMAIN_NAME
                         );
@@ -124,7 +124,7 @@ class LyraJavascriptClientManagementWrapper extends LyraPaymentManagementWrapper
                 throw new RedirectException($redirectUrl);
             }
         } else {
-            // We can't display the payement form :(
+            // We can't display the payment form :(
             $error = $response['answer'];
 
             // Pass the error details and the order ID to the payment page.
@@ -135,7 +135,7 @@ class LyraJavascriptClientManagementWrapper extends LyraPaymentManagementWrapper
 
             // Log the problem
             Tlog::getInstance()->error(
-                "PayZen CreatePayment failed, payement form could not be displayed. Error details : "
+                "PayZen CreatePayment failed, payment form could not be displayed. Error details : "
                 . 'errorCode:' . $error['errorCode']
                 . ', errorMessage:' . $error['errorMessage']
                 . ', detailedErrorCode:' . $error['detailedErrorCode']

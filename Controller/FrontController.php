@@ -129,7 +129,7 @@ class FrontController extends BasePaymentModuleController
     }
 
     /**
-     * Cancel an order
+     * Cancel an order on user request
      *
      * @param $orderId
      * @return \Symfony\Component\HttpFoundation\Response
@@ -151,7 +151,7 @@ class FrontController extends BasePaymentModuleController
             }
         }
 
-        $message = $this->getTranslator()->trans("Your payment was refused", [], PayzenEmbedded::DOMAIN_NAME);
+        $message = $this->getTranslator()->trans("You canceled the payment", [], PayzenEmbedded::DOMAIN_NAME);
 
         return $this->redirectToFailurePage($orderId, $message);
     }
