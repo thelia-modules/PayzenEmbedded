@@ -21,12 +21,11 @@ namespace PayzenEmbedded\EventListener;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
-use Thelia\Action\BaseAction;
 use Thelia\Core\Event\Order\OrderEvent;
 use Thelia\Core\Event\TheliaEvents;
 use Thelia\Mailer\MailerFactory;
 
-class SendConfirmationEmail extends BaseAction implements EventSubscriberInterface
+class SendConfirmationEmail implements EventSubscriberInterface
 {
     /** @var MailerFactory */
     protected $mailer;
@@ -34,6 +33,14 @@ class SendConfirmationEmail extends BaseAction implements EventSubscriberInterfa
     public function __construct(MailerFactory $mailer)
     {
         $this->mailer = $mailer;
+    }
+
+    public static function getSubscribedEvents()
+    {
+        return array(
+            TheliaEvents::ORDER_UPDATE_STATUS           => array("updateStatus", 128),
+            TheliaEvents::ORDER_SEND_CONFIRMATION_EMAIL => array("sendConfirmationEmail", 129)
+        );
     }
 
     /**
@@ -83,13 +90,5 @@ class SendConfirmationEmail extends BaseAction implements EventSubscriberInterfa
                 $dispatcher->dispatch(TheliaEvents::ORDER_SEND_CONFIRMATION_EMAIL, $event);
             }
         }
-    }
-
-    public static function getSubscribedEvents()
-    {
-        return array(
-            TheliaEvents::ORDER_UPDATE_STATUS           => array("updateStatus", 128),
-            TheliaEvents::ORDER_SEND_CONFIRMATION_EMAIL => array("sendConfirmationEmail", 129)
-        );
     }
 }

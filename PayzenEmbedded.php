@@ -33,10 +33,12 @@ class PayzenEmbedded extends AbstractPaymentModule
 {
     /** @var string */
     const DOMAIN_NAME = 'payzenembedded';
-    /**
-     * The confirmation message identifier
-     */
+
+    /** The confirmation message identifier */
     const CONFIRMATION_MESSAGE_NAME = 'payzen_embedded_payment_confirmation';
+
+    /** The transaction update event identifier */
+    const TRANSACTION_UPDATE_EVENT = "payzenembedded.transaction_update_event";
 
     /**
      * @param Order $order

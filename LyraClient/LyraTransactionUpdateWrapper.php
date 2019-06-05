@@ -12,10 +12,8 @@ namespace PayzenEmbedded\LyraClient;
 
 use Lyra\Exceptions\LyraException;
 use PayzenEmbedded\PayzenEmbedded;
-use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Thelia\Core\Translation\Translator;
 use Thelia\Exception\TheliaProcessException;
-use Thelia\Log\Tlog;
 use Thelia\Model\Order;
 
 /**
@@ -35,7 +33,7 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
      * @param \DateTime|null $captureDate the expected cature date, or null to use the default one.
      * @param boolean|null $manualValidation If false, it will be automatically validated, if null, the default configured in the PayZen back-offcie will be used.
      *
-     * @return array the web service result Common/ResponseCodeAnswer (see https://payzen.io/fr-FR/rest/V4.0/api/playground.html?ws=Common/ResponseCodeAnswer)
+     * @return int the order payment statrus, one of self::PAYEMENT_STATUS_*
      *
      * @throws LyraException
      * @throws \Exception
@@ -44,7 +42,7 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
     {
         $response = $this->sendTransactionUpdateRequest($order, $amount, $captureDate, $manualValidation);
 
-        $this->processTransactionUpdateResponse($response);
+        return $this->processTransactionUpdateResponse($response);
     }
 
     /**

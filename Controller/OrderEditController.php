@@ -18,6 +18,7 @@
  */
 namespace PayzenEmbedded\Controller;
 
+use PayzenEmbedded\Event\TransactionUpdateEvent;
 use PayzenEmbedded\LyraClient\LyraTransactionGetWrapper;
 use PayzenEmbedded\LyraClient\LyraTransactionUpdateWrapper;
 use PayzenEmbedded\PayzenEmbedded;
@@ -55,14 +56,12 @@ class OrderEditController extends BaseAdminController
             $data = $form->getData();
 
             if (null !== $order = OrderQuery::create()->findPk($orderId)) {
-                // Call the update service
-                $lyraClient = new LyraTransactionUpdateWrapper($this->getDispatcher());
-
-                $lyraClient->updateTransaction(
-                    $order,
-                    $data['amount'],
-                    $data['capture_date'],
-                    ! $data['automatic_validation']
+                $this->getDispatcher()->dispatch(
+                    PayzenEmbedded::TRANSACTION_UPDATE_EVENT,
+                    (new TransactionUpdateEvent($orderId))
+                        ->setAmount($data['amount'])
+                        ->setExpectedCaptureDate($data['capture_date'])
+                        ->setManualValidation(! $data['automatic_validation'])
                 );
 
                 // Log order modification
