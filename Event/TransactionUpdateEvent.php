@@ -117,7 +117,8 @@ class TransactionUpdateEvent extends ActionEvent
     }
 
     /**
-     * The payment status, one of
+     * The payment status, one of LyraClientWrapper::PAYEMENT_STATUS_* constants
+     *
      * @param int $paymentStatus
      * @return $this
      */

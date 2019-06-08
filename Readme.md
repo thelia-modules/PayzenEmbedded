@@ -1,82 +1,105 @@
 # Module PayZen pour Thelia
 
-Ce module vous permet de proposer à vos clients le système de paiement Payzen de la société Lyra Networks. Le paiement est réalisé via
-le formulaire embarqué PayZen. Vos clients ne sortent pas du site pour payer leurs achats.
+Ce module permet d'intégrer dans votre boutique le système de paiement Payzen ou SystemPay de la société Lyra Networks.
+ 
+## Paiement par carte bancaire
 
-### Installation
+Le paiement est réalisé via le formulaire de saisie des informations de carte bancaire PayZen qui est intégré à votre boutique.
+Vos clients ne sortent pas du site pour payer leurs achats.
+Le formulaire de saisie est intégralement géré par PayZen, les données de carte bancaires ne sont pas stockées ou manipulées 
+par le module. Une certification PCI-DSS n'est pas nécessaire.
 
-Vous pouvez installer ce module avec composer.
+## Paiement en 1-clic
 
-Si vous ne pouvez pas utiliser composer, il existe une version autonome du moduile qui embarque les dépendances nécessaires 
+Le module supporte le paiement en un clic (ou paiement par alias / token). Lors de chaque paiement, vos clients ont
+la possibilité d'enregistrer leurs informations de carte bancaire. Lors des achats suivants, ils n'auront alors plus
+besoin d'indiquer ces informations : un clic suffit à payer leur commande.
+Les informations de paiement sont enregistrées par PayZen, et ne sont jamais stockées ou manipulées par le module, une
+certification PCI-DSS n'est pas nécessaire.
 
-### Utilisation
+Les clients peuvent demander à tout moment la suppression des informations de paiement enregistrées, depuis leur compte
+client, ou au moment de payer leur commande.
 
-Pour utiliser le module Payzen, vous devez tout d'abord le configurer. Pour ce faire, rendez-vous dans votre back-office, onglet Modules, et activez le module Payzen.
+## Historique des transactions
 
-Cliquez ensuite sur "Configurer" sur la ligne du module, et renseignez les informations requises, que vous trouverez dans votre outil de gestion de caisse Payzen -&gt; Paramétrage -&gt; Boutiques -&gt; *votre boutique*
+L'historique des transactions PayZen est disponible pour chaque commande sur le détail de la commande dans le 
+back-office.
 
-Lors de la phase de test, vous pouvez définir les adresses IP qui seront autorisées à utiliser le module en front-office, afin de ne pas laisser vos clients payer leur commandes avec Payzen pendant la phase de test.
+Un historique de toutes les transactions PayZen effectuées par un client est disponible sur la fiche client daic le 
+back-office.
 
-### URL de retour
+## Modification des totaux de commande
 
-Pour que vos commandes passent automatiquement au statut payé lorsque vos clients ont payé leurs commandes, vous devez renseigner une **URL de retour** dans votre outils de gestion de caisse Payzen.
+Lorsque le module est configuré pour une validation manuelle des transactions, il devient possible d'ajuster à la baisse
+le montant final des commandes des clients depuis la page de détail de commande dans le back-office.
+
+L'administrateur de la boutique peut alors modifier :
+- Le montant qui sera payé par le client (<= au montant initial)
+- la date de remise en banque 
+- le mode de validation de la transaction (automatique pour une validation immédiate, ou manuel)
+
+### 
+Le module propose un event qui permet de réaliser cette opération programmatiquement, depuis un module de picking par
+exemple :
+
+Nom de l'évènement : `PayzenEmbedded::TRANSACTION_UPDATE_EVENT`
+
+L'action event `\PayzenEmbedded\Event\TransactionUpdateEvent` permet de définir :
+
+- l'ID ($orderId) de la commande concernée,
+- le nouveau montant ($amount) de la transaction
+- la date de capture requise ($expectedCaptureDate)
+- le mode de validation de la transaction ($manualValidation - true/false)
+
+Une fois dispatché, l'event retourne à travers $paymentStatus le statut de l'opération, qui est une des constantes
+LyraClientWrapper::PAYEMENT_STATUS_* :
+
+- PAYEMENT_STATUS_PAID : la transaction est terminée, et la commande est payée.
+- PAYEMENT_STATUS_NOT_PAID : la transaction est terminée, et la commande n'a pas été payée.
+- PAYEMENT_STATUS_IN_PROGRESS : la transaction est en cours, et peut être modifiée si nécessaire.
+- PAYEMENT_STATUS_ERROR : l'opération de modification a échoué, généralement parce que la transaction est terminée ou
+expirée.
+
+## Installation
+
+Vous pouvez installer ce module avec Composer :
+
+```
+composer require thelia/payzen-embedded-module:~1.0
+```
+
+Si vous ne pouvez pas utiliser Composer, il existe une version autonome du module qui embarque les dépendances nécessaires. 
+Choisissez la branche "standalone" pour télécharger cette version et l'installer sur votre Thelia depuis le back-office,
+ou par FTP.
+
+## Utilisation
+
+Pour utiliser le module Payzen, vous devez tout d'abord le configurer. Pour ce faire, rendez-vous dans votre back-office,
+onglet Modules, et activez le module Payzen. Cliquez ensuite sur "Configurer" sur la ligne du module, et renseignez les
+informations requises, que vous trouverez dans votre outil de gestion de caisse Payzen -&gt; Paramétrage -&gt; Boutiques
+-&gt; *votre boutique*
+
+Lors de la phase de test, vous pouvez définir les adresses IP qui seront autorisées à utiliser le module en front-office, 
+afin de ne pas laisser vos clients payer leur commandes avec Payzen pendant la phase de test. Une fois le module en production,
+vous pouvez aussi restreindre les IP autorisées à payer avec le module avec le mode "Production restreinte".
+
+## URL de retour
+
+Pour que vos commandes passent automatiquement au statut payé lorsque vos clients ont payé leurs commandes, vous devez
+renseigner une **URL de retour** dans votre outils de gestion de caisse Payzen.
 
 Cette adresse est formée de la manière suivante: `http://www.votresite.com/payzen/callback`
 Par exemple, pour le site `thelia.net`, l'adresse en mode test et en mode production serait: `http://www.thelia.net/payzen/callback`. 
 
 Vous trouverez l'adresse exacte à utiliser dans votre back-office Thelia, sur la page de configuration du module Payzen.
 
-Pour mettre en place cette URL de retour rendez-vous dans votre outil de gestion de caisse Payzen -&gt; Paramétrage -&gt; Boutiques -&gt; *votre boutique*, et copier/collez votre URL de retour dans les champs "*URL de retour de la boutique en mode test*" et "*URL de retour de la boutique en mode production*".
+Pour mettre en place cette URL de retour rendez-vous dans votre outil de gestion de caisse Payzen -&gt; Paramétrage -&gt;
+Boutiques -&gt; *votre boutique*, et copier/collez votre URL de retour dans les champs "*URL de retour de la boutique en mode test*" 
+et "*URL de retour de la boutique en mode production*".
 
-### Intégration en front-office
+## Intégration en front-office
 
-L'intégration est automatique, et s'appuie sur les templates standard.
+L'essentiel de l'intégration est réalisée via les hooks. Le module définit une page de paiement spécifique, qui permet 
+l'affichage du formulaire embarqué: `PayzenEmbedded/templates/frontOffice/default/payzen-embedded/embedded-payment-page.html`
 
-### Paiement en plusieurs fois
-
-Payzen propose le paiement en plusieurs fois. Vous pouvez le proposer à vos clients en installant le module Thelia **PayzenMulti**.
-
-### Paiement par prélèvement SEPA (SDD)
-
-Payzen propose le paiement par prélèvement SEPA. Vous pouvez le proposer à vos clients en installant le module Thelia **PayzenOneOffSEPA**.
-
-----------
-
-This module offers to your customers the Payzen payment system, operated by the Lyra Networks compagny.
-
-### Installation
-
-To install the Payzen module, uncompress the archive in the `<thelia root>/local/modules` directory. Be sure that the name of the module's directory is `Payzen` (and not `Payzen-master`, for exemple).
-
-**Warning**: If you're updating by manually a pre-1.3 version to a 1.3.x version, be sure to remove the AdminIncludes directory, or you'll get
-ikssues in the module configuration.
-
-### Usage
-
-You have to configure the Payzen module before starting to use it. To do so, go to the "Modules" tab of your Thelia back-office, and activate the Payzen module.
-
-Then click the "Configure" button, and enter the required information, which are available in your Payzen back-office -&gt; Setting -&gt; Shops -&gt; *your shop*
-
-During the test phase, you can defin the IP addresses allowed to use the Payzen module on the front office, so that your customers will not be able to pay with Payzen during this test phase.
-
-### Return URL
-
-For your order switching automatically to the "paid" status when your customers have successfully completed their payment, you should provide a **return URL** in the Payzen back-office.
-
-The return URL has the following form: `http://www.yourshop.com/payzen/callback`. For example, the return URL of the `thelia.net` is `http://www.thelia.net/payzen/callback`. 
-
-You'll find the exact return URL of you shop in the Thelia back-office, in the Payzen configuration page.
-
-To set up this return URL, go to your Payzen back-office, -&gt; Setting -&gt; Shops -&gt; *your shop*, and paste your return URL in "*Shop's return URL in test mode*" et "*Return URL of the shop in production mode*" fields.
-
-### Front-office integration
-
-The front-office integration is automatic, as it relies on standard templates.
-
-### Multiple times payments
-
-Multiple time payments are possible with Payzen. To offer this feature to your customers, install the Thelia **PayzenMulti** module on your shop.
-
-### SEPA payment (SDD)
-
-SEPA payments are possible with Payzen. To offer this feature to your customers, install the Thelia **PayzenOneOffSEPA** module on your shop.
+Vous pouvez mettre cette page aux couleurs de votre template spécifique si nécessaire.
