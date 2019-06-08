@@ -1,31 +1,13 @@
-    ____                            
-    |  _ \ __ _ _   _ _______ _ __  
-    | |_) / _` | | | |_  / _ \ '_ \ 
-    |  __/ (_| | |_| |/ /  __/ | | |
-    |_|   \__,_|\__, /___\___|_| |_|
-                |___/               
-                             ______         _____ _          _ _
-                             | ___ \       |_   _| |        | (_)
-                             | |_/ /_   _    | | | |__   ___| |_  __ _
-                             | ___ \ | | |   | | | '_ \ / _ \ | |/ _` |
-                             | |_/ / |_| |   | | | | | |  __/ | | (_| |
-                             \____/ \__, |   \_/ |_| |_|\___|_|_|\__,_|
-                                     __/ |
-                                    |___/   <info@thelia.net>
+# Module PayZen pour Thelia
 
-
-
-----------
-
-Ce module vous permet de proposer à vos clients le système de paiement Payzen de la société Lyra Networks.
+Ce module vous permet de proposer à vos clients le système de paiement Payzen de la société Lyra Networks. Le paiement est réalisé via
+le formulaire embarqué PayZen. Vos clients ne sortent pas du site pour payer leurs achats.
 
 ### Installation
 
-Pour installer le module Payzen, décompressez l'archive dans `<racine de thelia>/local/modules`. Veillez à ce que le dossier porte le nom `Payzen` (et pas `Payzen-master`, par exemple).
+Vous pouvez installer ce module avec composer.
 
-**Warning**: Attention, si vous mettez à jour manuellement une version pre-1.3 vers une version 1.3 ou ultérieure, vous devrez
-supprimer manuellement le répertoire AdminIncludes du module, sinon des problèmes pourraient survenir lors de la configuration
-du module.  
+Si vous ne pouvez pas utiliser composer, il existe une version autonome du moduile qui embarque les dépendances nécessaires 
 
 ### Utilisation
 

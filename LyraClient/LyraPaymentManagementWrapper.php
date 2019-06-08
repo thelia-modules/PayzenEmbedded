@@ -254,8 +254,11 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
      */
     protected function setOrderStatus(Order $order, OrderStatus $orderStatus)
     {
-        $event = (new OrderEvent($order))->setStatus($orderStatus->getId());
+        // Prevent sending several confirmation emails
+        if ($order->getStatusId() !== $orderStatus->getId()) {
+            $event = (new OrderEvent($order))->setStatus($orderStatus->getId());
 
-        $this->dispatcher->dispatch(TheliaEvents::ORDER_UPDATE_STATUS, $event);
+            $this->dispatcher->dispatch(TheliaEvents::ORDER_UPDATE_STATUS, $event);
+        }
     }
 }
