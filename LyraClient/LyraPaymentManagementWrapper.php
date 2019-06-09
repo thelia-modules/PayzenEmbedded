@@ -121,7 +121,7 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
      */
     public function processPaymentResponse($response)
     {
-        $status = self::PAYEMENT_STATUS_NOT_PAID;
+        $status = self::PAYMENT_STATUS_NOT_PAID;
 
         // Be sure to have transaction data.
         if (isset($response['transactions'])) {
@@ -150,7 +150,7 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
      */
     protected function processOrderStatus(Order $order, $answer)
     {
-        $status = self::PAYEMENT_STATUS_NOT_PAID;
+        $status = self::PAYMENT_STATUS_NOT_PAID;
 
         $orderStatus = $answer['status'];
         $transactionUuid = $answer['uuid'];
@@ -169,7 +169,7 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             // Payment OK !
             $this->setOrderStatus($order, OrderStatusQuery::getPaidStatus());
 
-            $status = self::PAYEMENT_STATUS_PAID;
+            $status = self::PAYMENT_STATUS_PAID;
         } else if ($orderStatus === 'UNPAID') {
             $this->log->addInfo(Translator::getInstance()->trans("Order %ref payment was not successful.", ['%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
 
@@ -181,12 +181,12 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             // Consider order as paid.
             $this->setOrderStatus($order, OrderStatusQuery::getPaidStatus());
 
-            $status = self::PAYEMENT_STATUS_IN_PROGRESS;
+            $status = self::PAYMENT_STATUS_IN_PROGRESS;
         } else {
             // This payment is not supported.
             $this->log->addInfo(Translator::getInstance()->trans("Order %ref payment is unsupported (%status).", ['%status' => $orderStatus, '%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
 
-            $status = self::PAYEMENT_STATUS_ERROR;
+            $status = self::PAYMENT_STATUS_ERROR;
         }
 
         // Check if customer has registered its card for 1-click payment

@@ -97,7 +97,7 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
      */
     public function processTransactionUpdateResponse($response)
     {
-        $paymentStatus = self::PAYEMENT_STATUS_NOT_PAID;
+        $paymentStatus = self::PAYMENT_STATUS_NOT_PAID;
 
         // Be sure to have transaction data.
         if (isset($response['answer']['uuid'])) {

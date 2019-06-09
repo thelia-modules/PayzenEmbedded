@@ -72,13 +72,13 @@ class FrontController extends BasePaymentModuleController
                 $paymentStatus = $lyraClient->processPaymentResponse($formAnswer);
 
                 switch ($paymentStatus) {
-                    case LyraPaymentManagementWrapper::PAYEMENT_STATUS_PAID:
+                    case LyraPaymentManagementWrapper::PAYMENT_STATUS_PAID:
                         $gateway_response_code = 'OK';
                         break;
-                    case LyraPaymentManagementWrapper::PAYEMENT_STATUS_NOT_PAID:
+                    case LyraPaymentManagementWrapper::PAYMENT_STATUS_NOT_PAID:
                         $gateway_response_code = 'KO';
                         break;
-                    case LyraPaymentManagementWrapper::PAYEMENT_STATUS_IN_PROGRESS:
+                    case LyraPaymentManagementWrapper::PAYMENT_STATUS_IN_PROGRESS:
                         $gateway_response_code = 'WAIT';
                         break;
                     default:

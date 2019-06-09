@@ -26,10 +26,10 @@ use Thelia\Model\Order;
 
 class LyraClientWrapper extends Client
 {
-    const PAYEMENT_STATUS_PAID = 1;
-    const PAYEMENT_STATUS_NOT_PAID = 2;
-    const PAYEMENT_STATUS_IN_PROGRESS = 3;
-    const PAYEMENT_STATUS_ERROR = 4;
+    const PAYMENT_STATUS_PAID = 1;
+    const PAYMENT_STATUS_NOT_PAID = 2;
+    const PAYMENT_STATUS_IN_PROGRESS = 3;
+    const PAYMENT_STATUS_ERROR = 4;
 
     public function __construct()
     {

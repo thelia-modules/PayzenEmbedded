@@ -92,13 +92,13 @@ class LyraJavascriptClientManagementWrapper extends LyraPaymentManagementWrapper
                     // Check if the order is paid or unpaid, and update order accordingly.
                     $paymentStatus = $this->processPaymentResponse($answer);
 
-                    if ($paymentStatus === self::PAYEMENT_STATUS_NOT_PAID) {
+                    if ($paymentStatus === self::PAYMENT_STATUS_NOT_PAID) {
                         $errorMessage = Translator::getInstance()->trans(
                             "Sorry, your one click payment failed.",
                             [],
                             PayzenEmbedded::DOMAIN_NAME
                         );
-                    } elseif ($paymentStatus === self::PAYEMENT_STATUS_IN_PROGRESS) {
+                    } elseif ($paymentStatus === self::PAYMENT_STATUS_IN_PROGRESS) {
                         // The cart was processed, let's clear it.
                         $this->dispatcher->dispatch(
                             TheliaEvents::ORDER_CART_CLEAR,
