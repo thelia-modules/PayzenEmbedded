@@ -25,7 +25,7 @@ client, ou au moment de payer leur commande.
 L'historique des transactions PayZen est disponible pour chaque commande sur le détail de la commande dans le 
 back-office.
 
-Un historique de toutes les transactions PayZen effectuées par un client est disponible sur la fiche client daic le 
+Un historique de toutes les transactions PayZen effectuées par un client est disponible sur la fiche client dans le 
 back-office.
 
 ## Modification des totaux de commande
@@ -38,7 +38,8 @@ L'administrateur de la boutique peut alors modifier :
 - la date de remise en banque 
 - le mode de validation de la transaction (automatique pour une validation immédiate, ou manuel)
 
-### 
+### Evènement de mise à jour des transactions
+
 Le module propose un event qui permet de réaliser cette opération programmatiquement, depuis un module de picking par
 exemple :
 
@@ -103,3 +104,112 @@ L'essentiel de l'intégration est réalisée via les hooks. Le module définit u
 l'affichage du formulaire embarqué: `PayzenEmbedded/templates/frontOffice/default/payzen-embedded/embedded-payment-page.html`
 
 Vous pouvez mettre cette page aux couleurs de votre template spécifique si nécessaire.
+
+---
+
+# PayZen module for Thelia
+
+This module allows you to integrate Lyra Networks Payzen or SystemPay payment system in your shop.
+ 
+## Payment by credit card
+
+Payment is made via the PayZen credit card information form which is integrated into your shop.
+Your customers do not leave the site to pay their purchases.
+The entry form is fully managed by PayZen, the credit card data is not stored or manipulated
+by the module. PCI-DSS certification is not required.
+
+## One-click payment
+
+The module supports one-click payment (or payment by alias / token). For each payment, your customers can
+register their credit card information. In subsequent purchases, they will no longer have
+to enter them again: a single click is enough to pay their order.
+Payment information is saved by PayZen, and is never stored or manipulated by the module, a
+PCI-DSS certification is not required.
+
+Customers may request at any time the removal of the registered payment information from their account
+customer page, or before paying an order.
+
+## Transaction History
+
+The PayZen transaction history is available for each order on the order detail page in the
+back office.
+
+A history of all PayZen transactions made by a customer is available on the customer page in the
+back office.
+
+## Edit order totals
+
+When the module is configured for manual validation of transactions, it is possible to adjust
+the final amount of orders from the order detail page in the back office.
+
+The  administrator can change :
+- The amount that will be paid by the customer (always less or equal to the original amount)
+- the date of bank receipt
+- the validation mode of the transaction (automatic for an immediate validation, or manual)
+
+### Transaction update event
+
+The module includes an event to programmatically update a transaction, from a picking module for
+example:
+
+Event Name: `PayzenEmbedded::TRANSACTION_UPDATE_EVENT`
+
+The event `\PayzenEmbedded\Event\TransactionUpdateEvent` contazins the following information :
+
+- the ID ($orderId) of the command concerned,
+- the new amount ($amount) of the transaction
+- the required capture date ($expectedCaptureDate)
+- the validation mode of the transaction ($manualValidation - true / false)
+
+Once dispatched, the event returns in $paymentStatus the status of the transaction, which is one of the constants
+`LyraClientWrapper::PAYMENT_STATUS_ *`:
+
+- `PAYMENT_STATUS_PAID`: the transaction is complete, and the order is paid.
+- `PAYMENT_STATUS_NOT_PAID`: the transaction is complete, and the order has not been paid.
+- `PAYMENT_STATUS_IN_PROGRESS`: the transaction is in progress, and can be modified if necessary.
+- `PAYMENT_STATUS_ERROR`: The change operation failed, usually because the transaction is complete or
+expired.
+
+## Installation
+
+You can install this module with Composer:
+
+`` `
+composer require thelia / payzen-embedded-module: ~ 1.0
+`` `
+
+If you can't use Composer, there is a stand-alone version of the module that embeds the necessary dependencies.
+Choose the "standalone" branch to download this version and install it on your Thelia from the back office,
+or by FTP.
+
+## Use
+
+To use the Payzen module, you must first configure it. To do this, go to your back office,
+Modules tab, and activate the Payzen module. Then click on "Configure" on the line of the module, and fill in the
+Required information, which you will find in your Payzen Cash Management Tool - &gt; Settings - &gt; Shops
+-&gt; *your shop*
+
+During the module test phase, you can define the IP addresses that will be allowed to use the module in the front office,
+so as not to let your customers pay for their orders with Payzen during the test phase. Once the module is in production,
+you can also restrict the IPs allowed to pay with the module with the "Restricted Production" mode.
+
+## Return URL
+
+For your orders to automatically go to paid status when your customers have paid their orders, you must
+Enter a **Return URL** in your Payzen back-office.
+
+This address is formed as follows: `https://www.yoursite.com/payzen-embedded/ipn-callback`
+For example, for the `thelia.net` site, the address in test mode and in production mode would be:` https://www.thelia.net/payzen-embedded/ipn-callback`.
+
+You will find the exact address to use in your Thelia back-office, on the Payzen module configuration page.
+
+To set up this return URL go to your Payzen Cash Management Tool -&gt; Settings -&gt;
+Shops -&gt; *your shop*, and copy / paste your return URL into the fields "*Shop return URL in test mode*"
+and "*Return URL of the store in production mode*".
+
+## Front Office Integration
+
+Most of the integration is done via hooks. The module defines a specific payment page, which allows
+Embedded form display: `PayzenEmbedded/templates/frontOffice/default/payzen-embedded/embedded-payment-page.html`
+
+You can style this page to match your specific template.
