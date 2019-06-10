@@ -1,0 +1,93 @@
+<script>
+    $(function() {
+        let popinButtonSelector = '.kr-popin-button';
+        let isPopinLoaded = false;
+
+        // Get the standard loader.
+        let $loader = $('<div class="loader"></div>');
+
+        // Wait for the popin button to be inserted in the DOM. Once done, hide it and trigger a click.
+        $(document).on('DOMNodeInserted', '*', function () {
+            if (! isPopinLoaded) {
+                let popin = $(popinButtonSelector);
+
+                if (popin.length > 0) {
+                    isPopinLoaded = true;
+                    $loader.hide();
+                    popin.hide().click();
+                }
+            }
+        });
+
+        /** Submit payement form via ajax, and display payzen popin if required */
+        $('#form-cart-payment').submit(function (ev) {
+            let payzenModuleId = {$moduleId}, $zis = $(this);
+
+            // If payzen was selected, we will load all popin form related stuff.
+            if ($('#payment_' + payzenModuleId).is(':checked')) {
+                ev.preventDefault();
+
+                if (isPopinLoaded) {
+                    $(popinButtonSelector).click();
+                } else {
+                    $.ajax({
+                        url: $zis.attr('action'),
+                        data: $zis.serialize(),
+                        method: "POST",
+                        success: function (data, success, jqXhr) {
+                            if (data.success === undefined) {
+                                // We do not have JSon information. We were probably redirected to an error page: change
+                                // the location of the page to the response URL.
+                                location.href = jqXhr.responseURL;
+                            } else {
+                                // We got a response from the PayZenEmbedded module.
+                                if (data.success) {
+                                    // Add the payment form, as a popin
+                                    $('.main').append(
+                                        '<div id="payzen-embedded-payment-form" class="kr-embedded" kr-popin>' +
+                                        '<div class="kr-pan"></div>' +
+                                        '<div class="kr-expiry"></div>' +
+                                        '<div class="kr-security-code"></div>' +
+                                        '<button class="kr-payment-button"></button>' +
+                                        '<div class="kr-form-error"></div>' +
+                                        '</div>'
+                                    );
+
+                                    let paymentForm =
+                                        '<script' +
+                                        ' src="https://api.payzen.eu/static/js/krypton-client/V4.0/stable/kr-payment-form.min.js"' +
+                                        ' kr-popin' +
+                                        ' kr-form-token="' + data.form_token + '"' +
+                                        ' kr-public-key="' + data.public_key + '"' +
+                                        ' kr-post-url-success="{url path="/order/placed/_ORDER_ID_"}"' +
+                                        ' kr-post-url-refused="{url path="/payzen-embedded/cancel-payment/_ORDER_ID_"}"' +
+                                        ' kr-language="{$lang_code|lower}">' +
+                                        '</scr' + 'ipt>'.replace(/_ORDER_ID_/g, data.order_id);
+
+                                    $('head')
+                                        .append('<link rel="stylesheet" href="https://api.payzen.eu/static/js/krypton-client/V4.0/ext/classic-reset.css">')
+                                        .append(paymentForm)
+                                        .append('<scr' + 'ipt src="https://api.payzen.eu/static/js/krypton-client/V4.0/ext/classic.js"></scr' + 'ipt>')
+                                    ;
+
+                                    // Show the loader again, as loading popin scripts may take some time
+                                    $loader.show();
+                                } else {
+                                    // Something goes wront in the payzen request, show an error message to the user.
+                                    alert(
+                                        "{intl l='Sorry, something goes wrong: _MSG_ (code _CODE_)' js=1}"
+                                            .replace('_CODE_', data.errorCode)
+                                            .replace('_MSG_', data.errorMessage)
+                                    );
+
+                                    // Redirect the user to the order invoice page to retry the payment.
+                                    location.href = "{url path='/order/invoice'}";
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+        });
+    });
+</script>
