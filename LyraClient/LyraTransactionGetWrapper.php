@@ -62,7 +62,7 @@ class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
      * Process a Transaction/Update response and update the order accordingly.
      *
      * @param array $response a CreatePayment response
-     * @return int the payment status, one of self::PAYEMENT_STATUS_* value
+     * @return int the payment status, one of self::PAYMENT_STATUS_* value
      * @throws \Exception
      */
     public function processTransactionGetResponse($response)

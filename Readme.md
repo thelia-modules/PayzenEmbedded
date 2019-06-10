@@ -53,12 +53,12 @@ L'action event `\PayzenEmbedded\Event\TransactionUpdateEvent` permet de définir
 - le mode de validation de la transaction ($manualValidation - true/false)
 
 Une fois dispatché, l'event retourne à travers $paymentStatus le statut de l'opération, qui est une des constantes
-LyraClientWrapper::PAYEMENT_STATUS_* :
+LyraClientWrapper::PAYMENT_STATUS_* :
 
-- PAYEMENT_STATUS_PAID : la transaction est terminée, et la commande est payée.
-- PAYEMENT_STATUS_NOT_PAID : la transaction est terminée, et la commande n'a pas été payée.
-- PAYEMENT_STATUS_IN_PROGRESS : la transaction est en cours, et peut être modifiée si nécessaire.
-- PAYEMENT_STATUS_ERROR : l'opération de modification a échoué, généralement parce que la transaction est terminée ou
+- PAYMENT_STATUS_PAID : la transaction est terminée, et la commande est payée.
+- PAYMENT_STATUS_NOT_PAID : la transaction est terminée, et la commande n'a pas été payée.
+- PAYMENT_STATUS_IN_PROGRESS : la transaction est en cours, et peut être modifiée si nécessaire.
+- PAYMENT_STATUS_ERROR : l'opération de modification a échoué, généralement parce que la transaction est terminée ou
 expirée.
 
 ## Installation

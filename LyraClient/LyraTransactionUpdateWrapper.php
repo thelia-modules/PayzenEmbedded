@@ -33,7 +33,7 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
      * @param \DateTime|null $captureDate the expected cature date, or null to use the default one.
      * @param boolean|null $manualValidation If false, it will be automatically validated, if null, the default configured in the PayZen back-offcie will be used.
      *
-     * @return int the order payment statrus, one of self::PAYEMENT_STATUS_*
+     * @return int the order payment statrus, one of self::PAYMENT_STATUS_*
      *
      * @throws LyraException
      * @throws \Exception
@@ -92,7 +92,7 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
      * Process a Transaction/Update response and update the order accordingly.
      *
      * @param array $response a CreatePayment response
-     * @return int the payment status, one of self::PAYEMENT_STATUS_* value
+     * @return int the payment status, one of self::PAYMENT_STATUS_* value
      * @throws \Exception
      */
     public function processTransactionUpdateResponse($response)
