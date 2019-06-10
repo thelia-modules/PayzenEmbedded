@@ -204,6 +204,19 @@ class ConfigurationForm extends BaseForm
                 )
             )
             ->add(
+                'popup_mode',
+                'checkbox',
+                array(
+                    'constraints' => [],
+                    'required' => false,
+                    'label' => $this->trans('Use popup form'),
+                    'data' => boolval(PayzenEmbedded::getConfigValue('popup_mode', true)),
+                    'label_attr' => array(
+                        'help' => $this->trans('If this box is checked, the credit card details form will be displayed in a popup on the invoice page instead of opening a new page.')
+                    )
+                )
+            )
+            ->add(
                 'capture_delay',
                 'number',
                 array(

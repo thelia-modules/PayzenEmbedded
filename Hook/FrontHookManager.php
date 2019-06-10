@@ -24,6 +24,18 @@ use Thelia\Core\Hook\BaseHook;
 
 class FrontHookManager extends BaseHook
 {
+    public function onOrderInvoiceJavascriptInitialization(HookRenderEvent $event)
+    {
+        if (PayzenEmbedded::getConfigValue('popup_mode', false)) {
+            $event->add(
+                $this->render(
+                    "payzen-embedded/order-invoice.js.html",
+                    ['moduleId' => PayzenEmbedded::getModuleId()]
+                )
+            );
+        }
+    }
+
     /**
      * Render configuration template
      *

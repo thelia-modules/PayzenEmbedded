@@ -14,6 +14,7 @@ namespace PayzenEmbedded;
 
 use PayzenEmbedded\LyraClient\LyraJavascriptClientManagementWrapper;
 use Propel\Runtime\Connection\ConnectionInterface;
+use Thelia\Core\HttpFoundation\JsonResponse;
 use Thelia\Core\HttpFoundation\Response;
 use Thelia\Core\Template\ParserInterface;
 use Thelia\Core\Translation\Translator;
@@ -52,26 +53,33 @@ class PayzenEmbedded extends AbstractPaymentModule
 
         $resultData = $lyraClient->payOrder($order);
 
-        /** @var ParserInterface $parser */
-        $parser = $this->getContainer()->get("thelia.parser");
+        $popupMode = PayzenEmbedded::getConfigValue('popup_mode', false);
 
-        $parser->setTemplateDefinition(
-            $parser->getTemplateHelper()->getActiveFrontTemplate()
-        );
+        if ($popupMode) {
+            // Pass the $resultData to the order-invoice script
+            return new JsonResponse($resultData);
+        } else {
+            /** @var ParserInterface $parser */
+            $parser = $this->getContainer()->get("thelia.parser");
 
-        // Display the payment page which includes the javascript form.
-        $renderedTemplate = $parser->render(
-            "payzen-embedded/embedded-payment-page.html",
-            array_merge(
-                [
-                    "order_id"   => $order->getId(),
-                    "cart_count" => $this->getRequest()->getSession()->getSessionCart($this->getDispatcher())->getCartItems()->count(),
-                ],
-                $resultData
-            )
-        );
+            $parser->setTemplateDefinition(
+                $parser->getTemplateHelper()->getActiveFrontTemplate()
+            );
 
-        return new Response($renderedTemplate);
+            // Display the payment page which includes the javascript form.
+            $renderedTemplate = $parser->render(
+                "payzen-embedded/embedded-payment-page.html",
+                array_merge(
+                    [
+                        "order_id" => $order->getId(),
+                        "cart_count" => $this->getRequest()->getSession()->getSessionCart($this->getDispatcher())->getCartItems()->count(),
+                    ],
+                    $resultData
+                )
+            );
+
+            return new Response($renderedTemplate);
+        }
     }
 
     /**
