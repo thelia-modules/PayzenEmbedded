@@ -9,6 +9,9 @@ Vos clients ne sortent pas du site pour payer leurs achats.
 Le formulaire de saisie est intégralement géré par PayZen, les données de carte bancaires ne sont pas stockées ou manipulées 
 par le module. Une certification PCI-DSS n'est pas nécessaire.
 
+Vous pouvez choisir d'afficher le formulaire de paiement dans une pop-in sur la page de récapitulation de la commande, 
+il n'est alors pas nécessaire de passer à une nouvelle page pour payer la commande.
+
 ## Paiement en 1-clic
 
 Le module supporte le paiement en un clic (ou paiement par alias / token). Lors de chaque paiement, vos clients ont
@@ -28,7 +31,7 @@ back-office.
 Un historique de toutes les transactions PayZen effectuées par un client est disponible sur la fiche client dans le 
 back-office.
 
-## Modification des totaux de commande
+## Modification des transaction avant remise
 
 Lorsque le module est configuré pour une validation manuelle des transactions, il devient possible d'ajuster à la baisse
 le montant final des commandes des clients depuis la page de détail de commande dans le back-office.
@@ -36,7 +39,9 @@ le montant final des commandes des clients depuis la page de détail de commande
 L'administrateur de la boutique peut alors modifier :
 - Le montant qui sera payé par le client (<= au montant initial)
 - la date de remise en banque 
-- le mode de validation de la transaction (automatique pour une validation immédiate, ou manuel)
+- le mode de validation de la transaction (automatique pour une validation immédiate, ou manuel).
+
+Ce mode de fonctionnement est aussi pratique pour faire du débit à l'expédition.
 
 ### Evènement de mise à jour des transactions
 
@@ -89,8 +94,8 @@ vous pouvez aussi restreindre les IP autorisées à payer avec le module avec le
 Pour que vos commandes passent automatiquement au statut payé lorsque vos clients ont payé leurs commandes, vous devez
 renseigner une **URL de retour** dans votre outils de gestion de caisse Payzen.
 
-Cette adresse est formée de la manière suivante: `http://www.votresite.com/payzen/callback`
-Par exemple, pour le site `thelia.net`, l'adresse en mode test et en mode production serait: `http://www.thelia.net/payzen/callback`. 
+Cette adresse est formée de la manière suivante: `https://www.votresite.com/payzen-embedded/ipn-callback`
+Par exemple, pour le site `thelia.net`, l'adresse en mode test et en mode production serait: `https://www.thelia.net/payzen-embedded/ipn-callback`. 
 
 Vous trouverez l'adresse exacte à utiliser dans votre back-office Thelia, sur la page de configuration du module Payzen.
 
@@ -100,10 +105,11 @@ et "*URL de retour de la boutique en mode production*".
 
 ## Intégration en front-office
 
-L'essentiel de l'intégration est réalisée via les hooks. Le module définit une page de paiement spécifique, qui permet 
+L'essentiel de l'intégration est réalisée via les hooks. Le module définit cependant une page de paiement spécifique, qui permet 
 l'affichage du formulaire embarqué: `PayzenEmbedded/templates/frontOffice/default/payzen-embedded/embedded-payment-page.html`
 
-Vous pouvez mettre cette page aux couleurs de votre template spécifique si nécessaire.
+Vous pouvez mettre cette page aux couleurs de votre template spécifique si nécessaire. Si vous utilisez le formulaire en
+pop-in, cette page ne sera pas utilisée.
 
 ---
 

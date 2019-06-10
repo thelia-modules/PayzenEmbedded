@@ -24,7 +24,7 @@ use Thelia\Core\Hook\BaseHook;
 
 class FrontHookManager extends BaseHook
 {
-    public function onOrderInvoiceJavascriptInitialization(HookRenderEvent $event)
+    public function onOrderInvoiceAfterJavascriptInclude(HookRenderEvent $event)
     {
         if (PayzenEmbedded::getConfigValue('popup_mode', false)) {
             $event->add(
@@ -37,7 +37,7 @@ class FrontHookManager extends BaseHook
     }
 
     /**
-     * Render configuration template
+     * Load all javascript form stuff in header.
      *
      * @param HookRenderEvent $event
      */

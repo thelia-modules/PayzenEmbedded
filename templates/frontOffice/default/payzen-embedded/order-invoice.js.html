@@ -3,8 +3,8 @@
         let popinButtonSelector = '.kr-popin-button';
         let isPopinLoaded = false;
 
-        // Get the standard loader.
-        let $loader = $('<div class="loader"></div>');
+        // Get the standard loader selector
+        let loaderSelector = '.loader';
 
         // Wait for the popin button to be inserted in the DOM. Once done, hide it and trigger a click.
         $(document).on('DOMNodeInserted', '*', function () {
@@ -13,7 +13,7 @@
 
                 if (popin.length > 0) {
                     isPopinLoaded = true;
-                    $loader.hide();
+                    $(loaderSelector).hide();
                     popin.hide().click();
                 }
             }
@@ -30,10 +30,13 @@
                 if (isPopinLoaded) {
                     $(popinButtonSelector).click();
                 } else {
+                    $(loaderSelector).show();
+
                     $.ajax({
                         url: $zis.attr('action'),
                         data: $zis.serialize(),
                         method: "POST",
+                        global: false, // Manage ourselves the loading indicator
                         success: function (data, success, jqXhr) {
                             if (data.success === undefined) {
                                 // We do not have JSon information. We were probably redirected to an error page: change
@@ -69,9 +72,6 @@
                                         .append(paymentForm)
                                         .append('<scr' + 'ipt src="https://api.payzen.eu/static/js/krypton-client/V4.0/ext/classic.js"></scr' + 'ipt>')
                                     ;
-
-                                    // Show the loader again, as loading popin scripts may take some time
-                                    $loader.show();
                                 } else {
                                     // Something goes wront in the payzen request, show an error message to the user.
                                     alert(
@@ -84,6 +84,12 @@
                                     location.href = "{url path='/order/invoice'}";
                                 }
                             }
+                        },
+                        error: function() {
+                            alert("{intl l='Sorry, something goes wrong, please try again.' js=1}");
+
+                            // Redirect the user to the order invoice page to retry the payment.
+                            location.href = "{url path='/order/invoice'}";
                         }
                     });
                 }
