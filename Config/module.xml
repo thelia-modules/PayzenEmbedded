@@ -5,18 +5,18 @@
     <fullnamespace>PayzenEmbedded\PayzenEmbedded</fullnamespace>
     <descriptive locale="en_US">
         <title>Pay by credit card with PayZen</title>
-        <subtitle>Your customers can enter their credit card information without leaving your shop</subtitle>
+        <subtitle>Your customers can enter their credit card information without leaving your shop. This module could also be used for all SystemPay based payement systems.</subtitle>
     </descriptive>
     <descriptive locale="fr_FR">
         <title>Payez par carte bancaire avec PayZen</title>
-        <subtitle>Vos client saisissent les informations de leur carte de paiement sans sortir de votre boutique.</subtitle>
+        <subtitle>Vos client saisissent les informations de leur carte de paiement sans sortir de votre boutique. Ce module peut aussi être utilisé pour tous les saystèmes de paiement basés sur SystemPay de Lyra Networks</subtitle>
     </descriptive>
 
     <languages>
         <language>en_US</language>
         <language>fr_FR</language>
     </languages>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
     <authors>
         <author>
             <name>Franck Allimant</name>
