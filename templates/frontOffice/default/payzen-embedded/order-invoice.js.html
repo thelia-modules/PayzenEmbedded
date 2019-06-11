@@ -79,7 +79,7 @@
                                         ' kr-post-url-refused="{url path="/payzen-embedded/cancel-payment/_ORDER_ID_"}"' +
                                         ' kr-language="{$lang_code|lower}">' +
                                         '</scr' + 'ipt>').replace(/_ORDER_ID_/g, data.order_id);
-alert(paymentForm);
+
                                     $('head')
                                         .append('<link rel="stylesheet" href="https://api.payzen.eu/static/js/krypton-client/V4.0/ext/classic-reset.css">')
                                         .append(paymentForm)
