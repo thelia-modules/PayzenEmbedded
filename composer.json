@@ -1,5 +1,5 @@
 {
-  "name": "your-vendor/payzen-embedded-module",
+  "name": "thelia/payzen-embedded-module",
   "license": "LGPL-3.0+",
   "type": "thelia-module",
   "require": {
