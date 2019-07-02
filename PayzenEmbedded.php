@@ -63,7 +63,8 @@ class PayzenEmbedded extends AbstractPaymentModule
             $parser = $this->getContainer()->get("thelia.parser");
 
             $parser->setTemplateDefinition(
-                $parser->getTemplateHelper()->getActiveFrontTemplate()
+                $parser->getTemplateHelper()->getActiveFrontTemplate(),
+                true
             );
 
             // Display the payment page which includes the javascript form.
