@@ -48,12 +48,7 @@ class TransactionUpdateForm extends BaseForm
                 [
                     'constraints' => [
                         new NotBlank(),
-                        new GreaterThan(['value' => 0]),
-                        new Callback([
-                            "methods" => [
-                                [ $this, "checkOrderAmount" ],
-                            ],
-                        ])
+                        new GreaterThan(['value' => 0])
                     ],
                     'required' => true,
                     'label' => $this->trans('Order ID'),
@@ -64,7 +59,12 @@ class TransactionUpdateForm extends BaseForm
                 'text',
                 [
                     'constraints' => [
-                        new NotBlank()
+                        new NotBlank(),
+                        new Callback([
+                            "methods" => [
+                                [ $this, "checkOrderAmount" ],
+                            ],
+                        ])
                     ],
                     'required' => true,
                     'label' => $this->trans('New order total amount'),
@@ -112,7 +112,7 @@ class TransactionUpdateForm extends BaseForm
         $orderId = \intval($context->getRoot()->getData()['order_id']);
 
         if (null !== $order = OrderQuery::create()->findPk($orderId)) {
-            if (\floatval($value> $order->getTotalAmount())) {
+            if (\floatval($value > $order->getTotalAmount())) {
                 $context->addViolation(
                     $this->trans("The amount should be less or equal to the order current amount.")
                 );
