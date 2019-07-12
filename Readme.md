@@ -45,11 +45,6 @@ Ce mode de fonctionnement est aussi pratique pour faire du débit à l'expéditi
 
 ### Evènement de mise à jour des transactions
 
-<<<<<<< HEAD
-=======
-### Evènement de mise à jour des transactions
-
->>>>>>> Updated english documentation
 Le module propose un event qui permet de réaliser cette opération programmatiquement, depuis un module de picking par
 exemple :
 
