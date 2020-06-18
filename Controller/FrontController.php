@@ -18,9 +18,11 @@
  */
 namespace PayzenEmbedded\Controller;
 
+use PayzenEmbedded\Events\ProcessPaymentResponseEvent;
 use PayzenEmbedded\LyraClient\LyraPaymentManagementWrapper;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
 use PayzenEmbedded\PayzenEmbedded;
+use Symfony\Component\Filesystem\Filesystem;
 use Thelia\Core\Event\Order\OrderEvent;
 use Thelia\Core\Event\TheliaEvents;
 use Thelia\Core\HttpFoundation\Response;
@@ -55,7 +57,7 @@ class FrontController extends BasePaymentModuleController
         $this->getLog()->info($this->getTranslator()->trans("Starting processing PayZen IPN request", [], PayzenEmbedded::DOMAIN_NAME));
 
         // The response code to the server
-        $gateway_response_code = 'KO';
+        $gatewayResponseCode = 'KO';
 
         $lyraClient = new LyraPaymentManagementWrapper($this->getDispatcher(), $this->getLog());
 
@@ -63,33 +65,36 @@ class FrontController extends BasePaymentModuleController
             /* Retrieve the IPN content */
             $rawAnswer = $lyraClient->getParsedFormAnswer();
 
-            if (! $lyraClient->checkHash()) {
+            if (!$lyraClient->checkHash()) {
                 $this->getLog()->addError($this->getTranslator()->trans("Invalid signature received, aborting.", [], PayzenEmbedded::DOMAIN_NAME));
-            } else {
-                $formAnswer = $rawAnswer['kr-answer'];
+                throw new \Exception($this->getTranslator()->trans("Invalid signature received, aborting.", [], PayzenEmbedded::DOMAIN_NAME));
+            }
 
-                // Process platform response, and update the order accordingly.
-                $paymentStatus = $lyraClient->processPaymentResponse($formAnswer);
+            $formAnswer = $rawAnswer['kr-answer'];
 
-                switch ($paymentStatus) {
-                    case LyraPaymentManagementWrapper::PAYMENT_STATUS_PAID:
-                        $gateway_response_code = 'OK';
-                        break;
-                    case LyraPaymentManagementWrapper::PAYMENT_STATUS_NOT_PAID:
-                        $gateway_response_code = 'KO';
-                        break;
-                    case LyraPaymentManagementWrapper::PAYMENT_STATUS_IN_PROGRESS:
-                        $gateway_response_code = 'WAIT';
-                        break;
-                    default:
-                        $gateway_response_code = 'UNKNOWN';
-                }
+            $processPaymentEvent = new ProcessPaymentResponseEvent($formAnswer);
+            $this->dispatch('PAYZEN_EMBEDDED_PROCESS_PAYMENT_RESPONSE', $processPaymentEvent);
+
+            $paymentStatus = $processPaymentEvent->getStatus();
+
+            switch ($paymentStatus) {
+                case LyraPaymentManagementWrapper::PAYMENT_STATUS_PAID:
+                    $gatewayResponseCode = 'OK';
+                    break;
+                case LyraPaymentManagementWrapper::PAYMENT_STATUS_NOT_PAID:
+                    $gatewayResponseCode = 'KO';
+                    break;
+                case LyraPaymentManagementWrapper::PAYMENT_STATUS_IN_PROGRESS:
+                    $gatewayResponseCode = 'WAIT';
+                    break;
+                default:
+                    $gatewayResponseCode = 'UNKNOWN';
             }
         } catch (\Exception $ex) {
             $this->getLog()->addError($this->getTranslator()->trans("Failed to process request, aborting. Error is " .$ex->getMessage(), [], PayzenEmbedded::DOMAIN_NAME));
         }
 
-        return Response::create($gateway_response_code);
+        return Response::create($gatewayResponseCode);
     }
 
     /**

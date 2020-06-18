@@ -24,6 +24,11 @@
         <service id="payzen_embedded.update_listener" class="PayzenEmbedded\EventListener\TransactionUpdateListener">
             <tag name="kernel.event_subscriber"/>
         </service>
+
+        <service id="payzen_embedded.process_ipn_response" class="PayzenEmbedded\LyraClient\LyraPaymentManagementWrapper">
+            <argument type="service" id="event_dispatcher" />
+            <tag name="kernel.event_subscriber"/>
+        </service>
     </services>
 
     <hooks>

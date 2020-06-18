@@ -10,6 +10,7 @@
 
 namespace PayzenEmbedded\LyraClient;
 
+use PayzenEmbedded\Events\ProcessPaymentResponseEvent;
 use PayzenEmbedded\PayzenEmbedded;
 use Thelia\Core\Event\Order\OrderEvent;
 use Thelia\Core\Event\TheliaEvents;
@@ -90,7 +91,10 @@ class LyraJavascriptClientManagementWrapper extends LyraPaymentManagementWrapper
 
                 if ($this->oneClickEnabled) {
                     // Check if the order is paid or unpaid, and update order accordingly.
-                    $paymentStatus = $this->processPaymentResponse($answer);
+                    $processPaymentEvent = new ProcessPaymentResponseEvent($answer);
+                    $this->dispatcher->dispatch('PAYZEN_EMBEDDED_PROCESS_PAYMENT_RESPONSE', $answer);
+                    $paymentStatus = $processPaymentEvent->getStatus();
+                    //$paymentStatus = $this->processPaymentResponse($answer);
 
                     if ($paymentStatus === self::PAYMENT_STATUS_NOT_PAID) {
                         $errorMessage = Translator::getInstance()->trans(
