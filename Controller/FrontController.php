@@ -57,7 +57,7 @@ class FrontController extends BasePaymentModuleController
         $this->getLog()->info($this->getTranslator()->trans("Starting processing PayZen IPN request", [], PayzenEmbedded::DOMAIN_NAME));
 
         // The response code to the server
-        $gateway_response_code = 'KO';
+        $gatewayResponseCode = 'KO';
 
         $lyraClient = new LyraPaymentManagementWrapper($this->getDispatcher(), $this->getLog());
 
@@ -79,22 +79,22 @@ class FrontController extends BasePaymentModuleController
 
             switch ($paymentStatus) {
                 case LyraPaymentManagementWrapper::PAYMENT_STATUS_PAID:
-                    $gateway_response_code = 'OK';
+                    $gatewayResponseCode = 'OK';
                     break;
                 case LyraPaymentManagementWrapper::PAYMENT_STATUS_NOT_PAID:
-                    $gateway_response_code = 'KO';
+                    $gatewayResponseCode = 'KO';
                     break;
                 case LyraPaymentManagementWrapper::PAYMENT_STATUS_IN_PROGRESS:
-                    $gateway_response_code = 'WAIT';
+                    $gatewayResponseCode = 'WAIT';
                     break;
                 default:
-                    $gateway_response_code = 'UNKNOWN';
+                    $gatewayResponseCode = 'UNKNOWN';
             }
         } catch (\Exception $ex) {
             $this->getLog()->addError($this->getTranslator()->trans("Failed to process request, aborting. Error is " .$ex->getMessage(), [], PayzenEmbedded::DOMAIN_NAME));
         }
 
-        return Response::create($gateway_response_code);
+        return Response::create($gatewayResponseCode);
     }
 
     /**
