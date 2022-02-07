@@ -37,7 +37,7 @@ class ConfigurationForm extends BaseForm
                     'label' => $this->trans('Username'),
                     'data' => PayzenEmbedded::getConfigValue('site_id', '69876357'),
                     'label_attr' => array(
-                        'help' => $this->trans('This is your shop identifier. You received this information when you subscribed to PayZen/SystemPay')
+                        'help' => $this->trans('This is your shop identifier. You received this information when you subscribed to PayZen')
                     )
                 )
             )
@@ -131,7 +131,7 @@ class ConfigurationForm extends BaseForm
                     'label' => $this->trans('Web Services end point'),
                     'data' => PayzenEmbedded::getConfigValue('webservice_endpoint', 'https://api.payzen.eu'),
                     'label_attr' => array(
-                        'help' => $this->trans('This is the URL of the web service. You should change this value if you\'re usin a SystemPay implementation instead of PayZen')
+                        'help' => $this->trans('This is the URL of the web service. You should change this value if you\'re usin a specific Lyra implementation instead of PayZen')
                     )
                 )
             )
