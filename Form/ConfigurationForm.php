@@ -13,6 +13,11 @@
 namespace PayzenEmbedded\Form;
 
 use PayzenEmbedded\PayzenEmbedded;
+use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
+use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
+use Symfony\Component\Form\Extension\Core\Type\NumberType;
+use Symfony\Component\Form\Extension\Core\Type\TextareaType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Validator\Constraints\GreaterThanOrEqual;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Thelia\Form\BaseForm;
@@ -30,7 +35,7 @@ class ConfigurationForm extends BaseForm
             // -- Username and passwords -------------------------------------------------------------------------------
             ->add(
                 'site_id',
-                'text',
+                TextType::class,
                 array(
                     'constraints' => array(new NotBlank()),
                     'required' => true,
@@ -43,7 +48,7 @@ class ConfigurationForm extends BaseForm
             )
             ->add(
                 'test_password',
-                'text',
+                TextType::class,
                 array(
                     'constraints' => array(new NotBlank()),
                     'required' => true,
@@ -56,7 +61,7 @@ class ConfigurationForm extends BaseForm
             )
             ->add(
                 'production_password',
-                'text',
+                TextType::class,
                 array(
                     'constraints' => array(new NotBlank()),
                     'required' => true,
@@ -70,7 +75,7 @@ class ConfigurationForm extends BaseForm
             // -- Javascript public keys -------------------------------------------------------------------------------
             ->add(
                 'javascript_test_key',
-                'text',
+                TextType::class,
                 array(
                     'constraints' => array(new NotBlank()),
                     'required' => true,
@@ -83,7 +88,7 @@ class ConfigurationForm extends BaseForm
             )
             ->add(
                 'javascript_production_key',
-                'text',
+                TextType::class,
                 array(
                     'constraints' => array(new NotBlank()),
                     'required' => true,
@@ -97,7 +102,7 @@ class ConfigurationForm extends BaseForm
             // -- Signature keys ---------------------------------------------------------------------------------------
             ->add(
                 'signature_test_key',
-                'text',
+                TextType::class,
                 array(
                     'constraints' => array(new NotBlank()),
                     'required' => true,
@@ -110,7 +115,7 @@ class ConfigurationForm extends BaseForm
             )
             ->add(
                 'signature_production_key',
-                'text',
+                TextType::class,
                 array(
                     'constraints' => array(new NotBlank()),
                     'required' => true,
@@ -124,7 +129,7 @@ class ConfigurationForm extends BaseForm
 
             ->add(
                 'webservice_endpoint',
-                'text',
+                TextType::class,
                 array(
                     'constraints' => array(new NotBlank()),
                     'required' => true,
@@ -137,7 +142,7 @@ class ConfigurationForm extends BaseForm
             )
             ->add(
                 'mode',
-                'choice',
+                ChoiceType::class,
                 array(
                     'constraints' => array(new NotBlank()),
                     'required' => true,
@@ -155,7 +160,7 @@ class ConfigurationForm extends BaseForm
             )
             ->add(
                 'allowed_ip_list',
-                'textarea',
+                TextAreaType::class,
                 array(
                     'required' => false,
                     'label' => $this->trans('Allowed IPs in test or restricted production modes'),
@@ -171,7 +176,7 @@ class ConfigurationForm extends BaseForm
             )
             ->add(
                 'payment_source',
-                'choice',
+                ChoiceType::class,
                 array(
                     'required' => false,
                     'choices' => array(
@@ -192,7 +197,7 @@ class ConfigurationForm extends BaseForm
             )
             ->add(
                 'allow_one_click_payments',
-                'checkbox',
+                CheckboxType::class,
                 array(
                     'constraints' => [],
                     'required' => false,
@@ -205,7 +210,7 @@ class ConfigurationForm extends BaseForm
             )
             ->add(
                 'popup_mode',
-                'checkbox',
+                CheckboxType::class,
                 array(
                     'constraints' => [],
                     'required' => false,
@@ -218,7 +223,7 @@ class ConfigurationForm extends BaseForm
             )
             ->add(
                 'capture_delay',
-                'number',
+                NumberType::class,
                 array(
                     'constraints' => array(
                         new NotBlank(),
@@ -234,7 +239,7 @@ class ConfigurationForm extends BaseForm
             )
             ->add(
                 'validation_mode',
-                'choice',
+                ChoiceType::class,
                 array(
                     'required' => false,
                     'choices' => array(
@@ -253,7 +258,7 @@ class ConfigurationForm extends BaseForm
             )
             ->add(
                 'strong_authentication',
-                'choice',
+                ChoiceType::class,
                 array(
                     'required' => false,
                     'choices' => array(
@@ -273,7 +278,7 @@ class ConfigurationForm extends BaseForm
 
             ->add(
                 'minimum_amount',
-                'number',
+                NumberType::class,
                 array(
                     'constraints' => array(
                         new NotBlank(),
@@ -293,7 +298,7 @@ class ConfigurationForm extends BaseForm
             )
             ->add(
                 'maximum_amount',
-                'number',
+                NumberType::class,
                 array(
                     'constraints' => array(
                         new NotBlank(),
@@ -313,7 +318,7 @@ class ConfigurationForm extends BaseForm
             )
             ->add(
                 'send_confirmation_message_only_if_paid',
-                'checkbox',
+                CheckboxType::class,
                 [
                     'value' => 1,
                     'required' => false,
@@ -328,7 +333,7 @@ class ConfigurationForm extends BaseForm
             )
             ->add(
                 'send_payment_confirmation_message',
-                'checkbox',
+                CheckboxType::class,
                 [
                     'value' => 1,
                     'required' => false,
@@ -349,7 +354,7 @@ class ConfigurationForm extends BaseForm
         return $this->translator->trans($string, $args, PayzenEmbedded::DOMAIN_NAME);
     }
 
-    public function getName()
+    public static function getName()
     {
         return 'payzen_embedded_configuration_form';
     }

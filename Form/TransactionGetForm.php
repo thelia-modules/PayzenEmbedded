@@ -13,6 +13,7 @@
 namespace PayzenEmbedded\Form;
 
 use PayzenEmbedded\PayzenEmbedded;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Validator\Constraints\GreaterThan;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Thelia\Form\BaseForm;
@@ -29,7 +30,7 @@ class TransactionGetForm extends BaseForm
         $this->formBuilder
             ->add(
                 'order_id',
-                'text',
+                TextType::class,
                 [
                     'constraints' => [
                         new NotBlank(),
@@ -42,7 +43,7 @@ class TransactionGetForm extends BaseForm
     }
 
 
-    public function getName()
+    public static function getName()
     {
         return 'payzen_embedded_get_form';
     }

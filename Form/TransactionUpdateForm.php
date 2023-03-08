@@ -13,6 +13,9 @@
 namespace PayzenEmbedded\Form;
 
 use PayzenEmbedded\PayzenEmbedded;
+use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
+use Symfony\Component\Form\Extension\Core\Type\DateType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Validator\Constraints\Callback;
 use Symfony\Component\Validator\Constraints\GreaterThan;
 use Symfony\Component\Validator\Constraints\NotBlank;
@@ -44,7 +47,7 @@ class TransactionUpdateForm extends BaseForm
         $this->formBuilder
             ->add(
                 'order_id',
-                'text',
+                TextType::class,
                 [
                     'constraints' => [
                         new NotBlank(),
@@ -56,7 +59,7 @@ class TransactionUpdateForm extends BaseForm
             )
             ->add(
                 'amount',
-                'text',
+                TextType::class,
                 [
                     'constraints' => [
                         new NotBlank(),
@@ -75,7 +78,7 @@ class TransactionUpdateForm extends BaseForm
             )
             ->add(
                 'capture_date',
-                'date',
+                DateType::class,
                 [
                     'constraints' => [new NotBlank()],
                     'required' => true,
@@ -91,7 +94,7 @@ class TransactionUpdateForm extends BaseForm
             )
             ->add(
                 'automatic_validation',
-                'checkbox',
+                CheckboxType::class,
                 [
                     'constraints' => [],
                     'required' => false,
@@ -120,7 +123,7 @@ class TransactionUpdateForm extends BaseForm
         }
     }
 
-    public function getName()
+    public static function getName()
     {
         return 'payzen_embedded_order_edit_form';
     }

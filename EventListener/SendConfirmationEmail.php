@@ -90,7 +90,7 @@ class SendConfirmationEmail implements EventSubscriberInterface
                 // Clone the event just in case somebody make a stopPropagatation() during dispaching.
                 // We don't want to stop the propagation of ORDER_UPDATE_STATUS event (isn't it Bertrand ? ;-)
                 $clonedEvent = clone $event;
-                $dispatcher->dispatch(TheliaEvents::ORDER_SEND_CONFIRMATION_EMAIL, $clonedEvent);
+                $dispatcher->dispatch($clonedEvent, TheliaEvents::ORDER_SEND_CONFIRMATION_EMAIL);
             }
         }
     }

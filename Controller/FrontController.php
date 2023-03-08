@@ -22,22 +22,27 @@ use PayzenEmbedded\Events\ProcessPaymentResponseEvent;
 use PayzenEmbedded\LyraClient\LyraPaymentManagementWrapper;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
 use PayzenEmbedded\PayzenEmbedded;
-use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\EventDispatcher\EventDispatcher;
 use Thelia\Core\Event\Order\OrderEvent;
 use Thelia\Core\Event\TheliaEvents;
 use Thelia\Core\HttpFoundation\Response;
+use Thelia\Core\HttpFoundation\Session\Session;
 use Thelia\Core\Security\Exception\AuthorizationException;
+use Thelia\Core\Security\SecurityContext;
+use Thelia\Core\Translation\Translator;
 use Thelia\Model\Customer;
 use Thelia\Model\Order;
 use Thelia\Model\OrderQuery;
 use Thelia\Model\OrderStatusQuery;
 use Thelia\Module\BasePaymentModuleController;
-use Thelia\Tools\URL;
+use Symfony\Component\Routing\Annotation\Route;
 
 /**
  * Payzen payment module
  *
  * @author Franck Allimant <franck@cqfdev.fr>
+ *
+ * @Route("/payzen-embedded", name="payzen_embedded_front_")
  */
 class FrontController extends BasePaymentModuleController
 {
@@ -49,31 +54,33 @@ class FrontController extends BasePaymentModuleController
     /**
      * Process a Payzen platform request
      *
+     * @Route("/ipn-callback", name="process_ipn")
+     *
      * @return \Symfony\Component\HttpFoundation\Response
      * @throws \Exception
      */
-    public function processIpn()
+    public function processIpn(EventDispatcher $dispatcher, Translator $translator)
     {
-        $this->getLog()->info($this->getTranslator()->trans("Starting processing PayZen IPN request", [], PayzenEmbedded::DOMAIN_NAME));
+        $this->getLog()->info($translator->trans("Starting processing PayZen IPN request", [], PayzenEmbedded::DOMAIN_NAME));
 
         // The response code to the server
         $gatewayResponseCode = 'KO';
 
-        $lyraClient = new LyraPaymentManagementWrapper($this->getDispatcher(), $this->getLog());
+        $lyraClient = new LyraPaymentManagementWrapper($dispatcher, $this->getLog());
 
         try {
             /* Retrieve the IPN content */
             $rawAnswer = $lyraClient->getParsedFormAnswer();
 
             if (!$lyraClient->checkHash()) {
-                $this->getLog()->addError($this->getTranslator()->trans("Invalid signature received, aborting.", [], PayzenEmbedded::DOMAIN_NAME));
-                throw new \Exception($this->getTranslator()->trans("Invalid signature received, aborting.", [], PayzenEmbedded::DOMAIN_NAME));
+                $this->getLog()->addError($translator->trans("Invalid signature received, aborting.", [], PayzenEmbedded::DOMAIN_NAME));
+                throw new \Exception($translator->trans("Invalid signature received, aborting.", [], PayzenEmbedded::DOMAIN_NAME));
             }
 
             $formAnswer = $rawAnswer['kr-answer'];
 
             $processPaymentEvent = new ProcessPaymentResponseEvent($formAnswer);
-            $this->dispatch('PAYZEN_EMBEDDED_PROCESS_PAYMENT_RESPONSE', $processPaymentEvent);
+            $dispatcher->dispatch($processPaymentEvent, 'PAYZEN_EMBEDDED_PROCESS_PAYMENT_RESPONSE');
 
             $paymentStatus = $processPaymentEvent->getStatus();
 
@@ -91,74 +98,87 @@ class FrontController extends BasePaymentModuleController
                     $gatewayResponseCode = 'UNKNOWN';
             }
         } catch (\Exception $ex) {
-            $this->getLog()->addError($this->getTranslator()->trans("Failed to process request, aborting. Error is " .$ex->getMessage(), [], PayzenEmbedded::DOMAIN_NAME));
+            $this->getLog()->addError($translator->trans("Failed to process request, aborting. Error is " .$ex->getMessage(), [], PayzenEmbedded::DOMAIN_NAME));
         }
 
-        return Response::create($gatewayResponseCode);
+        return new Response($gatewayResponseCode);
     }
 
     /**
      * This is a simple wrapper around teh redirection to failure page
+     *
+     * @Route("/alias-failure/{orderId}/{message}", name="notify_payment_failure")
      *
      * @param $orderId
      * @param $message
      */
     public function notifyOneClickPaymentFailure($orderId, $message)
     {
-        return $this->redirectToFailurePage($orderId, $message);
+        $this->redirectToFailurePage($orderId, $message);
     }
 
     /**
      * When a one click payment is validated in PayzenEmbedded\PayzenEmbedded::processJavascriptClientPayment,
      * redirect the user to the success page.
      *
+     * @Route("/alias-success/{orderId}", name="notify_payment_success")
      * @param $orderId
      */
     public function notifyOneClickPaymentSuccess($orderId)
     {
-        return $this->redirectToSuccessPage($orderId);
+        $this->redirectToSuccessPage($orderId);
     }
 
     /**
+     * @Route("/alias-clear", name="get_address")
      * @throws \Propel\Runtime\Exception\PropelException
      */
-    public function clearCustomerToken()
+    public function clearCustomerToken(Session $session)
     {
-        $customerId = $this->getSession()->getCustomerUser()->getId();
+        $customerId = $session->getCustomerUser()->getId();
 
         if (null !== $token = PayzenEmbeddedCustomerTokenQuery::create()->findOneByCustomerId($customerId)) {
            $token->delete();
         }
 
-        return $this->generateRedirect($this->getSession()->getReturnToUrl());
+        return $this->generateRedirect($session->getReturnToUrl());
     }
 
     /**
      * Cancel an order on user request
      *
+     * @Route("/cancel-payment/{orderId}", name="abort_payment")
+     *
+     * @param EventDispatcher $dispatcher
+     * @param SecurityContext $securityContext
+     * @param Translator $translator
      * @param $orderId
      * @return \Symfony\Component\HttpFoundation\Response
      * @throws AuthorizationException
      */
-    public function abortPayment($orderId)
-    {
+    public function abortPayment(
+        EventDispatcher $dispatcher,
+        SecurityContext $securityContext,
+        Translator $translator,
+        $orderId
+    ){
         // Cancel the order and redirect to failure page.
         if (null !== $order = $this->getOrder($orderId)) {
             /** @var Customer $customer */
-            $customer = $this->getSecurityContext()->getCustomerUser();
+            $customer = $securityContext->getCustomerUser();
 
             if ($order->getCustomerId() === $customer->getId()) {
-                $this->cancelOrder($order);
+                $this->cancelOrder($dispatcher, $translator, $order);
             } else {
-                $this->getLog()->addError($this->getTranslator()->trans($customer->getRef() . " is not allowed to cancel order " . $order->getRef(), [], PayzenEmbedded::DOMAIN_NAME));
+                $this->getLog()->addError($translator->trans($customer->getRef() . " is not allowed to cancel order " . $order->getRef(), [], PayzenEmbedded::DOMAIN_NAME));
 
                 throw new AuthorizationException("Forbidden");
             }
         }
 
-        $message = $this->getTranslator()->trans("You canceled the payment", [], PayzenEmbedded::DOMAIN_NAME);
+        $message = $translator->trans("You canceled the payment", [], PayzenEmbedded::DOMAIN_NAME);
 
-        return $this->redirectToFailurePage($orderId, $message);
+        $this->redirectToFailurePage($orderId, $message);
     }
 
     /**
@@ -166,11 +186,11 @@ class FrontController extends BasePaymentModuleController
      * @param string $orderReference
      * @return null|\Thelia\Model\Order
      */
-    protected function getOrderByRef($orderReference)
+    protected function getOrderByRef(Translator $translator, string $orderReference)
     {
         if (null == $order = OrderQuery::create()->filterByRef($orderReference)->findOne()) {
             $this->getLog()->addError(
-                $this->getTranslator()->trans("Unknown order reference:  %ref", array('%ref' => $orderReference))
+                $translator->trans("Unknown order reference:  %ref", array('%ref' => $orderReference))
             );
         }
 
@@ -180,12 +200,14 @@ class FrontController extends BasePaymentModuleController
     /**
      * Set an order to the canceled status
      *
+     * @param EventDispatcher $dispatcher
+     * @param Translator $translator
      * @param Order $order
      */
-    protected function cancelOrder(Order $order)
+    protected function cancelOrder(EventDispatcher $dispatcher, Translator $translator, Order $order)
     {
         $this->getLog()->addInfo(
-            $this->getTranslator()->trans(
+            $translator->trans(
                 "Processing cancelation of payment for order ref. %ref",
                 ['%ref' => $order->getRef()]
             )
@@ -194,6 +216,6 @@ class FrontController extends BasePaymentModuleController
         $event = (new OrderEvent($order))
             ->setStatus(OrderStatusQuery::getCancelledStatus()->getId());
 
-        $this->dispatch(TheliaEvents::ORDER_UPDATE_STATUS, $event);
+        $dispatcher->dispatch($event,TheliaEvents::ORDER_UPDATE_STATUS);
     }
 }

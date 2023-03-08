@@ -1,7 +1,0 @@
-lyra_php_api_sdk:
-  build: .
-  container_name:  lyra-php-api-sdk
-  volumes:
-    - ./:/var/www/html/
-  ports:
-    - 6968:80

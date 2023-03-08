@@ -21,22 +21,29 @@ namespace PayzenEmbedded\Controller;
 use PayzenEmbedded\Event\TransactionUpdateEvent;
 use PayzenEmbedded\LyraClient\LyraTransactionGetWrapper;
 use PayzenEmbedded\PayzenEmbedded;
+use Symfony\Component\EventDispatcher\EventDispatcher;
 use Thelia\Controller\Admin\BaseAdminController;
 use Thelia\Core\Security\AccessManager;
 use Thelia\Core\Security\Resource\AdminResources;
+use Thelia\Core\Translation\Translator;
 use Thelia\Form\Exception\FormValidationException;
 use Thelia\Model\OrderQuery;
 use Thelia\Tools\URL;
+use Symfony\Component\Routing\Annotation\Route;
 
 /**
  * Payzen payment module
  *
  * @author Franck Allimant <franck@cqfdev.fr>
+ *
+ * @Route("/admin/module/payzen-embedded", name="payzen_embedded_order_edit_")
  */
 class OrderEditController extends BaseAdminController
 {
-
-    public function updateTransaction($orderId)
+    /**
+     * @Route("/update-transaction/{orderId}", name="update_transaction", methods="POST")
+     */
+    public function updateTransaction(EventDispatcher $dispatcher, Translator $translator, $orderId)
     {
         if (null !== $response = $this->checkAuth(AdminResources::MODULE, 'PayzenEmbedded', AccessManager::UPDATE)) {
             return $response;
@@ -55,13 +62,12 @@ class OrderEditController extends BaseAdminController
             $data = $form->getData();
 
             if (null !== $order = OrderQuery::create()->findPk($orderId)) {
-                $this->getDispatcher()->dispatch(
-                    PayzenEmbedded::TRANSACTION_UPDATE_EVENT,
+                $dispatcher->dispatch(
                     (new TransactionUpdateEvent($orderId))
                         ->setAmount($data['amount'])
                         ->setExpectedCaptureDate($data['capture_date'])
-                        ->setManualValidation(! $data['automatic_validation'])
-                );
+                        ->setManualValidation(! $data['automatic_validation']),
+                PayzenEmbedded::TRANSACTION_UPDATE_EVENT);
 
                 // Log order modification
                 $this->adminLogAppend(
@@ -80,7 +86,7 @@ class OrderEditController extends BaseAdminController
 
         if ($errorMsg) {
             $this->setupFormErrorContext(
-                $this->getTranslator()->trans("PayzenEmbedded update transaction", [], PayzenEmbedded::DOMAIN_NAME),
+                $translator->trans("PayzenEmbedded update transaction", [], PayzenEmbedded::DOMAIN_NAME),
                 $errorMsg,
                 $updateForm,
                 $ex
@@ -90,7 +96,10 @@ class OrderEditController extends BaseAdminController
         return $this->generateRedirect(URL::getInstance()->absoluteUrl("admin/order/update/$orderId") . '#payzen-embedded');
     }
 
-    public function refreshTransaction($orderId)
+    /**
+     * @Route("/refresh-transaction/{orderId}", name="get_address", methods="POST")
+     */
+    public function refreshTransaction(EventDispatcher $dispatcher, Translator $translator, $orderId)
     {
         if (null !== $response = $this->checkAuth(AdminResources::MODULE, 'PayzenEmbedded', AccessManager::UPDATE)) {
             return $response;
@@ -107,7 +116,7 @@ class OrderEditController extends BaseAdminController
 
             if (null !== $order = OrderQuery::create()->findPk($orderId)) {
                 // Call the get service
-                $lyraClient = new LyraTransactionGetWrapper($this->getDispatcher());
+                $lyraClient = new LyraTransactionGetWrapper($dispatcher);
                 $lyraClient->getTransaction($order);
 
                 // Log order modification
@@ -124,7 +133,7 @@ class OrderEditController extends BaseAdminController
 
         if ($errorMsg) {
             $this->setupFormErrorContext(
-                $this->getTranslator()->trans("PayzenEmbedded refresh transaction", [], PayzenEmbedded::DOMAIN_NAME),
+                $translator->trans("PayzenEmbedded refresh transaction", [], PayzenEmbedded::DOMAIN_NAME),
                 $errorMsg,
                 $getForm,
                 $ex
