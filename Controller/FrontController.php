@@ -23,6 +23,7 @@ use PayzenEmbedded\LyraClient\LyraPaymentManagementWrapper;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\EventDispatcher\EventDispatcher;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Thelia\Core\Event\Order\OrderEvent;
 use Thelia\Core\Event\TheliaEvents;
 use Thelia\Core\HttpFoundation\Response;
@@ -41,9 +42,8 @@ use Symfony\Component\Routing\Annotation\Route;
  * Payzen payment module
  *
  * @author Franck Allimant <franck@cqfdev.fr>
- *
- * @Route("/payzen-embedded", name="payzen_embedded_front_")
  */
+#[Route('/payzen-embedded', name: 'payzen_embedded_front_')]
 class FrontController extends BasePaymentModuleController
 {
     protected function getModuleCode()
@@ -53,13 +53,9 @@ class FrontController extends BasePaymentModuleController
 
     /**
      * Process a Payzen platform request
-     *
-     * @Route("/ipn-callback", name="process_ipn")
-     *
-     * @return \Symfony\Component\HttpFoundation\Response
-     * @throws \Exception
      */
-    public function processIpn(EventDispatcher $dispatcher, Translator $translator)
+    #[Route('/ipn-callback', name: 'process_ipn')]
+    public function processIpn(EventDispatcherInterface $dispatcher, Translator $translator)
     {
         $this->getLog()->info($translator->trans("Starting processing PayZen IPN request", [], PayzenEmbedded::DOMAIN_NAME));
 
@@ -106,12 +102,8 @@ class FrontController extends BasePaymentModuleController
 
     /**
      * This is a simple wrapper around teh redirection to failure page
-     *
-     * @Route("/alias-failure/{orderId}/{message}", name="notify_payment_failure")
-     *
-     * @param $orderId
-     * @param $message
      */
+    #[Route('/alias-failure/{orderId}/{message}', name: 'notify_payment_failure')]
     public function notifyOneClickPaymentFailure($orderId, $message)
     {
         $this->redirectToFailurePage($orderId, $message);
@@ -120,19 +112,14 @@ class FrontController extends BasePaymentModuleController
     /**
      * When a one click payment is validated in PayzenEmbedded\PayzenEmbedded::processJavascriptClientPayment,
      * redirect the user to the success page.
-     *
-     * @Route("/alias-success/{orderId}", name="notify_payment_success")
-     * @param $orderId
      */
+    #[Route('/alias-success/{orderId}', name: 'notify_payment_success')]
     public function notifyOneClickPaymentSuccess($orderId)
     {
         $this->redirectToSuccessPage($orderId);
     }
 
-    /**
-     * @Route("/alias-clear", name="get_address")
-     * @throws \Propel\Runtime\Exception\PropelException
-     */
+    #[Route('/alias-clear', name: 'alias_clear')]
     public function clearCustomerToken(Session $session)
     {
         $customerId = $session->getCustomerUser()->getId();
@@ -146,16 +133,8 @@ class FrontController extends BasePaymentModuleController
 
     /**
      * Cancel an order on user request
-     *
-     * @Route("/cancel-payment/{orderId}", name="abort_payment")
-     *
-     * @param EventDispatcher $dispatcher
-     * @param SecurityContext $securityContext
-     * @param Translator $translator
-     * @param $orderId
-     * @return \Symfony\Component\HttpFoundation\Response
-     * @throws AuthorizationException
      */
+    #[Route('/cancel-payment/{orderId}', name: 'abort_payment')]
     public function abortPayment(
         EventDispatcher $dispatcher,
         SecurityContext $securityContext,
@@ -183,8 +162,6 @@ class FrontController extends BasePaymentModuleController
 
     /**
      * Get an order and issue a log message if not found.
-     * @param string $orderReference
-     * @return null|\Thelia\Model\Order
      */
     protected function getOrderByRef(Translator $translator, string $orderReference)
     {
@@ -199,10 +176,6 @@ class FrontController extends BasePaymentModuleController
 
     /**
      * Set an order to the canceled status
-     *
-     * @param EventDispatcher $dispatcher
-     * @param Translator $translator
-     * @param Order $order
      */
     protected function cancelOrder(EventDispatcher $dispatcher, Translator $translator, Order $order)
     {

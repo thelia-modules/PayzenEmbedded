@@ -33,16 +33,11 @@ use Thelia\Tools\URL;
  * Payzen payment module
  *
  * @author Franck Allimant <franck@cqfdev.fr>
- *
- * @Route("/admin/module/payzen-embedded", name="payzen_embedded_")
  */
+#[Route('/admin/module/payzen-embedded', name: 'payzen_embedded_')]
 class ConfigurationController extends BaseAdminController
 {
-
-    /**
-     * @Route("/configure", name="configure", methods="POST")
-     * @return mixed an HTTP response, or
-     */
+    #[Route('/configure', name: 'configure', methods:'POST')]
     public function configure(RequestStack $requestStack, Translator $translator)
     {
         if (null !== $response = $this->checkAuth(AdminResources::MODULE, 'PayzenEmbedded', AccessManager::UPDATE)) {

@@ -35,14 +35,11 @@ use Symfony\Component\Routing\Annotation\Route;
  * Payzen payment module
  *
  * @author Franck Allimant <franck@cqfdev.fr>
- *
- * @Route("/admin/module/payzen-embedded", name="payzen_embedded_order_edit_")
  */
+#[Route('/admin/module/payzen-embedded', name: 'payzen_embedded_order_edit_')]
 class OrderEditController extends BaseAdminController
 {
-    /**
-     * @Route("/update-transaction/{orderId}", name="update_transaction", methods="POST")
-     */
+    #[Route('/update-transaction/{orderId}', name: 'update_transaction', methods: 'POST')]
     public function updateTransaction(EventDispatcher $dispatcher, Translator $translator, $orderId)
     {
         if (null !== $response = $this->checkAuth(AdminResources::MODULE, 'PayzenEmbedded', AccessManager::UPDATE)) {
@@ -96,9 +93,7 @@ class OrderEditController extends BaseAdminController
         return $this->generateRedirect(URL::getInstance()->absoluteUrl("admin/order/update/$orderId") . '#payzen-embedded');
     }
 
-    /**
-     * @Route("/refresh-transaction/{orderId}", name="get_address", methods="POST")
-     */
+    #[Route('/refresh-transaction/{orderId}', name: 'refresh_transaction', methods: 'POST')]
     public function refreshTransaction(EventDispatcher $dispatcher, Translator $translator, $orderId)
     {
         if (null !== $response = $this->checkAuth(AdminResources::MODULE, 'PayzenEmbedded', AccessManager::UPDATE)) {
