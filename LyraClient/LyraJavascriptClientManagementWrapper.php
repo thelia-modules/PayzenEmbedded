@@ -105,8 +105,8 @@ class LyraJavascriptClientManagementWrapper extends LyraPaymentManagementWrapper
                     } elseif ($paymentStatus === self::PAYMENT_STATUS_IN_PROGRESS) {
                         // The cart was processed, let's clear it.
                         $this->dispatcher->dispatch(
-                            TheliaEvents::ORDER_CART_CLEAR,
-                            new OrderEvent($order)
+                            new OrderEvent($order),
+                            TheliaEvents::ORDER_CART_CLEAR
                         );
                     }
                 } else {

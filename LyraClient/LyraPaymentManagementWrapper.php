@@ -163,7 +163,7 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper implements EventSub
         // Store the transaction ID
         $event = new OrderEvent($order);
         $event->setTransactionRef($transactionUuid);
-        $this->dispatcher->dispatch(TheliaEvents::ORDER_UPDATE_TRANSACTION_REF, $event);
+        $this->dispatcher->dispatch($event, TheliaEvents::ORDER_UPDATE_TRANSACTION_REF);
 
         if ($orderStatus === 'PAID') {
             $this->log->addInfo(Translator::getInstance()->trans("Order %ref payment was successful.", ['%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
@@ -260,7 +260,7 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper implements EventSub
         if ($order->getStatusId() !== $orderStatus->getId()) {
             $event = (new OrderEvent($order))->setStatus($orderStatus->getId());
 
-            $this->dispatcher->dispatch(TheliaEvents::ORDER_UPDATE_STATUS, $event);
+            $this->dispatcher->dispatch($event, TheliaEvents::ORDER_UPDATE_STATUS);
         }
     }
 
