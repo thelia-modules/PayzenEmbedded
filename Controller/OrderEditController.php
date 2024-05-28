@@ -19,6 +19,8 @@
 namespace PayzenEmbedded\Controller;
 
 use PayzenEmbedded\Event\TransactionUpdateEvent;
+use PayzenEmbedded\Form\TransactionGetForm;
+use PayzenEmbedded\Form\TransactionUpdateForm;
 use PayzenEmbedded\LyraClient\LyraTransactionGetWrapper;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\EventDispatcher\EventDispatcher;
@@ -49,7 +51,7 @@ class OrderEditController extends BaseAdminController
         $errorMsg = $ex = false;
 
         // Create the Form from the request
-        $updateForm = $this->createForm('payzen_embedded.order-edit.form');
+        $updateForm = $this->createForm(TransactionUpdateForm::getName());
 
         try {
             // Check the form against constraints violations
@@ -103,7 +105,7 @@ class OrderEditController extends BaseAdminController
         $errorMsg = $ex = false;
 
         // Create the Form from the request
-        $getForm = $this->createForm('payzen_embedded.get.form');
+        $getForm = $this->createForm(TransactionGetForm::getName());
 
         try {
             // Check the form against constraints violations
