@@ -10,8 +10,6 @@
 
 namespace PayzenEmbedded\LyraClient;
 
-require_once __DIR__ . '/../vendor/autoload.php';
-
 use Lyra\Client;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistory;
 use PayzenEmbedded\PayzenEmbedded;

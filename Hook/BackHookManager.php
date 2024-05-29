@@ -60,4 +60,28 @@ class BackHookManager extends BaseHook
             $event->getArguments()
         ));
     }
+
+    public static function getSubscribedHooks()
+    {
+        return [
+            "order-edit.bottom" => [
+                [
+                    "type" => "back",
+                    "method" => "onOrderEditBottom"
+                ]
+            ],
+            "customer-edit.bottom" => [
+                [
+                    "type" => "back",
+                    "method" => "onCustomerEditBottom"
+                ]
+            ],
+            "module.configuration" => [
+                [
+                    "type" => "back",
+                    "method" => "onModuleConfigure"
+                ]
+            ]
+        ];
+    }
 }

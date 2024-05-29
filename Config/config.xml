@@ -9,26 +9,4 @@
         <loop name="payzen_embedded_token" class="PayzenEmbedded\Loop\OneClickPaymentLoop"/>
     </loops>
 
-    <forms>
-        <form name="payzen_embedded_configuration_form" class="PayzenEmbedded\Form\ConfigurationForm" />
-        <form name="payzen_embedded_order-edit_form" class="PayzenEmbedded\Form\TransactionUpdateForm" />
-        <form name="payzen_embedded_get_form" class="PayzenEmbedded\Form\TransactionGetForm" />
-    </forms>
-
-    <hooks>
-        <hook id="payzen_embedded.configuration.back.hook" class="PayzenEmbedded\Hook\BackHookManager">
-            <tag name="hook.event_listener" event="module.configuration" type="back" method="onModuleConfigure" />
-            <tag name="hook.event_listener" event="order-edit.bottom" type="back" method="onOrderEditBottom"/>
-            <tag name="hook.event_listener" event="customer-edit.bottom" type="back" method="onCustomerEditBottom"/>
-        </hook>
-
-        <hook id="payzen_embedded.configuration.front.hook" class="PayzenEmbedded\Hook\FrontHookManager">
-            <tag name="hook.event_listener" event="order-payment-gateway.stylesheet" type="front" method="onOrderPaymentGatewayStylesheet" />
-            <tag name="hook.event_listener" event="order-invoice.payment-extra" type="front" method="onOrderInvoicePayementExtra" />
-            <tag name="hook.event_listener" event="account.additional" type="front" method="onAccountAdditional" />
-
-            <tag name="hook.event_listener" event="order-invoice.after-javascript-include" type="front" method="onOrderInvoiceAfterJavascriptInclude" />
-
-        </hook>
-    </hooks>
 </config>

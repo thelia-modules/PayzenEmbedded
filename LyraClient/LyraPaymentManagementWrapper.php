@@ -11,12 +11,10 @@
 namespace PayzenEmbedded\LyraClient;
 
 use Lyra\Exceptions\LyraException;
-use PayzenEmbedded\Events\ProcessPaymentResponseEvent;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerToken;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
-use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Thelia\Core\Event\Order\OrderEvent;
 use Thelia\Core\Event\TheliaEvents;
 use Thelia\Core\Translation\Translator;
@@ -35,7 +33,7 @@ use Thelia\Tools\URL;
  * Date: 27/05/2019 17:33
  */
 
-class LyraPaymentManagementWrapper extends LyraClientWrapper implements EventSubscriberInterface
+class LyraPaymentManagementWrapper extends LyraClientWrapper
 {
     /**
      * @var boolean
@@ -50,13 +48,13 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper implements EventSub
      */
     protected $dispatcher;
 
-    public function __construct(EventDispatcherInterface $dispatcher, TLog $log = null)
+    public function __construct(EventDispatcherInterface $dispatcher)
     {
         parent::__construct();
 
         $this->oneClickEnabled = (bool)(PayzenEmbedded::getConfigValue('allow_one_click_payments'));
 
-        $this->log = null === $log ? Tlog::getInstance() : $log;
+        $this->log = Tlog::getInstance();
         $this->dispatcher = $dispatcher;
     }
 
@@ -117,14 +115,10 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper implements EventSub
     /**
      * Process a CreatePayment response and update the order accordingly.
      *
-     * @param ProcessPaymentResponseEvent $event a CreatePayment response
-     * @throws \Exception
      */
-    public function processPaymentResponse(ProcessPaymentResponseEvent $event)
+    public function processPaymentResponse($response)
     {
         $status = self::PAYMENT_STATUS_NOT_PAID;
-
-        $response = $event->getResponse();
 
         // Be sure to have transaction data.
         if (isset($response['transactions'])) {
@@ -139,7 +133,7 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper implements EventSub
             $this->log->info(Translator::getInstance()->trans("PayZen payment response for order %ref processing teminated.", ['%ref' => $orderRef], PayzenEmbedded::DOMAIN_NAME));
         }
 
-        $event->setStatus($status);
+        return $status;
     }
 
     /**
@@ -262,12 +256,5 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper implements EventSub
 
             $this->dispatcher->dispatch($event, TheliaEvents::ORDER_UPDATE_STATUS);
         }
-    }
-
-    public static function getSubscribedEvents()
-    {
-        return array(
-            'PAYZEN_EMBEDDED_PROCESS_PAYMENT_RESPONSE' => array('processPaymentResponse', 128),
-        );
     }
 }

@@ -85,4 +85,34 @@ class FrontHookManager extends BaseHook
             ));
         }
     }
+
+    public static function getSubscribedHooks()
+    {
+        return [
+            "order-payment-gateway.stylesheet" => [
+                [
+                    "type" => "front",
+                    "method" => "onOrderPaymentGatewayStylesheet"
+                ]
+            ],
+            "order-invoice.payment-extra" => [
+                [
+                    "type" => "front",
+                    "method" => "onOrderInvoicePayementExtra"
+                ]
+            ],
+            "account.additional" => [
+                [
+                    "type" => "front",
+                    "method" => "onAccountAdditional"
+                ]
+            ],
+            "order-invoice.after-javascript-include" => [
+                [
+                    "type" => "front",
+                    "method" => "onOrderInvoiceAfterJavascriptInclude"
+                ]
+            ]
+        ];
+    }
 }
