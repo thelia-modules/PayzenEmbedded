@@ -78,7 +78,7 @@ class FrontController extends BasePaymentModuleController
             $processPaymentEvent = new ProcessPaymentResponseEvent($formAnswer);
             $dispatcher->dispatch($processPaymentEvent, 'PAYZEN_EMBEDDED_PROCESS_PAYMENT_RESPONSE');
 
-            $paymentStatus = $processPaymentEvent->getStatus();
+            $paymentStatus = $lyraClient->processPaymentResponse($formAnswer);
 
             switch ($paymentStatus) {
                 case LyraPaymentManagementWrapper::PAYMENT_STATUS_PAID:
@@ -136,7 +136,7 @@ class FrontController extends BasePaymentModuleController
      */
     #[Route('/cancel-payment/{orderId}', name: 'abort_payment')]
     public function abortPayment(
-        EventDispatcher $dispatcher,
+        EventDispatcherInterface $dispatcher,
         SecurityContext $securityContext,
         Translator $translator,
         $orderId
@@ -147,7 +147,18 @@ class FrontController extends BasePaymentModuleController
             $customer = $securityContext->getCustomerUser();
 
             if ($order->getCustomerId() === $customer->getId()) {
-                $this->cancelOrder($dispatcher, $translator, $order);
+                $this->getLog()->addInfo(
+                    $translator->trans(
+                        "Processing cancelation of payment for order ref. %ref",
+                        ['%ref' => $order->getRef()]
+                    )
+                );
+
+                $event = (new OrderEvent($order))
+                    ->setStatus(OrderStatusQuery::getCancelledStatus()->getId());
+
+                $dispatcher->dispatch($event,TheliaEvents::ORDER_UPDATE_STATUS);
+
             } else {
                 $this->getLog()->addError($translator->trans($customer->getRef() . " is not allowed to cancel order " . $order->getRef(), [], PayzenEmbedded::DOMAIN_NAME));
 
@@ -158,37 +169,5 @@ class FrontController extends BasePaymentModuleController
         $message = $translator->trans("You canceled the payment", [], PayzenEmbedded::DOMAIN_NAME);
 
         $this->redirectToFailurePage($orderId, $message);
-    }
-
-    /**
-     * Get an order and issue a log message if not found.
-     */
-    protected function getOrderByRef(Translator $translator, string $orderReference)
-    {
-        if (null == $order = OrderQuery::create()->filterByRef($orderReference)->findOne()) {
-            $this->getLog()->addError(
-                $translator->trans("Unknown order reference:  %ref", array('%ref' => $orderReference))
-            );
-        }
-
-        return $order;
-    }
-
-    /**
-     * Set an order to the canceled status
-     */
-    protected function cancelOrder(EventDispatcher $dispatcher, Translator $translator, Order $order)
-    {
-        $this->getLog()->addInfo(
-            $translator->trans(
-                "Processing cancelation of payment for order ref. %ref",
-                ['%ref' => $order->getRef()]
-            )
-        );
-
-        $event = (new OrderEvent($order))
-            ->setStatus(OrderStatusQuery::getCancelledStatus()->getId());
-
-        $dispatcher->dispatch($event,TheliaEvents::ORDER_UPDATE_STATUS);
     }
 }

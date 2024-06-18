@@ -42,7 +42,7 @@ class ConfigurationForm extends BaseForm
                     'label' => $this->trans('Username'),
                     'data' => PayzenEmbedded::getConfigValue('site_id', '69876357'),
                     'label_attr' => array(
-                        'help' => $this->trans('This is your shop identifier. You received this information when you subscribed to PayZen')
+                        'help' => $this->trans('This is your shop identifier. You received this information when you subscribed to PayZen/SystemPay')
                     )
                 )
             )
@@ -136,7 +136,7 @@ class ConfigurationForm extends BaseForm
                     'label' => $this->trans('Web Services end point'),
                     'data' => PayzenEmbedded::getConfigValue('webservice_endpoint', 'https://api.payzen.eu'),
                     'label_attr' => array(
-                        'help' => $this->trans('This is the URL of the web service. You should change this value if you\'re usin a specific Lyra implementation instead of PayZen')
+                        'help' => $this->trans('This is the URL of the web service. You should change this value if you\'re usin a SystemPay implementation instead of PayZen')
                     )
                 )
             )
@@ -147,9 +147,9 @@ class ConfigurationForm extends BaseForm
                     'constraints' => array(new NotBlank()),
                     'required' => true,
                     'choices' => array(
-                        'TEST' => $this->trans('Test'),
-                        'PRODUCTION_RESTRICTED' => $this->trans('Restricted production'),
-                        'PRODUCTION' => $this->trans('Production'),
+                        $this->trans('Test') => 'TEST',
+                        $this->trans('Restricted production') => 'PRODUCTION_RESTRICTED',
+                        $this->trans('Production') => 'PRODUCTION',
                     ),
                     'label' => $this->trans('Operation Mode'),
                     'data' => PayzenEmbedded::getConfigValue('mode', 'TEST'),
@@ -160,7 +160,7 @@ class ConfigurationForm extends BaseForm
             )
             ->add(
                 'allowed_ip_list',
-                TextAreaType::class,
+                TextareaType::class,
                 array(
                     'required' => false,
                     'label' => $this->trans('Allowed IPs in test or restricted production modes'),
@@ -180,11 +180,11 @@ class ConfigurationForm extends BaseForm
                 array(
                     'required' => false,
                     'choices' => array(
-                        '' => $this->trans('None'),
-                        'EC'    => $this->trans('E-Commerce: transaction where the payment method data is directly filled in by the buyer.'),
-                        'MOTO'  => $this->trans('MAIL OR TELEPHONE ORDER: payment processed by an operator following a MOTO order.'),
-                        'CC'    => $this->trans('Call Center: payment made through a call center.'),
-                        'OTHER' => $this->trans('Other: payment made through a different source, e.g. Back Office.'),
+                        $this->trans('None') => '',
+                        $this->trans('E-Commerce: transaction where the payment method data is directly filled in by the buyer.') => 'EC',
+                        $this->trans('MAIL OR TELEPHONE ORDER: payment processed by an operator following a MOTO order.') => 'MOTO',
+                        $this->trans('Call Center: payment made through a call center.') => 'CC',
+                        $this->trans('Other: payment made through a different source, e.g. Back Office.') => 'OTHER',
                     ),
                     'label' => $this->trans('Payement source'),
                     'data' => PayzenEmbedded::getConfigValue('payment_source', ''),
@@ -243,9 +243,9 @@ class ConfigurationForm extends BaseForm
                 array(
                     'required' => false,
                     'choices' => array(
-                        '' => $this->trans('Default'),
-                        'NO' => $this->trans('Automatic'),
-                        'YES' => $this->trans('Manual'),
+                        $this->trans('Default') => '',
+                        $this->trans('Automatic') => 'NO',
+                        $this->trans('Manual') => 'YES',
                     ),
                     'label' => $this->trans('Payment validation'),
                     'data' => PayzenEmbedded::getConfigValue('validation_mode', ''),
@@ -262,9 +262,9 @@ class ConfigurationForm extends BaseForm
                 array(
                     'required' => false,
                     'choices' => array(
-                        'AUTO' => $this->trans('Default'),
-                        'DISABLED' => $this->trans('Disabled'),
-                        'ENABLED' => $this->trans('Enabled'),
+                        $this->trans('Default') => 'AUTO',
+                        $this->trans('Disabled') => 'DISABLED',
+                        $this->trans('Enabled') => 'ENABLED',
                     ),
                     'label' => $this->trans('Strong authentication'),
                     'data' => PayzenEmbedded::getConfigValue('strong_authentication', ''),
@@ -352,10 +352,5 @@ class ConfigurationForm extends BaseForm
     protected function trans($string, $args = [])
     {
         return $this->translator->trans($string, $args, PayzenEmbedded::DOMAIN_NAME);
-    }
-
-    public static function getName()
-    {
-        return 'payzen_embedded_configuration_form';
     }
 }
