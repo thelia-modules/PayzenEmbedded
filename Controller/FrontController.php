@@ -75,9 +75,7 @@ class FrontController extends BasePaymentModuleController
 
             $formAnswer = $rawAnswer['kr-answer'];
 
-            $processPaymentEvent = new ProcessPaymentResponseEvent($formAnswer);
-            $dispatcher->dispatch($processPaymentEvent, 'PAYZEN_EMBEDDED_PROCESS_PAYMENT_RESPONSE');
-
+            // Process platform response, and update the order accordingly.
             $paymentStatus = $lyraClient->processPaymentResponse($formAnswer);
 
             switch ($paymentStatus) {
