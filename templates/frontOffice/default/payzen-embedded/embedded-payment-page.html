@@ -60,9 +60,9 @@
 
                                 <dl class="dl-horizontal">
                                     <dt>{intl l='Error code' d=$dmn}</dt>
-                                    <dd>{$errorCode}{if $detailedErrorCode}({$detailedErrorCode}){/if}</dd>
+                                    <dd>{$errorCode}{if $detailedErrorCode|default:null}({$detailedErrorCode}){/if}</dd>
                                     <dt>{intl l='Error message' d=$dmn}</dt>
-                                    <dd>{$errorMessage}{if $detailedErrorMessage}({$detailedErrorMessage}){/if}</dd>
+                                    <dd>{$errorMessage}{if $detailedErrorMessage|default:null}({$detailedErrorMessage}){/if}</dd>
                                 </dl>
 
                                 <p><a href="{url path="/payzen-embedded/cancel-payment/%order_id" order_id=$order_id}" class="btn btn-primary">{intl l="Try again your payment" d=$dmn}</a></p>
@@ -82,10 +82,10 @@
 {block name="stylesheet"}
     <script type="text/javascript"
             src="https://api.lyra.com/static/js/krypton-client/V4.0/stable/kr-payment-form.min.js"
-            kr-public-key="{$public_key}"
+            kr-public-key="{$public_key|default:null}"
             kr-post-url-success="{url path="/order/placed/%order_id" order_id=$order_id}"
             kr-post-url-refused="{url path="/payzen-embedded/cancel-payment/%order_id" order_id=$order_id}"
-            kr-language="{$lang_code|lower}">
+            kr-language="{$lang_code|lower|default:null}">
     </script>
 
     <link rel="stylesheet" href="https://api.lyra.com/static/js/krypton-client/V4.0/ext/classic.css">
