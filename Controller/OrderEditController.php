@@ -23,7 +23,7 @@ use PayzenEmbedded\Form\TransactionGetForm;
 use PayzenEmbedded\Form\TransactionUpdateForm;
 use PayzenEmbedded\LyraClient\LyraTransactionGetWrapper;
 use PayzenEmbedded\PayzenEmbedded;
-use Symfony\Component\EventDispatcher\EventDispatcher;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Thelia\Controller\Admin\BaseAdminController;
 use Thelia\Core\Security\AccessManager;
 use Thelia\Core\Security\Resource\AdminResources;
@@ -42,7 +42,7 @@ use Symfony\Component\Routing\Annotation\Route;
 class OrderEditController extends BaseAdminController
 {
     #[Route('/update-transaction/{orderId}', name: 'update_transaction', methods: 'POST')]
-    public function updateTransaction(EventDispatcher $dispatcher, Translator $translator, $orderId)
+    public function updateTransaction(EventDispatcherInterface $dispatcher, Translator $translator, $orderId)
     {
         if (null !== $response = $this->checkAuth(AdminResources::MODULE, 'PayzenEmbedded', AccessManager::UPDATE)) {
             return $response;
@@ -96,7 +96,7 @@ class OrderEditController extends BaseAdminController
     }
 
     #[Route('/refresh-transaction/{orderId}', name: 'refresh_transaction', methods: 'POST')]
-    public function refreshTransaction(EventDispatcher $dispatcher, Translator $translator, $orderId)
+    public function refreshTransaction(EventDispatcherInterface $dispatcher, Translator $translator, $orderId)
     {
         if (null !== $response = $this->checkAuth(AdminResources::MODULE, 'PayzenEmbedded', AccessManager::UPDATE)) {
             return $response;
