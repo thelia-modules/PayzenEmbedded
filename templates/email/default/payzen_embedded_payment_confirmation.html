@@ -20,7 +20,7 @@
 
 {* Content  *}
 {block name="email-content"}
-    <p>{intl l='Your invoice is now available <a href="%account_url">in your customer account</a> on %store_name'}
+    <p>{intl l='Your invoice is now available <a href="%account_url">in your customer account</a> on %store_name'
         account_url={url path="/account"}
         store_name={config key="store_name"}
         d=$dom}</p>
