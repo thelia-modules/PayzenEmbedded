@@ -1,4 +1,4 @@
-{default_translation_domain domain='payzen.email.default'}
+{default_translation_domain domain='payzenembedded.email.default'}
 {default_locale locale={$locale}}
 {intl l="Dear customer,"}
 {intl l="This is a confirmation of the payment of your order %ref via PayZen on our shop." ref={$order_ref}}
