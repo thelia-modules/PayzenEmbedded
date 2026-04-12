@@ -123,7 +123,7 @@ class TransactionUpdateForm extends BaseForm
         }
     }
 
-    public static function getName()
+    public static function getName(): string
     {
         return 'payzen_embedded_order_edit_form';
     }

@@ -28,7 +28,7 @@ use Thelia\Model\OrderQuery;
 
 class TransactionUpdateListener implements EventSubscriberInterface
 {
-    public static function getSubscribedEvents()
+    public static function getSubscribedEvents(): array
     {
         return [
             PayzenEmbedded::TRANSACTION_UPDATE_EVENT => ["transactionUpdate", 128],
