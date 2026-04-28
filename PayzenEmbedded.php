@@ -15,11 +15,11 @@ namespace PayzenEmbedded;
 use PayzenEmbedded\LyraClient\LyraJavascriptClientManagementWrapper;
 use Propel\Runtime\Connection\ConnectionInterface;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ServicesConfigurator;
-use Thelia\Core\HttpFoundation\JsonResponse;
-use Thelia\Core\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Thelia\Core\Template\ParserInterface;
 use Thelia\Core\Translation\Translator;
-use Thelia\Install\Database;
+use Thelia\Core\Install\Database;
 use Thelia\Model\Lang;
 use Thelia\Model\LangQuery;
 use Thelia\Model\Message;
@@ -39,15 +39,7 @@ class PayzenEmbedded extends AbstractPaymentModule
     /** The transaction update event identifier */
     const TRANSACTION_UPDATE_EVENT = "payzenembedded.transaction_update_event";
 
-    /**
-     * Process a payment using the PayZen javascript client
-     *
-     * @param Order $order
-     *
-     * @return \Symfony\Component\HttpFoundation\Response
-     * @throws \Propel\Runtime\Exception\PropelException
-     */
-    public function pay(Order $order)
+    public function pay(Order $order): ?Response
     {
         // Use the embedded javascript client
         $lyraClient = new LyraJavascriptClientManagementWrapper($this->getDispatcher());
@@ -84,16 +76,7 @@ class PayzenEmbedded extends AbstractPaymentModule
         }
     }
 
-    /**
-     *
-     * This method is call on Payment loop.
-     *
-     * If you return true, the payment method will de display
-     * If you return false, the payment method will not be display
-     *
-     * @return boolean
-     */
-    public function isValidPayment()
+    public function isValidPayment(): bool
     {
         $valid = false;
 
@@ -144,11 +127,7 @@ class PayzenEmbedded extends AbstractPaymentModule
         return $order_total > 0 && ($min_amount <= 0 || $order_total >= $min_amount) && ($max_amount <= 0 || $order_total <= $max_amount);
     }
 
-    /**
-     * @param ConnectionInterface|null $con
-     * @throws \Exception
-     */
-    public function postActivation(ConnectionInterface $con = null): void
+    public function postActivation(?ConnectionInterface $con = null): void
     {
         $languages = LangQuery::create()->find();
 
@@ -188,20 +167,20 @@ class PayzenEmbedded extends AbstractPaymentModule
         }
     }
 
-    public function preActivation(ConnectionInterface $con = null)
+    public function preActivation(?ConnectionInterface $con = null): bool
     {
         $database = new Database($con);
-        $database->insertSql(null, array(__DIR__ . '/Config/create.sql'));
+        $database->insertSql(null, [__DIR__ . '/Config/create.sql']);
 
         return true;
     }
 
-    public function destroy(ConnectionInterface $con = null, $deleteModuleData = false): void
+    public function destroy(?ConnectionInterface $con = null, $deleteModuleData = false): void
     {
         if ($deleteModuleData) {
             $database = new Database($con);
 
-            $database->insertSql(null, array(__DIR__ . '/Config/destroy.sql'));
+            $database->insertSql(null, [__DIR__ . '/Config/destroy.sql']);
         }
     }
 

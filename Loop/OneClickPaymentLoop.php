@@ -23,30 +23,19 @@ use Thelia\Type\TypeCollection;
  */
 class OneClickPaymentLoop extends BaseLoop implements PropelSearchLoopInterface
 {
-    /**
-     * @return ArgumentCollection
-     */
-    protected function getArgDefinitions()
+    protected function getArgDefinitions(): ArgumentCollection
     {
         return new ArgumentCollection(
             Argument::createIntTypeArgument('customer_id', null, true)
         );
     }
 
-    /**
-     * @return PayzenEmbeddedCustomerTokenQuery
-     */
-    public function buildModelCriteria()
+    public function buildModelCriteria(): \Propel\Runtime\ActiveQuery\ModelCriteria
     {
         return PayzenEmbeddedCustomerTokenQuery::create()->filterByCustomerId($this->getCustomerId());
     }
 
-    /**
-     * @param LoopResult $loopResult
-     * @return LoopResult
-     * @throws \Propel\Runtime\Exception\PropelException
-     */
-    public function parseResults(LoopResult $loopResult)
+    public function parseResults(LoopResult $loopResult): LoopResult
     {
         /** @var \PayzenEmbedded\Model\PayzenEmbeddedCustomerToken $token */
         foreach ($loopResult->getResultDataCollection() as $token) {

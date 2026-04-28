@@ -26,7 +26,7 @@ use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Thelia\Core\Event\Order\OrderEvent;
 use Thelia\Core\Event\TheliaEvents;
-use Thelia\Core\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\Response;
 use Thelia\Core\HttpFoundation\Session\Session;
 use Thelia\Core\Security\Exception\AuthorizationException;
 use Thelia\Core\Security\SecurityContext;
@@ -46,7 +46,7 @@ use Symfony\Component\Routing\Attribute\Route;
 #[Route('/payzen-embedded', name: 'payzen_embedded_front_')]
 class FrontController extends BasePaymentModuleController
 {
-    protected function getModuleCode()
+    protected function getModuleCode(): string
     {
         return PayzenEmbedded::getModuleCode();
     }

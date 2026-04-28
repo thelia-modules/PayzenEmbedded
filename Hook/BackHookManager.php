@@ -61,7 +61,7 @@ class BackHookManager extends BaseHook
         ));
     }
 
-    public static function getSubscribedHooks()
+    public static function getSubscribedHooks(): array
     {
         return [
             "order-edit.bottom" => [

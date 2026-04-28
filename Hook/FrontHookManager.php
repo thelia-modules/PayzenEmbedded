@@ -86,7 +86,7 @@ class FrontHookManager extends BaseHook
         }
     }
 
-    public static function getSubscribedHooks()
+    public static function getSubscribedHooks(): array
     {
         return [
             "order-payment-gateway.stylesheet" => [

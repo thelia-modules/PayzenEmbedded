@@ -24,10 +24,7 @@ class TransactionHistoryLoop extends BaseLoop implements PropelSearchLoopInterfa
 {
     protected $timestampable = true;
 
-    /**
-     * @return ArgumentCollection
-     */
-    protected function getArgDefinitions()
+    protected function getArgDefinitions(): ArgumentCollection
     {
         return new ArgumentCollection(
             Argument::createIntTypeArgument('order_id'),
@@ -50,10 +47,7 @@ class TransactionHistoryLoop extends BaseLoop implements PropelSearchLoopInterfa
         );
     }
 
-    /**
-     * @return PayzenEmbeddedTransactionHistoryQuery
-     */
-    public function buildModelCriteria()
+    public function buildModelCriteria(): \Propel\Runtime\ActiveQuery\ModelCriteria
     {
         $search = PayzenEmbeddedTransactionHistoryQuery::create();
 
@@ -105,12 +99,7 @@ class TransactionHistoryLoop extends BaseLoop implements PropelSearchLoopInterfa
         return $search;
     }
 
-    /**
-     * @param LoopResult $loopResult
-     * @return LoopResult
-     * @throws \Propel\Runtime\Exception\PropelException
-     */
-    public function parseResults(LoopResult $loopResult)
+    public function parseResults(LoopResult $loopResult): LoopResult
     {
         /** @var \PayzenEmbedded\Model\PayzenEmbeddedTransactionHistory $transactionHistory */
         foreach ($loopResult->getResultDataCollection() as $transactionHistory) {
