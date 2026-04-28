@@ -99,12 +99,12 @@
                                         {form_field field="capture_date"}
                                             <div class="row">
                                                 <div class="col-md-12">
-                                                    <label for="{$label_attr.for}">
+                                                    <label for="{$label_attr.for|default:$name}">
                                                         {$label}
                                                     </label>
                                                 </div>
                                                 <div class="col-md-4">
-                                                    <select id="{$label_attr.for}_year" class="form-control" name="{$name}[year]">
+                                                    <select id="{$label_attr.for|default:$name}_year" class="form-control" name="{$name}[year]">
                                                         {for $year = $thisYear to $thisYear+1}
                                                             <option value="{$year}"{if {$smarty.now|date_format:'%Y'} == $year} selected{/if}>{$year}</option>
                                                         {/for}
@@ -112,7 +112,7 @@
                                                 </div>
 
                                                 <div class="col-md-4">
-                                                    <select id="{$label_attr.for}_month" class="form-control" name="{$name}[month]">
+                                                    <select id="{$label_attr.for|default:$name}_month" class="form-control" name="{$name}[month]">
                                                         {for $month = 1 to 12}
                                                             <option value="{$month}"{if {$smarty.now|date_format:'%m'} == $month} selected{/if}>{$month}</option>
                                                         {/for}
@@ -120,7 +120,7 @@
                                                 </div>
 
                                                 <div class="col-md-4">
-                                                    <select id="{$label_attr.for}_day" class="form-control" name="{$name}[day]">
+                                                    <select id="{$label_attr.for|default:$name}_day" class="form-control" name="{$name}[day]">
                                                         {for $days = 1 to 31}
                                                             <option value="{$days}"{if {$smarty.now|date_format:'%d'} == $days} selected{/if}>{$days}</option>
                                                         {/for}
