@@ -17,7 +17,7 @@ use Propel\Runtime\Connection\ConnectionInterface;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ServicesConfigurator;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
-use Thelia\Core\Template\ParserInterface;
+use Thelia\Core\Template\Parser\ParserResolver;
 use Thelia\Core\Translation\Translator;
 use Thelia\Core\Install\Database;
 use Thelia\Model\Lang;
@@ -52,17 +52,18 @@ class PayzenEmbedded extends AbstractPaymentModule
             // Pass the $resultData to the order-invoice script
             return new JsonResponse($resultData);
         } else {
-            /** @var ParserInterface $parser */
-            $parser = $this->getContainer()->get("thelia.parser");
+            /** @var ParserResolver $parserResolver */
+            $parserResolver = $this->getContainer()->get('thelia.parser.resolver');
 
-            $parser->setTemplateDefinition(
-                $parser->getTemplateHelper()->getActiveFrontTemplate(),
-                true
-            );
+            $templateHelper = $this->getContainer()->get('thelia.template_helper');
+            $activeTemplate = $templateHelper->getActiveFrontTemplate();
+
+            $parser = $parserResolver->getParser($activeTemplate->getAbsolutePath(), null);
+            $parser->setTemplateDefinition($activeTemplate, true);
 
             // Display the payment page which includes the javascript form.
             $renderedTemplate = $parser->render(
-                "payzen-embedded/embedded-payment-page.html",
+                "payzen-embedded/embedded-payment-page.html.twig",
                 array_merge(
                     [
                         "order_id" => $order->getId(),
