@@ -1,0 +1,93 @@
+{% set _d = 'payzenembedded.bo.default' %}
+<div class="card mb-3">
+    <div class="card-header">
+        <h2 class="card-title h5 mb-0">{{ 'PayZen Configuration'|trans({}, _d) }}</h2>
+    </div>
+    <div class="card-body">
+        {{ form_start(form, {'action': path('payzen_embedded_configure'), 'method': 'post', 'attr': {'class': 'payzen-embedded-config-form'}}) }}
+            {{ form_errors(form) }}
+
+            <div class="row">
+                <div class="col-md-4">
+                    <p class="h6">{{ 'Access to PayZen Platform'|trans({}, _d) }}</p>
+
+                    {{ form_row(form.site_id) }}
+                    {{ form_row(form.webservice_endpoint) }}
+                    {{ form_row(form.mode) }}
+                    {{ form_row(form.allowed_ip_list) }}
+
+                    <div class="mb-3">
+                        <label class="form-label">{{ 'Return URL in the back-office'|trans({}, _d) }}</label>
+                        <div class="card card-body bg-light p-2">{{ ipn_callback_url }}</div>
+                        <span class="form-text">
+                            {{ "Copy this URL in the 'URL to notify in TEST mode' and 'URL to notify in PRODUCTION mode' (which must not be mistaken with the 'Return URL of the shop') in 'Notification rules' fields in the PayZen back-office"|trans({}, _d) }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <p class="h6">{{ 'Test parameters'|trans({}, _d) }}</p>
+
+                    {{ form_row(form.test_password) }}
+                    {{ form_row(form.javascript_test_key) }}
+                    {{ form_row(form.signature_test_key) }}
+
+                    <p class="h6">{{ 'Production parameters'|trans({}, _d) }}</p>
+
+                    {{ form_row(form.production_password) }}
+                    {{ form_row(form.javascript_production_key) }}
+                    {{ form_row(form.signature_production_key) }}
+                </div>
+
+                <div class="col-md-4">
+                    <p class="h6">{{ 'Payment configuration'|trans({}, _d) }}</p>
+
+                    {{ form_row(form.popup_mode) }}
+                    {{ form_row(form.allow_one_click_payments) }}
+                    {{ form_row(form.payment_source) }}
+                    {{ form_row(form.capture_delay) }}
+                    {{ form_row(form.validation_mode) }}
+                    {{ form_row(form.strong_authentication) }}
+
+                    <p class="h6">{{ 'One time payment'|trans({}, _d) }}</p>
+
+                    <div class="mb-3">
+                        {{ form_label(form.minimum_amount) }}
+                        <div class="input-group">
+                            {{ form_widget(form.minimum_amount, {'attr': {'class': 'form-control' ~ (form.minimum_amount.vars.errors|length ? ' is-invalid' : '')}}) }}
+                            <span class="input-group-text">{{ default_currency_symbol }}</span>
+                        </div>
+                        {{ form_errors(form.minimum_amount) }}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form_label(form.maximum_amount) }}
+                        <div class="input-group">
+                            {{ form_widget(form.maximum_amount, {'attr': {'class': 'form-control' ~ (form.maximum_amount.vars.errors|length ? ' is-invalid' : '')}}) }}
+                            <span class="input-group-text">{{ default_currency_symbol }}</span>
+                        </div>
+                        {{ form_errors(form.maximum_amount) }}
+                    </div>
+
+                    <p class="h6">{{ 'Email configuration'|trans({}, _d) }}</p>
+
+                    {{ form_row(form.send_confirmation_message_only_if_paid) }}
+                    {{ form_row(form.send_payment_confirmation_message) }}
+
+                    {% if payment_confirmation_message_id %}
+                        <div class="card card-body bg-light p-2">
+                            <span><i class="bi bi-info-circle"></i></span>
+                            {{ 'You can edit the payment confirmation email sent to the customer after a successful payment.'|trans({}, _d) }}
+                            <a href="{{ path('admin.configuration.messages.update', {'message_id': payment_confirmation_message_id}) }}">{{ 'Edit'|trans({}, _d) }}</a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="text-end mt-3">
+                <a href="{{ path('admin.module') }}" class="btn btn-secondary">{{ 'Cancel'|trans({}, _d) }}</a>
+                <button type="submit" class="btn btn-success"><i class="bi bi-save"></i> {{ 'Save'|trans({}, _d) }}</button>
+            </div>
+        {{ form_end(form) }}
+    </div>
+</div>

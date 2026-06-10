@@ -1,0 +1,78 @@
+{% set _d = 'payzenembedded.bo.default' %}
+<div id="payzen-embedded">
+    <div class="card mb-3">
+        <div class="card-header">
+            <h2 class="card-title h5 mb-0">{{ 'PayZen transaction history'|trans({}, _d) }}</h2>
+        </div>
+        <div class="card-body">
+            {% if transactions|length %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                        <tr>
+                            <th>{{ 'Transaction ID'|trans({}, _d) }}</th>
+                            <th>{{ 'Creation date'|trans({}, _d) }}</th>
+                            <th>{{ 'Update date'|trans({}, _d) }}</th>
+                            <th>{{ 'Status'|trans({}, _d) }}</th>
+                            <th>{{ 'Amount'|trans({}, _d) }}</th>
+                            <th>{{ 'Error code'|trans({}, _d) }}</th>
+                            <th>{{ 'Error message'|trans({}, _d) }}</th>
+                            <th>&nbsp;</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for transaction in transactions %}
+                            {% include 'payzen-embedded/transaction-table-content.inc.html.twig' with {'transaction': transaction, 'hide_order_ref': true} only %}
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if not finished %}
+                    <hr>
+                    <h3 class="h6">{{ 'Update PayZen transaction'|trans({}, _d) }}</h3>
+                    <div class="alert alert-info">
+                        {{ 'You can update here the PayZen transaction related to this order. You can change the transaction amount (it should be greater or eaqual to the current amount), define the capture date (the date at which the payment is done), and the validation mode, to change manual validation to automatic validation of the transaction'|trans({}, _d) }}
+                    </div>
+
+                    {{ form_start(update_form, {'action': path('payzen_embedded_order_edit_update_transaction', {'orderId': order_id}), 'method': 'post'}) }}
+                        {{ form_errors(update_form) }}
+                        <input type="hidden" name="{{ update_form.order_id.vars.full_name }}" value="{{ order_id }}">
+                        {% do update_form.order_id.setRendered %}
+
+                        <div class="row">
+                            <div class="col-md-4">
+                                {{ form_label(update_form.amount) }}
+                                <div class="input-group">
+                                    {{ form_widget(update_form.amount, {'value': last_transaction_amount, 'attr': {'class': 'form-control' ~ (update_form.amount.vars.errors|length ? ' is-invalid' : '')}}) }}
+                                </div>
+                                {{ form_help(update_form.amount) }}
+                                {{ form_errors(update_form.amount) }}
+                            </div>
+                            <div class="col-md-4">
+                                {{ form_row(update_form.capture_date) }}
+                            </div>
+                            <div class="col-md-4">
+                                {{ form_row(update_form.automatic_validation) }}
+                            </div>
+                        </div>
+
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-primary">{{ 'Update transaction'|trans({}, _d) }}</button>
+                        </div>
+                    {{ form_end(update_form) }}
+                {% endif %}
+            {% else %}
+                {{ form_start(get_form, {'action': path('payzen_embedded_order_edit_refresh_transaction', {'orderId': order_id}), 'method': 'post'}) }}
+                    {{ form_errors(get_form) }}
+                    <div class="alert alert-info">
+                        <input type="hidden" name="{{ get_form.order_id.vars.full_name }}" value="{{ order_id }}">
+                        {% do get_form.order_id.setRendered %}
+                        <p>{{ 'There is no history for this transaction.'|trans({}, _d) }}</p>
+                        <button type="submit" class="btn btn-info">{{ 'Refresh history'|trans({}, _d) }}</button>
+                    </div>
+                {{ form_end(get_form) }}
+            {% endif %}
+        </div>
+    </div>
+</div>

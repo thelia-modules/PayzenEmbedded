@@ -1,0 +1,53 @@
+{# Renders a single transaction history row. Expects `transaction` (array) and optional `hide_order_ref` (bool). #}
+{% set _d = 'payzenembedded.bo.default' %}
+{% set hide_order_ref = hide_order_ref|default(false) %}
+<tr>
+    <td>{{ transaction.TRANSACTION_REF }}</td>
+    {% if not hide_order_ref %}
+        <td>
+            {% if transaction.ORDER_ID %}
+                <a href="{{ path('admin.order.update.view', {'order_id': transaction.ORDER_ID}) }}">{{ transaction.ORDER_REF }}</a>
+            {% else %}
+                {{ 'None'|trans({}, _d) }}
+            {% endif %}
+        </td>
+    {% endif %}
+
+    <td>{{ transaction.CREATION_DATE ? transaction.CREATION_DATE|date('Y-m-d H:i:s') : '' }}</td>
+    <td>{{ transaction.UPDATE_DATE ? transaction.UPDATE_DATE|date('Y-m-d H:i:s') : '' }}</td>
+    <td>
+        {% if transaction.STATUS == 'PAID' %}
+            {% set mode = 'success' %}
+        {% elseif transaction.STATUS == 'UNPAID' %}
+            {% set mode = 'danger' %}
+        {% else %}
+            {% set mode = 'info' %}
+        {% endif %}
+        <span class="badge text-bg-{{ mode }}">{{ transaction.STATUS }}</span>
+        {% if transaction.DETAILED_STATUS %} ({{ transaction.DETAILED_STATUS }}){% endif %}
+    </td>
+    <td>
+        {{ (transaction.AMOUNT / 100)|number_format(2, '.', ' ') }} {{ transaction.CURRENCY_SYMBOL }}
+    </td>
+    <td>
+        {% if transaction.ERROR_CODE %}
+            {{ transaction.ERROR_CODE }}{% if transaction.DETAILED_ERROR_CODE %} ({{ transaction.DETAILED_ERROR_CODE }}){% endif %}
+        {% else %}
+            <div class="text-center">-</div>
+        {% endif %}
+    </td>
+    <td>
+        {% if transaction.ERROR_MESSAGE %}
+            {{ transaction.ERROR_MESSAGE }}{% if transaction.DETAILED_ERROR_MESSAGE %} ({{ transaction.DETAILED_ERROR_MESSAGE }}){% endif %}
+        {% else %}
+            <div class="text-center">-</div>
+        {% endif %}
+    </td>
+    <td>
+        {% if transaction.IS_FINISHED %}
+            <span class="badge text-bg-success">{{ 'Finished'|trans({}, _d) }}</span>
+        {% else %}
+            <span class="badge text-bg-info">{{ 'In progress'|trans({}, _d) }}</span>
+        {% endif %}
+    </td>
+</tr>

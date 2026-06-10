@@ -1,0 +1,38 @@
+{% set _d = 'payzenembedded.bo.default' %}
+<div id="payzen-embedded">
+    <div class="card mb-3">
+        <div class="card-header">
+            <h2 class="card-title h5 mb-0">{{ 'Customer PayZen transaction history'|trans({}, _d) }}</h2>
+        </div>
+        <div class="card-body">
+            {% if transactions|length %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                        <tr>
+                            <th>{{ 'Transaction ID'|trans({}, _d) }}</th>
+                            <th>{{ 'Order'|trans({}, _d) }}</th>
+                            <th>{{ 'Creation date'|trans({}, _d) }}</th>
+                            <th>{{ 'Update date'|trans({}, _d) }}</th>
+                            <th>{{ 'Status'|trans({}, _d) }}</th>
+                            <th>{{ 'Amount'|trans({}, _d) }}</th>
+                            <th>{{ 'Error code'|trans({}, _d) }}</th>
+                            <th>{{ 'Error message'|trans({}, _d) }}</th>
+                            <th>&nbsp;</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for transaction in transactions %}
+                            {% include 'payzen-embedded/transaction-table-content.inc.html.twig' with {'transaction': transaction, 'hide_order_ref': false} only %}
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info mb-0">
+                    {{ 'There is no transaction history for this customer.'|trans({}, _d) }}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
