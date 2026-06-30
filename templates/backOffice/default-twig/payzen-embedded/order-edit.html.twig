@@ -50,10 +50,22 @@
                                 {{ form_errors(update_form.amount) }}
                             </div>
                             <div class="col-md-4">
-                                {{ form_row(update_form.capture_date) }}
+                                <div class="mb-3">
+                                    {{ form_label(update_form.capture_date) }}
+                                    <div class="d-flex gap-2">
+                                        {{ form_widget(update_form.capture_date.day, {attr: {class: 'form-select'}}) }}
+                                        {{ form_widget(update_form.capture_date.month, {attr: {class: 'form-select'}}) }}
+                                        {{ form_widget(update_form.capture_date.year, {attr: {class: 'form-select'}}) }}
+                                    </div>
+                                    {{ form_errors(update_form.capture_date) }}
+                                </div>
                             </div>
                             <div class="col-md-4">
-                                {{ form_row(update_form.automatic_validation) }}
+                                <div class="mb-3 form-check">
+                                    {{ form_widget(update_form.automatic_validation, {attr: {class: 'form-check-input'}}) }}
+                                    {{ form_label(update_form.automatic_validation, null, {label_attr: {class: 'form-check-label'}}) }}
+                                    {{ form_errors(update_form.automatic_validation) }}
+                                </div>
                             </div>
                         </div>
 
