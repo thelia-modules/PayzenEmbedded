@@ -71,7 +71,8 @@ class ConfigurationController extends BaseAdminController
             );
 
             // Redirect to the success URL,
-            if ($requestStack->getCurrentRequest()->get('save_mode') == 'stay') {
+            $currentRequest = $requestStack->getCurrentRequest();
+            if ($currentRequest?->attributes->get('save_mode', $currentRequest->query->get('save_mode', $currentRequest->request->get('save_mode'))) == 'stay') {
                 // If we have to stay on the same page, redisplay the configuration page/
                 $route = '/admin/module/PayzenEmbedded';
             } else {
