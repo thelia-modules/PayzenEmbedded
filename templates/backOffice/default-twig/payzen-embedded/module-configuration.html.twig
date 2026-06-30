@@ -11,10 +11,29 @@
                 <div class="col-md-4">
                     <p class="h6">{{ 'Access to PayZen Platform'|trans({}, _d) }}</p>
 
-                    {{ form_row(form.site_id) }}
-                    {{ form_row(form.webservice_endpoint) }}
-                    {{ form_row(form.mode) }}
-                    {{ form_row(form.allowed_ip_list) }}
+                    <div class="mb-3">
+                        {{ form_label(form.site_id) }}
+                        {{ form_widget(form.site_id, {attr: {class: 'form-control'}}) }}
+                        {{ form_errors(form.site_id) }}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form_label(form.webservice_endpoint) }}
+                        {{ form_widget(form.webservice_endpoint, {attr: {class: 'form-control'}}) }}
+                        {{ form_errors(form.webservice_endpoint) }}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form_label(form.mode) }}
+                        {{ form_widget(form.mode, {attr: {class: 'form-select'}}) }}
+                        {{ form_errors(form.mode) }}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form_label(form.allowed_ip_list) }}
+                        {{ form_widget(form.allowed_ip_list, {attr: {class: 'form-control'}}) }}
+                        {{ form_errors(form.allowed_ip_list) }}
+                    </div>
 
                     <div class="mb-3">
                         <label class="form-label">{{ 'Return URL in the back-office'|trans({}, _d) }}</label>
@@ -28,26 +47,83 @@
                 <div class="col-md-4">
                     <p class="h6">{{ 'Test parameters'|trans({}, _d) }}</p>
 
-                    {{ form_row(form.test_password) }}
-                    {{ form_row(form.javascript_test_key) }}
-                    {{ form_row(form.signature_test_key) }}
+                    <div class="mb-3">
+                        {{ form_label(form.test_password) }}
+                        {{ form_widget(form.test_password, {attr: {class: 'form-control'}}) }}
+                        {{ form_errors(form.test_password) }}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form_label(form.javascript_test_key) }}
+                        {{ form_widget(form.javascript_test_key, {attr: {class: 'form-control'}}) }}
+                        {{ form_errors(form.javascript_test_key) }}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form_label(form.signature_test_key) }}
+                        {{ form_widget(form.signature_test_key, {attr: {class: 'form-control'}}) }}
+                        {{ form_errors(form.signature_test_key) }}
+                    </div>
 
                     <p class="h6">{{ 'Production parameters'|trans({}, _d) }}</p>
 
-                    {{ form_row(form.production_password) }}
-                    {{ form_row(form.javascript_production_key) }}
-                    {{ form_row(form.signature_production_key) }}
+                    <div class="mb-3">
+                        {{ form_label(form.production_password) }}
+                        {{ form_widget(form.production_password, {attr: {class: 'form-control'}}) }}
+                        {{ form_errors(form.production_password) }}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form_label(form.javascript_production_key) }}
+                        {{ form_widget(form.javascript_production_key, {attr: {class: 'form-control'}}) }}
+                        {{ form_errors(form.javascript_production_key) }}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form_label(form.signature_production_key) }}
+                        {{ form_widget(form.signature_production_key, {attr: {class: 'form-control'}}) }}
+                        {{ form_errors(form.signature_production_key) }}
+                    </div>
                 </div>
 
                 <div class="col-md-4">
                     <p class="h6">{{ 'Payment configuration'|trans({}, _d) }}</p>
 
-                    {{ form_row(form.popup_mode) }}
-                    {{ form_row(form.allow_one_click_payments) }}
-                    {{ form_row(form.payment_source) }}
-                    {{ form_row(form.capture_delay) }}
-                    {{ form_row(form.validation_mode) }}
-                    {{ form_row(form.strong_authentication) }}
+                    <div class="mb-3 form-check">
+                        {{ form_widget(form.popup_mode, {attr: {class: 'form-check-input'}}) }}
+                        {{ form_label(form.popup_mode, null, {label_attr: {class: 'form-check-label'}}) }}
+                        {{ form_errors(form.popup_mode) }}
+                    </div>
+
+                    <div class="mb-3 form-check">
+                        {{ form_widget(form.allow_one_click_payments, {attr: {class: 'form-check-input'}}) }}
+                        {{ form_label(form.allow_one_click_payments, null, {label_attr: {class: 'form-check-label'}}) }}
+                        {{ form_errors(form.allow_one_click_payments) }}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form_label(form.payment_source) }}
+                        {{ form_widget(form.payment_source, {attr: {class: 'form-select'}}) }}
+                        {{ form_errors(form.payment_source) }}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form_label(form.capture_delay) }}
+                        {{ form_widget(form.capture_delay, {attr: {class: 'form-control'}}) }}
+                        {{ form_errors(form.capture_delay) }}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form_label(form.validation_mode) }}
+                        {{ form_widget(form.validation_mode, {attr: {class: 'form-select'}}) }}
+                        {{ form_errors(form.validation_mode) }}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form_label(form.strong_authentication) }}
+                        {{ form_widget(form.strong_authentication, {attr: {class: 'form-select'}}) }}
+                        {{ form_errors(form.strong_authentication) }}
+                    </div>
 
                     <p class="h6">{{ 'One time payment'|trans({}, _d) }}</p>
 
@@ -71,8 +147,17 @@
 
                     <p class="h6">{{ 'Email configuration'|trans({}, _d) }}</p>
 
-                    {{ form_row(form.send_confirmation_message_only_if_paid) }}
-                    {{ form_row(form.send_payment_confirmation_message) }}
+                    <div class="mb-3 form-check">
+                        {{ form_widget(form.send_confirmation_message_only_if_paid, {attr: {class: 'form-check-input'}}) }}
+                        {{ form_label(form.send_confirmation_message_only_if_paid, null, {label_attr: {class: 'form-check-label'}}) }}
+                        {{ form_errors(form.send_confirmation_message_only_if_paid) }}
+                    </div>
+
+                    <div class="mb-3 form-check">
+                        {{ form_widget(form.send_payment_confirmation_message, {attr: {class: 'form-check-input'}}) }}
+                        {{ form_label(form.send_payment_confirmation_message, null, {label_attr: {class: 'form-check-label'}}) }}
+                        {{ form_errors(form.send_payment_confirmation_message) }}
+                    </div>
 
                     {% if payment_confirmation_message_id %}
                         <div class="card card-body bg-light p-2">
