@@ -21,6 +21,7 @@
         <column name="uuid" type="VARCHAR" size="128" />
         <column name="status" type="VARCHAR" size="10" />
         <column name="detailedStatus" type="VARCHAR" size="32" />
+        <column name="payment_method_type" type="VARCHAR" size="64" />
         <column name="amount" type="INTEGER" size="11" />
         <column name="currency_id" type="INTEGER" required="true" />
         <column name="creationDate" type="TIMESTAMP" />

@@ -78,6 +78,13 @@
                             {render_form_field field="validation_mode"}
                             {render_form_field field="strong_authentication"}
 
+                            <p class="title title-without-tabs">{intl d=$_d l="Payment methods"}</p>
+
+                            {render_form_field field="restrict_payment_methods"}
+                            {render_form_field field="allowed_payment_methods"}
+                            {render_form_field field="additional_payment_methods"}
+                            {render_form_field field="apple_pay_merchant_id"}
+
                             <p class="title title-without-tabs">{intl d=$_d l="One time payment"}</p>
 
                             {custom_render_form_field field="minimum_amount"}

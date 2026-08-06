@@ -125,6 +125,7 @@ class TransactionHistoryLoop extends BaseLoop implements PropelSearchLoopInterfa
                     ->set('TRANSACTION_REF', $transactionHistory->getUuid())
                     ->set('STATUS', $transactionHistory->getStatus())
                     ->set('DETAILED_STATUS', $transactionHistory->getDetailedstatus())
+                    ->set('PAYMENT_METHOD_TYPE', $transactionHistory->getPaymentMethodType())
                     ->set('AMOUNT', $transactionHistory->getAmount())
                     ->set('CURRENCY_ID', $transactionHistory->getCurrencyId())
                     ->set('CREATION_DATE', $transactionHistory->getCreationdate())

@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS `payzen_embedded_transaction_history`
     `uuid` VARCHAR(128),
     `status` VARCHAR(10),
     `detailedStatus` VARCHAR(32),
+    `payment_method_type` VARCHAR(64),
     `amount` INTEGER(11),
     `currency_id` INTEGER NOT NULL,
     `creationDate` DATETIME,

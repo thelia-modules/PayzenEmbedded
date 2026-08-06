@@ -276,6 +276,66 @@ class ConfigurationForm extends BaseForm
                 )
             )
 
+            // -- Payment methods --------------------------------------------------------------------------------------
+            ->add(
+                'restrict_payment_methods',
+                CheckboxType::class,
+                array(
+                    'required' => false,
+                    'label' => $this->trans('Restrict the displayed payment methods'),
+                    'data' => boolval(PayzenEmbedded::getConfigValue('restrict_payment_methods', false)),
+                    'label_attr' => array(
+                        'help' => $this->trans('If unchecked, every payment method enabled in your Lyra Back Office (cards, wallets, PayPal, meal vouchers, split payment...) is displayed automatically. Check this box to restrict the methods offered to your customers to the selection below.')
+                    )
+                )
+            )
+            ->add(
+                'allowed_payment_methods',
+                ChoiceType::class,
+                array(
+                    'required' => false,
+                    'multiple' => true,
+                    'expanded' => true,
+                    'choices' => array(
+                        $this->trans('Bank cards (CB, Visa, Mastercard...)') => PayzenEmbedded::PAYMENT_METHOD_CARDS,
+                        $this->trans('Apple Pay') => PayzenEmbedded::PAYMENT_METHOD_APPLE_PAY,
+                        $this->trans('Google Pay') => PayzenEmbedded::PAYMENT_METHOD_GOOGLE_PAY,
+                        $this->trans('PayPal') => PayzenEmbedded::PAYMENT_METHOD_PAYPAL,
+                        $this->trans('Meal vouchers (CONECS)') => PayzenEmbedded::PAYMENT_METHOD_CONECS,
+                    ),
+                    'label' => $this->trans('Allowed payment methods'),
+                    'data' => array_filter(explode(';', (string) PayzenEmbedded::getConfigValue('allowed_payment_methods', ''))),
+                    'label_attr' => array(
+                        'help' => $this->trans('Only used when "Restrict the displayed payment methods" is checked. A method is offered only if it is also enabled in your Lyra Back Office.')
+                    )
+                )
+            )
+            ->add(
+                'additional_payment_methods',
+                TextareaType::class,
+                array(
+                    'required' => false,
+                    'label' => $this->trans('Additional payment method codes'),
+                    'data' => PayzenEmbedded::getConfigValue('additional_payment_methods', ''),
+                    'label_attr' => array(
+                        'help' => $this->trans('Only used when the restriction is enabled. Contract-specific payment method codes not listed above (e.g. split/deferred payment such as Oney or Alma, local schemes), as provided by Lyra. One code per line.'),
+                        'rows' => 3
+                    )
+                )
+            )
+            ->add(
+                'apple_pay_merchant_id',
+                TextType::class,
+                array(
+                    'required' => false,
+                    'label' => $this->trans('Apple Pay Merchant ID'),
+                    'data' => PayzenEmbedded::getConfigValue('apple_pay_merchant_id', ''),
+                    'label_attr' => array(
+                        'help' => $this->trans('Your Apple Pay Merchant ID, as configured in your Lyra Back Office. Apple Pay also requires hosting a domain verification file on your site (see the module documentation).')
+                    )
+                )
+            )
+
             ->add(
                 'minimum_amount',
                 NumberType::class,

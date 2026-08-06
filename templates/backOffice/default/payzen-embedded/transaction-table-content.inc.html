@@ -30,6 +30,7 @@
         {/if}
         <div class="label label-{$mode}">{$STATUS}</div>
         {if $DETAILED_STATUS} ({$DETAILED_STATUS}){/if}
+        {if $PAYMENT_METHOD_TYPE}<br><small class="text-muted">{$PAYMENT_METHOD_TYPE}</small>{/if}
     </td>
     <td>
         {loop type="currency" name="cur" id=$CURRENCY_ID}

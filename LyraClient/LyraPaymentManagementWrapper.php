@@ -104,6 +104,12 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             ],
         ];
 
+        // Restrict the payment methods displayed in the smartForm, if configured. When no restriction
+        // is set, every method enabled in the Lyra Back Office is displayed automatically.
+        if ([] !== $paymentMethods = PayzenEmbedded::getRestrictedPaymentMethods()) {
+            $store['paymentMethods'] = $paymentMethods;
+        }
+
         // Add 1-click payment token if we have one, and if it is allowed
         if ($this->oneClickEnabled && (null !== $tokenData = PayzenEmbeddedCustomerTokenQuery::create()->findOneByCustomerId($customer->getId()))) {
             $store['paymentMethodToken'] = $tokenData->getPaymentToken();

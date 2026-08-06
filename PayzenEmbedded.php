@@ -40,6 +40,45 @@ class PayzenEmbedded extends AbstractPaymentModule
     const TRANSACTION_UPDATE_EVENT = "payzenembedded.transaction_update_event";
 
     /**
+     * Payment method type codes, used by the Lyra "paymentMethods" API parameter to restrict
+     * the methods displayed in the smartForm.
+     *
+     * IMPORTANT: the exact codes available depend on your Lyra contract and on the methods enabled
+     * in your Lyra Back Office. Validate them against your Back Office / Lyra support before enabling
+     * a restriction in production (see Readme.md). Contract-specific methods (Oney, Alma, Franfinance,
+     * local schemes...) can be added through the "additional payment methods" configuration field.
+     */
+    const PAYMENT_METHOD_CARDS = 'CARDS';
+    const PAYMENT_METHOD_APPLE_PAY = 'APPLE_PAY';
+    const PAYMENT_METHOD_GOOGLE_PAY = 'GOOGLE_PAY';
+    const PAYMENT_METHOD_PAYPAL = 'PAYPAL';
+    const PAYMENT_METHOD_CONECS = 'CONECS';
+
+    /**
+     * Build the list of payment methods the smartForm should be restricted to, from the module
+     * configuration. Returns an empty array when no restriction is configured, in which case every
+     * method enabled in the Lyra Back Office is displayed in the smartForm.
+     *
+     * @return string[]
+     */
+    public static function getRestrictedPaymentMethods(): array
+    {
+        if (! (bool) self::getConfigValue('restrict_payment_methods', false)) {
+            return [];
+        }
+
+        $methods = array_filter(explode(';', (string) self::getConfigValue('allowed_payment_methods', '')));
+
+        foreach (explode("\n", (string) self::getConfigValue('additional_payment_methods', '')) as $additional) {
+            if ('' !== $additional = trim($additional)) {
+                $methods[] = $additional;
+            }
+        }
+
+        return array_values(array_unique($methods));
+    }
+
+    /**
      * Process a payment using the PayZen javascript client
      *
      * @param Order $order
@@ -202,6 +241,24 @@ class PayzenEmbedded extends AbstractPaymentModule
             $database = new Database($con);
 
             $database->insertSql(null, array(__DIR__ . '/Config/destroy.sql'));
+        }
+    }
+
+    public function update($currentVersion, $newVersion, ConnectionInterface $con = null): void
+    {
+        if (null === $con) {
+            return;
+        }
+
+        // 2.6.0: keep track of the payment method type (card, wallet, PayPal...) used for each transaction.
+        $columnExists = $con
+            ->query("SHOW COLUMNS FROM `payzen_embedded_transaction_history` LIKE 'payment_method_type'")
+            ->fetch();
+
+        if (false === $columnExists) {
+            $con->exec(
+                "ALTER TABLE `payzen_embedded_transaction_history` ADD COLUMN `payment_method_type` VARCHAR(64) NULL AFTER `detailedStatus`"
+            );
         }
     }
 

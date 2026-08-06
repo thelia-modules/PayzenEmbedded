@@ -23,6 +23,36 @@ certification PCI-DSS n'est pas nécessaire.
 Les clients peuvent demander à tout moment la suppression des informations de paiement enregistrées, depuis leur compte
 client, ou au moment de payer leur commande.
 
+## Moyens de paiement (smartForm)
+
+Depuis la version 2.6.0, le module utilise le **smartForm** de Lyra (`kr-smart-form`) à la place de l'ancien
+formulaire embarqué carte bancaire (`kr-embedded`). L'intérêt principal est que **tous les moyens de paiement
+activés dans votre Back Office Lyra s'affichent automatiquement** dans le tunnel de paiement, sans développement
+supplémentaire : carte bancaire, Apple Pay, Google Pay, PayPal, titre-restaurant dématérialisé (CONECS), paiement
+fractionné / différé (selon votre contrat)...
+
+Par défaut, aucune restriction n'est appliquée : c'est votre Back Office Lyra qui pilote la liste des moyens
+disponibles. Vous pouvez toutefois restreindre les moyens proposés à vos clients depuis la configuration du module
+(section « Payment methods »), en cochant « Restrict the displayed payment methods » puis en sélectionnant les
+moyens autorisés. Les moyens spécifiques à votre contrat (Oney, Alma...) peuvent être ajoutés via le champ
+« Additional payment method codes » (un code par ligne, tel que fourni par Lyra).
+
+Le moyen de paiement effectivement utilisé pour chaque transaction est tracé dans l'historique des transactions.
+
+### Apple Pay
+
+En plus de l'activation d'Apple Pay dans votre Back Office Lyra, Apple Pay nécessite :
+- de renseigner votre **Apple Pay Merchant ID** dans la configuration du module ;
+- d'héberger un **fichier de vérification de domaine** fourni par Lyra sur votre site.
+
+### Limites connues
+
+- **Paiement récurrent / abonnement** : le module gère le paiement en 1-clic (rejeu d'un alias à l'initiative du
+  client), mais pas encore les abonnements pilotés côté marchand (paiements récurrents programmés). Cette évolution
+  nécessite une intégration dédiée de l'API subscription Lyra.
+- Les codes exacts des moyens de paiement et les modalités CONECS (plafond journalier, paiement mixte) dépendent de
+  votre contrat marchand et doivent être validés auprès de Lyra.
+
 ## Historique des transactions
 
 L'historique des transactions PayZen est disponible pour chaque commande sur le détail de la commande dans le 
@@ -134,6 +164,34 @@ PCI-DSS certification is not required.
 
 Customers may request at any time the removal of the registered payment information from their account
 customer page, or before paying an order.
+
+## Payment methods (smartForm)
+
+Since version 2.6.0, the module uses the Lyra **smartForm** (`kr-smart-form`) instead of the legacy embedded card
+form (`kr-embedded`). The main benefit is that **every payment method enabled in your Lyra Back Office is displayed
+automatically** in the payment flow, with no extra development: bank cards, Apple Pay, Google Pay, PayPal, digitized
+meal vouchers (CONECS), split / deferred payment (depending on your contract)...
+
+By default no restriction is applied: your Lyra Back Office drives the list of available methods. You may still
+restrict the methods offered to your customers from the module configuration ("Payment methods" section) by checking
+"Restrict the displayed payment methods" and selecting the allowed methods. Contract-specific methods (Oney, Alma...)
+can be added through the "Additional payment method codes" field (one code per line, as provided by Lyra).
+
+The payment method actually used for each transaction is recorded in the transaction history.
+
+### Apple Pay
+
+In addition to enabling Apple Pay in your Lyra Back Office, Apple Pay requires:
+- setting your **Apple Pay Merchant ID** in the module configuration;
+- hosting a **domain verification file** provided by Lyra on your site.
+
+### Known limitations
+
+- **Recurring payment / subscription**: the module supports one-click payment (customer-initiated token replay) but
+  not yet merchant-driven subscriptions (scheduled recurring payments). This would require a dedicated integration of
+  the Lyra subscription API.
+- The exact payment method codes and the CONECS specifics (daily cap, mixed payment) depend on your merchant contract
+  and must be validated with Lyra.
 
 ## Transaction History
 

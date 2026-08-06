@@ -77,6 +77,7 @@ class LyraClientWrapper extends Client
             ->setAdmin($admin)
             ->setUuid($answer['uuid'])
             ->setDetailedstatus($answer['detailedStatus'])
+            ->setPaymentMethodType($answer['paymentMethodType'] ?? null)
             ->setStatus($answer['status'])
             ->setAmount($answer['amount'])
             ->setCurrencyId($currency ? $currency->getId() : null)
