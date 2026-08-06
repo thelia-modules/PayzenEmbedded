@@ -18,11 +18,9 @@
  */
 namespace PayzenEmbedded\Controller;
 
-use PayzenEmbedded\Events\ProcessPaymentResponseEvent;
 use PayzenEmbedded\LyraClient\LyraPaymentManagementWrapper;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
 use PayzenEmbedded\PayzenEmbedded;
-use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Thelia\Core\Event\Order\OrderEvent;
 use Thelia\Core\Event\TheliaEvents;
@@ -62,7 +60,7 @@ class FrontController extends BasePaymentModuleController
         // The response code to the server
         $gatewayResponseCode = 'KO';
 
-        $lyraClient = new LyraPaymentManagementWrapper($dispatcher, $this->getLog());
+        $lyraClient = new LyraPaymentManagementWrapper($dispatcher);
 
         try {
             /* Retrieve the IPN content */
