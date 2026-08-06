@@ -35,17 +35,10 @@
                     <div class="panel-body">
                         {if $cart_count > 0}
                             {if $success}
-                                {* Display PayZen embedded payment form *}
-                                <div id="payzen-embedded-payment-form" >
-                                    <div class="kr-embedded" kr-form-token="{$form_token}">
-                                        <div class="kr-pan"></div>
-                                        <div class="kr-expiry"></div>
-                                        <div class="kr-security-code"></div>
-
-                                        <button class="kr-payment-button"></button>
-
-                                        <div class="kr-form-error"></div>
-                                    </div>
+                                {* Display PayZen smartForm. All payment methods enabled in the Lyra Back Office
+                                   (cards, wallets, PayPal, meal vouchers, split payment...) are displayed automatically. *}
+                                <div id="payzen-embedded-payment-form">
+                                    <div class="kr-smart-form" kr-form-token="{$form_token}"></div>
                                 </div>
                                 <div class="pull-right">
                                     <a href="{url path="/payzen-embedded/cancel-payment/%order_id" order_id=$order_id}" class="btn btn-default">{intl l="Cancel payment" d=$dmn}</a>
@@ -88,8 +81,8 @@
             kr-language="{$lang_code|lower|default:null}">
     </script>
 
-    <link rel="stylesheet" href="https://api.lyra.com/static/js/krypton-client/V4.0/ext/classic.css">
-    <script type="text/javascript" src="https://api.lyra.com/static/js/krypton-client/V4.0/ext/classic.js"></script>
+    <link rel="stylesheet" href="https://api.lyra.com/static/js/krypton-client/V4.0/ext/neon-reset.min.css">
+    <script type="text/javascript" src="https://api.lyra.com/static/js/krypton-client/V4.0/ext/neon.js"></script>
 
     {hook name="order-payment-gateway.stylesheet"}
 {/block}

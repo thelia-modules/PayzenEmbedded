@@ -58,20 +58,15 @@
                             } else {
                                 // We got a response from the PayZenEmbedded module.
                                 if (data.success) {
-                                    // Add the payment form, as a popin
+                                    // Add the smartForm, as a popin. All payment methods enabled in the Lyra
+                                    // Back Office are displayed automatically.
                                     $('.main').append(
-                                        '<div id="payzen-embedded-payment-form" class="kr-embedded" kr-popin>' +
-                                        '<div class="kr-pan"></div>' +
-                                        '<div class="kr-expiry"></div>' +
-                                        '<div class="kr-security-code"></div>' +
-                                        '<button class="kr-payment-button"></button>' +
-                                        '<div class="kr-form-error"></div>' +
-                                        '</div>'
+                                        '<div id="payzen-embedded-payment-form" class="kr-smart-form" kr-popin></div>'
                                     );
 
                                     let paymentForm =
                                         ('<script' +
-                                        ' src="https://api.payzen.eu/static/js/krypton-client/V4.0/stable/kr-payment-form.min.js"' +
+                                        ' src="https://api.lyra.com/static/js/krypton-client/V4.0/stable/kr-payment-form.min.js"' +
                                         ' kr-popin' +
                                         ' kr-form-token="' + data.form_token + '"' +
                                         ' kr-public-key="' + data.public_key + '"' +
@@ -81,9 +76,9 @@
                                         '</scr' + 'ipt>').replace(/_ORDER_ID_/g, data.order_id);
 
                                     $('head')
-                                        .append('<link rel="stylesheet" href="https://api.payzen.eu/static/js/krypton-client/V4.0/ext/classic-reset.css">')
+                                        .append('<link rel="stylesheet" href="https://api.lyra.com/static/js/krypton-client/V4.0/ext/neon-reset.min.css">')
                                         .append(paymentForm)
-                                        .append('<scr' + 'ipt src="https://api.payzen.eu/static/js/krypton-client/V4.0/ext/classic.js"></scr' + 'ipt>')
+                                        .append('<scr' + 'ipt src="https://api.lyra.com/static/js/krypton-client/V4.0/ext/neon.js"></scr' + 'ipt>')
                                     ;
                                 } else {
                                     // Something goes wront in the payzen request, show an error message to the user.
