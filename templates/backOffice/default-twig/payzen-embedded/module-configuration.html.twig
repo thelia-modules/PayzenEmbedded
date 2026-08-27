@@ -1,196 +1,215 @@
 {% set _d = 'payzenembedded.bo.default' %}
-<div class="card mb-3">
-    <div class="card-header">
-        <h2 class="card-title h5 mb-0">{{ 'PayZen Configuration'|trans({}, _d) }}</h2>
+
+{# Fields carry their guidance in label_attr.help, the wording the Smarty back-office renders too.
+   These macros put it back under the field rather than losing it. #}
+{% macro field(field, widgetClass) %}
+    <div class="mb-2">
+        {{ form_label(field, null, {label_attr: {class: 'form-label mb-1'}}) }}
+        {{ form_widget(field, {attr: {class: widgetClass|default('form-control form-control-sm')}}) }}
+        {% if field.vars.label_attr.help is defined %}
+            <div class="form-text mt-1">{{ field.vars.label_attr.help }}</div>
+        {% endif %}
+        {{ form_errors(field) }}
     </div>
-    <div class="card-body">
+{% endmacro %}
+
+{% macro check(field) %}
+    <div class="form-check mb-2">
+        {{ form_widget(field, {attr: {class: 'form-check-input'}}) }}
+        {{ form_label(field, null, {label_attr: {class: 'form-check-label'}}) }}
+        {% if field.vars.label_attr.help is defined %}
+            <div class="form-text mt-0">{{ field.vars.label_attr.help }}</div>
+        {% endif %}
+        {{ form_errors(field) }}
+    </div>
+{% endmacro %}
+
+{% macro amount(field, symbol) %}
+    <div class="mb-2">
+        {{ form_label(field, null, {label_attr: {class: 'form-label mb-1'}}) }}
+        <div class="input-group input-group-sm">
+            {{ form_widget(field, {attr: {class: 'form-control' ~ (field.vars.errors|length ? ' is-invalid' : '')}}) }}
+            <span class="input-group-text">{{ symbol }}</span>
+        </div>
+        <div class="form-text mt-1">{{ field.vars.label_attr.help }}</div>
+        {{ form_errors(field) }}
+    </div>
+{% endmacro %}
+
+{% import _self as ui %}
+
+<style>
+    /* The chevron follows the fold: Bootstrap only rotates the one inside an accordion button. */
+    .payzen-embedded-connection-toggle .bi-chevron-down { transition: transform .2s; }
+    .payzen-embedded-connection-toggle[aria-expanded="true"] .bi-chevron-down { transform: rotate(180deg); }
+</style>
+
+<div class="card mb-3">
+    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2 py-2">
+        <h2 class="card-title h6 mb-0">{{ 'PayZen Configuration'|trans({}, _d) }}</h2>
+        <div class="d-flex align-items-center gap-2 small">
+            {% if is_configured %}
+                <span class="text-muted">{{ 'Shop'|trans({}, _d) }} {{ site_id }}</span>
+                <span class="text-muted">·</span>
+                <span class="text-muted">{{ 'Contract'|trans({}, _d) }}:</span>
+                {% if available_payment_methods is empty %}
+                    <span class="badge bg-light text-dark border">{{ 'not read yet'|trans({}, _d) }}</span>
+                {% else %}
+                    {% for paymentMethod in available_payment_methods %}
+                        <span class="badge bg-light text-dark border">{{ payment_method_labels[paymentMethod]|default(paymentMethod) }}</span>
+                    {% endfor %}
+                {% endif %}
+            {% endif %}
+            {% if is_production %}
+                <span class="badge bg-success">{{ 'Live payments'|trans({}, _d) }}</span>
+            {% else %}
+                <span class="badge bg-warning text-dark">{{ 'Test payments'|trans({}, _d) }}</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card-body py-3">
+        {% if not is_configured %}
+            <div class="alert alert-warning py-2 small">
+                {{ 'Start with step 3: without the shop identifier and the keys, PayZen refuses the payments.'|trans({}, _d) }}
+            </div>
+        {% endif %}
+
         {{ form_start(form, {'action': path('payzen_embedded_configure'), 'method': 'post', 'attr': {'class': 'payzen-embedded-config-form'}}) }}
             {{ form_errors(form) }}
 
-            <div class="row">
-                <div class="col-md-4">
-                    <p class="h6">{{ 'Access to PayZen Platform'|trans({}, _d) }}</p>
+            <div class="row g-4">
+                {# Step 1: the only section a shop manager touches day to day. #}
+                <div class="col-lg-6">
+                    <h3 class="h6 mb-1">{{ '1. What your customers pay with'|trans({}, _d) }}</h3>
+                    <p class="text-muted small mb-2">{{ 'What the customer sees on the payment page.'|trans({}, _d) }}</p>
 
-                    <div class="mb-3">
-                        {{ form_label(form.site_id) }}
-                        {{ form_widget(form.site_id, {attr: {class: 'form-control'}}) }}
-                        {{ form_errors(form.site_id) }}
+                    {{ ui.field(form.form_type, 'form-select form-select-sm') }}
+
+                    <div data-payzen-smart-form-only class="ps-3 border-start mb-2">
+                        {{ ui.field(form.excluded_payment_methods, '') }}
+                        {{ ui.check(form.smart_form_card_form_expanded) }}
                     </div>
 
-                    <div class="mb-3">
-                        {{ form_label(form.webservice_endpoint) }}
-                        {{ form_widget(form.webservice_endpoint, {attr: {class: 'form-control'}}) }}
-                        {{ form_errors(form.webservice_endpoint) }}
-                    </div>
-
-                    <div class="mb-3">
-                        {{ form_label(form.mode) }}
-                        {{ form_widget(form.mode, {attr: {class: 'form-select'}}) }}
-                        {{ form_errors(form.mode) }}
-                    </div>
-
-                    <div class="mb-3">
-                        {{ form_label(form.allowed_ip_list) }}
-                        {{ form_widget(form.allowed_ip_list, {attr: {class: 'form-control'}}) }}
-                        {{ form_errors(form.allowed_ip_list) }}
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">{{ 'Return URL in the back-office'|trans({}, _d) }}</label>
-                        <div class="card card-body bg-light p-2">{{ ipn_callback_url }}</div>
-                        <span class="form-text">
-                            {{ "Copy this URL in the 'URL to notify in TEST mode' and 'URL to notify in PRODUCTION mode' (which must not be mistaken with the 'Return URL of the shop') in 'Notification rules' fields in the PayZen back-office"|trans({}, _d) }}
-                        </span>
-                    </div>
+                    {{ ui.check(form.allow_one_click_payments) }}
+                    {{ ui.check(form.popup_mode) }}
                 </div>
 
-                <div class="col-md-4">
-                    <p class="h6">{{ 'Test parameters'|trans({}, _d) }}</p>
+                {# Step 2: what happens to the money, and what the customer receives. #}
+                <div class="col-lg-6">
+                    <h3 class="h6 mb-1">{{ '2. Collection and e-mails'|trans({}, _d) }}</h3>
+                    <p class="text-muted small mb-2">{{ 'When the money is taken, and what is written to the customer.'|trans({}, _d) }}</p>
 
-                    <div class="mb-3">
-                        {{ form_label(form.test_password) }}
-                        {{ form_widget(form.test_password, {attr: {class: 'form-control'}}) }}
-                        {{ form_errors(form.test_password) }}
-                    </div>
-
-                    <div class="mb-3">
-                        {{ form_label(form.javascript_test_key) }}
-                        {{ form_widget(form.javascript_test_key, {attr: {class: 'form-control'}}) }}
-                        {{ form_errors(form.javascript_test_key) }}
-                    </div>
-
-                    <div class="mb-3">
-                        {{ form_label(form.signature_test_key) }}
-                        {{ form_widget(form.signature_test_key, {attr: {class: 'form-control'}}) }}
-                        {{ form_errors(form.signature_test_key) }}
-                    </div>
-
-                    <p class="h6">{{ 'Production parameters'|trans({}, _d) }}</p>
-
-                    <div class="mb-3">
-                        {{ form_label(form.production_password) }}
-                        {{ form_widget(form.production_password, {attr: {class: 'form-control'}}) }}
-                        {{ form_errors(form.production_password) }}
-                    </div>
-
-                    <div class="mb-3">
-                        {{ form_label(form.javascript_production_key) }}
-                        {{ form_widget(form.javascript_production_key, {attr: {class: 'form-control'}}) }}
-                        {{ form_errors(form.javascript_production_key) }}
-                    </div>
-
-                    <div class="mb-3">
-                        {{ form_label(form.signature_production_key) }}
-                        {{ form_widget(form.signature_production_key, {attr: {class: 'form-control'}}) }}
-                        {{ form_errors(form.signature_production_key) }}
-                    </div>
-                </div>
-
-                <div class="col-md-4">
-                    <p class="h6">{{ 'Payment configuration'|trans({}, _d) }}</p>
-
-                    <div class="mb-3">
-                        {{ form_label(form.form_type) }}
-                        {{ form_widget(form.form_type, {attr: {class: 'form-select'}}) }}
-                        {{ form_errors(form.form_type) }}
-                    </div>
-
-                    <div class="mb-3 form-check">
-                        {{ form_widget(form.smart_form_card_form_expanded, {attr: {class: 'form-check-input'}}) }}
-                        {{ form_label(form.smart_form_card_form_expanded, null, {label_attr: {class: 'form-check-label'}}) }}
-                        {{ form_errors(form.smart_form_card_form_expanded) }}
-                    </div>
-
-                    <div class="mb-3">
-                        {{ form_label(form.excluded_payment_methods) }}
-                        {{ form_widget(form.excluded_payment_methods) }}
-                        {{ form_errors(form.excluded_payment_methods) }}
-                    </div>
-
-                    <div class="mb-3 form-check">
-                        {{ form_widget(form.popup_mode, {attr: {class: 'form-check-input'}}) }}
-                        {{ form_label(form.popup_mode, null, {label_attr: {class: 'form-check-label'}}) }}
-                        {{ form_errors(form.popup_mode) }}
-                    </div>
-
-                    <div class="mb-3 form-check">
-                        {{ form_widget(form.allow_one_click_payments, {attr: {class: 'form-check-input'}}) }}
-                        {{ form_label(form.allow_one_click_payments, null, {label_attr: {class: 'form-check-label'}}) }}
-                        {{ form_errors(form.allow_one_click_payments) }}
-                    </div>
-
-                    <div class="mb-3">
-                        {{ form_label(form.payment_source) }}
-                        {{ form_widget(form.payment_source, {attr: {class: 'form-select'}}) }}
-                        {{ form_errors(form.payment_source) }}
-                    </div>
-
-                    <div class="mb-3">
-                        {{ form_label(form.capture_delay) }}
-                        {{ form_widget(form.capture_delay, {attr: {class: 'form-control'}}) }}
-                        {{ form_errors(form.capture_delay) }}
-                    </div>
-
-                    <div class="mb-3">
-                        {{ form_label(form.validation_mode) }}
-                        {{ form_widget(form.validation_mode, {attr: {class: 'form-select'}}) }}
-                        {{ form_errors(form.validation_mode) }}
-                    </div>
-
-                    <div class="mb-3">
-                        {{ form_label(form.strong_authentication) }}
-                        {{ form_widget(form.strong_authentication, {attr: {class: 'form-select'}}) }}
-                        {{ form_errors(form.strong_authentication) }}
-                    </div>
-
-                    <p class="h6">{{ 'One time payment'|trans({}, _d) }}</p>
-
-                    <div class="mb-3">
-                        {{ form_label(form.minimum_amount) }}
-                        <div class="input-group">
-                            {{ form_widget(form.minimum_amount, {'attr': {'class': 'form-control' ~ (form.minimum_amount.vars.errors|length ? ' is-invalid' : '')}}) }}
-                            <span class="input-group-text">{{ default_currency_symbol }}</span>
+                    <div class="row g-3">
+                        <div class="col-sm-6">
+                            {{ ui.field(form.validation_mode, 'form-select form-select-sm') }}
+                            {{ ui.field(form.capture_delay) }}
                         </div>
-                        {{ form_errors(form.minimum_amount) }}
-                    </div>
-
-                    <div class="mb-3">
-                        {{ form_label(form.maximum_amount) }}
-                        <div class="input-group">
-                            {{ form_widget(form.maximum_amount, {'attr': {'class': 'form-control' ~ (form.maximum_amount.vars.errors|length ? ' is-invalid' : '')}}) }}
-                            <span class="input-group-text">{{ default_currency_symbol }}</span>
+                        <div class="col-sm-6">
+                            {{ ui.amount(form.minimum_amount, default_currency_symbol) }}
+                            {{ ui.amount(form.maximum_amount, default_currency_symbol) }}
                         </div>
-                        {{ form_errors(form.maximum_amount) }}
                     </div>
 
-                    <p class="h6">{{ 'Email configuration'|trans({}, _d) }}</p>
-
-                    <div class="mb-3 form-check">
-                        {{ form_widget(form.send_confirmation_message_only_if_paid, {attr: {class: 'form-check-input'}}) }}
-                        {{ form_label(form.send_confirmation_message_only_if_paid, null, {label_attr: {class: 'form-check-label'}}) }}
-                        {{ form_errors(form.send_confirmation_message_only_if_paid) }}
-                    </div>
-
-                    <div class="mb-3 form-check">
-                        {{ form_widget(form.send_payment_confirmation_message, {attr: {class: 'form-check-input'}}) }}
-                        {{ form_label(form.send_payment_confirmation_message, null, {label_attr: {class: 'form-check-label'}}) }}
-                        {{ form_errors(form.send_payment_confirmation_message) }}
-                    </div>
+                    {{ ui.check(form.send_confirmation_message_only_if_paid) }}
+                    {{ ui.check(form.send_payment_confirmation_message) }}
 
                     {% if payment_confirmation_message_id %}
-                        <div class="card card-body bg-light p-2">
-                            <span><i class="bi bi-info-circle"></i></span>
-                            {{ 'You can edit the payment confirmation email sent to the customer after a successful payment.'|trans({}, _d) }}
-                            <a href="{{ path('admin.configuration.messages.update', {'message_id': payment_confirmation_message_id}) }}">{{ 'Edit'|trans({}, _d) }}</a>
-                        </div>
+                        <p class="form-text mb-0">
+                            <a href="{{ path('admin.configuration.messages.update', {'message_id': payment_confirmation_message_id}) }}">{{ 'Edit the payment confirmation e-mail'|trans({}, _d) }}</a>
+                        </p>
                     {% endif %}
                 </div>
             </div>
 
+            {# Step 3: the plumbing, filled in once when the shop opens. #}
+            {# An outlined button rather than a card header: the back-office overrides the header
+               background, and the fold has to stay obviously clickable. #}
+            <div class="mt-4">
+                <button class="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-between payzen-embedded-connection-toggle"
+                        type="button" data-bs-toggle="collapse" data-bs-target="#payzen-embedded-connection-body"
+                        aria-expanded="{{ is_configured ? 'false' : 'true' }}" aria-controls="payzen-embedded-connection-body">
+                    <span>
+                        <strong>{{ '3. PayZen connection'|trans({}, _d) }}</strong>
+                        <span class="small ms-2">{{ 'set once when the shop opens'|trans({}, _d) }}</span>
+                    </span>
+                    <i class="bi bi-chevron-down"></i>
+                </button>
+                <div id="payzen-embedded-connection-body" class="collapse {{ is_configured ? '' : 'show' }}">
+                    <div class="border border-top-0 rounded-bottom p-3">
+                            <div class="row g-4">
+                                <div class="col-lg-4">
+                                    {{ ui.field(form.site_id) }}
+                                    {{ ui.field(form.mode, 'form-select form-select-sm') }}
+                                    {{ ui.field(form.allowed_ip_list) }}
+                                </div>
+
+                                <div class="col-lg-4">
+                                    <p class="h6 mb-1">{{ 'Test parameters'|trans({}, _d) }}</p>
+                                    {{ ui.field(form.test_password) }}
+                                    {{ ui.field(form.javascript_test_key) }}
+                                    {{ ui.field(form.signature_test_key) }}
+                                </div>
+
+                                <div class="col-lg-4">
+                                    <p class="h6 mb-1">{{ 'Production parameters'|trans({}, _d) }}</p>
+                                    {{ ui.field(form.production_password) }}
+                                    {{ ui.field(form.javascript_production_key) }}
+                                    {{ ui.field(form.signature_production_key) }}
+                                </div>
+                            </div>
+
+                            <div class="row g-4 mt-1">
+                                <div class="col-lg-8">
+                                    <label class="form-label mb-1">{{ 'Return URL in the back-office'|trans({}, _d) }}</label>
+                                    <input type="text" class="form-control form-control-sm" readonly value="{{ ipn_callback_url }}">
+                                    <div class="form-text mt-1">
+                                        {{ "Copy this URL in the 'URL to notify in TEST mode' and 'URL to notify in PRODUCTION mode' (which must not be mistaken with the 'Return URL of the shop') in 'Notification rules' fields in the PayZen back-office"|trans({}, _d) }}
+                                    </div>
+                                </div>
+                                <div class="col-lg-4">
+                                    {{ ui.field(form.webservice_endpoint) }}
+                                    {{ ui.field(form.payment_source, 'form-select form-select-sm') }}
+                                </div>
+                            </div>
+
+                        <div class="mt-2">
+                            {{ ui.field(form.strong_authentication, 'form-select form-select-sm') }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="text-end mt-3">
-                <a href="{{ path('admin.module') }}" class="btn btn-secondary">{{ 'Cancel'|trans({}, _d) }}</a>
-                <button type="submit" class="btn btn-success"><i class="bi bi-save"></i> {{ 'Save'|trans({}, _d) }}</button>
+                <a href="{{ path('admin.module') }}" class="btn btn-secondary btn-sm">{{ 'Cancel'|trans({}, _d) }}</a>
+                <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-save"></i> {{ 'Save'|trans({}, _d) }}</button>
             </div>
         {{ form_end(form) }}
     </div>
 </div>
+
+<script>
+    // The wallet options only mean something with the SmartForm. Without JavaScript everything
+    // stays visible, which is the harmless outcome.
+    (function () {
+        var form = document.querySelector('.payzen-embedded-config-form');
+
+        if (!form) {
+            return;
+        }
+
+        var formType = form.querySelector('[name$="[form_type]"]');
+        var walletOptions = form.querySelector('[data-payzen-smart-form-only]');
+
+        if (!formType || !walletOptions) {
+            return;
+        }
+
+        function toggleWalletOptions() {
+            walletOptions.hidden = formType.value !== '{{ smart_form_value }}';
+        }
+
+        formType.addEventListener('change', toggleWalletOptions);
+        toggleWalletOptions();
+    })();
+</script>

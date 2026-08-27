@@ -13,6 +13,7 @@
 namespace PayzenEmbedded\Form;
 
 use PayzenEmbedded\PayzenEmbedded;
+use Symfony\Component\Form\CallbackTransformer;
 use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\NumberType;
@@ -245,10 +246,10 @@ class ConfigurationForm extends BaseForm
                     'multiple' => true,
                     'expanded' => true,
                     'choices' => $this->getPaymentMethodChoices(),
-                    'label' => $this->trans('Payment methods to switch off'),
+                    'label' => $this->trans('Payment methods offered to your customers'),
                     'data' => PayzenEmbedded::getExcludedPaymentMethods(),
                     'label_attr' => array(
-                        'help' => $this->trans('Check a payment method to remove it from the form, for instance while it is out of service. The list holds the payment methods activated on your PayZen contract, as the platform reports them.')
+                        'help' => $this->trans('Uncheck a payment method to stop offering it, for instance while it is out of service. The list holds what your PayZen contract allows: a method missing here has to be activated by PayZen first.')
                     )
                 )
             )
@@ -391,6 +392,23 @@ class ConfigurationForm extends BaseForm
                 ]
             )
         ;
+
+        $this->addPaymentMethodsTransformer();
+    }
+
+    protected function addPaymentMethodsTransformer(): void
+    {
+        // The checkboxes read as "offered to your customers", while the configuration stores the
+        // methods left out: a method added to the contract later is then offered without anyone
+        // having to come back here.
+        $availablePaymentMethods = PayzenEmbedded::getAvailablePaymentMethods();
+
+        $this->formBuilder->get('excluded_payment_methods')->addModelTransformer(
+            new CallbackTransformer(
+                static fn (?array $excluded) => array_values(array_diff($availablePaymentMethods, $excluded ?? [])),
+                static fn (?array $offered) => array_values(array_diff($availablePaymentMethods, $offered ?? []))
+            )
+        );
     }
 
     /**

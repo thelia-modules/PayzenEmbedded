@@ -1,3 +1,9 @@
+# 3.2.0
+- Rebuilt the module configuration page around the three questions a shop asks: what customers pay with, how the money is collected, and the PayZen connection, that last one folded away once it is filled in.
+- Payment methods are now checkboxes reading "offered to your customers", one per method the contract allows, instead of a list of identifiers to type.
+- Every field shows its guidance again: the Twig back-office rendered none of it, and the wording has been cut down to one line per field.
+- Completed the French catalogue of the configuration page.
+
 # 3.1.1
 - The card form is dressed by the neon theme too: under the older classic theme it lost its field placeholders, its brand logos and its button wording.
 - Added the back-office wording missing from the French catalogue.

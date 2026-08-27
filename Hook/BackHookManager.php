@@ -55,14 +55,35 @@ class BackHookManager extends BaseHook
         $confirmationMessage = MessageQuery::create()
             ->findOneByName(PayzenEmbedded::CONFIRMATION_MESSAGE_NAME);
 
+        $availablePaymentMethods = PayzenEmbedded::getAvailablePaymentMethods();
+
         $event->add(
             $this->render('payzen-embedded/module-configuration.html.twig', [
                 'form' => $form->createView()->getView(),
                 'default_currency_symbol' => null !== $defaultCurrency ? $defaultCurrency->getSymbol() : '',
                 'payment_confirmation_message_id' => null !== $confirmationMessage ? $confirmationMessage->getId() : null,
                 'ipn_callback_url' => URL::getInstance()->absoluteUrl('/payzen-embedded/ipn-callback'),
+                'is_configured' => !empty(PayzenEmbedded::getConfigValue('site_id')),
+                'site_id' => PayzenEmbedded::getConfigValue('site_id'),
+                'is_production' => 'PRODUCTION' === PayzenEmbedded::getConfigValue('mode'),
+                'available_payment_methods' => $availablePaymentMethods,
+                'payment_method_labels' => $this->getPaymentMethodLabels(),
+                'smart_form_value' => PayzenEmbedded::FORM_TYPE_SMART_FORM,
             ])
         );
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function getPaymentMethodLabels(): array
+    {
+        return [
+            'CARDS' => $this->trans('Credit cards', [], PayzenEmbedded::DOMAIN_NAME),
+            'APPLE_PAY' => $this->trans('Apple Pay', [], PayzenEmbedded::DOMAIN_NAME),
+            'GOOGLE_PAY' => $this->trans('Google Pay', [], PayzenEmbedded::DOMAIN_NAME),
+            'PAYPAL' => $this->trans('PayPal', [], PayzenEmbedded::DOMAIN_NAME),
+        ];
     }
 
     /**
