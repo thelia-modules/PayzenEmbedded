@@ -12,9 +12,36 @@ par le module. Une certification PCI-DSS n'est pas nécessaire.
 Vous pouvez choisir d'afficher le formulaire de paiement dans une pop-in sur la page de récapitulation de la commande, 
 il n'est alors pas nécessaire de passer à une nouvelle page pour payer la commande.
 
+## Portefeuilles : Apple Pay, Google Pay
+
+Le formulaire de paiement se présente sous deux formes, au choix dans la configuration du module :
+
+- **Formulaire carte bancaire** : l'acheteur saisit les informations de sa carte. C'est le comportement par défaut.
+- **SmartForm** : la plateforme PayZen affiche tous les moyens de paiement activés sur votre contrat, la carte
+  et les portefeuilles comme Apple Pay ou Google Pay. Vous pouvez déplier les champs carte par défaut, les autres
+  moyens de paiement étant alors listés en dessous.
+
+Les portefeuilles n'apparaissent que dans le SmartForm : le formulaire carte bancaire ne les affiche jamais, même
+si le contrat correspondant est actif. Le SmartForm demande la page de paiement dédiée, il ne s'affiche pas dans
+la pop-in.
+
+La configuration du module liste les moyens de paiement activés sur votre contrat, tels que la plateforme les
+annonce, et permet d'en désactiver un sans toucher au contrat : utile le temps d'une panne, par exemple. La liste
+est relue à chaque affichage de la page de configuration.
+
+### Prérequis
+
+- Le contrat du moyen de paiement doit être activé sur votre boutique PayZen, en test comme en production.
+  Un contrat associé mais inactif se traduit par un moyen de paiement absent du formulaire, et par une erreur
+  `PSP_610 / NO_ACCEPTANCE_AGREEMENT_AVAILABLE` si vous le forcez dans la liste des moyens proposés.
+- Apple Pay demande en production que chaque domaine servant la boutique soit déclaré dans le Back Office Expert
+  et serve le fichier de validation Apple sous `.well-known/apple-developer-merchantid-domain-association`,
+  en HTTPS et sans authentification. En mode test, Apple Pay s'affiche depuis n'importe quel navigateur.
+
 ## Paiement en 1-clic
 
-Le module supporte le paiement en un clic (ou paiement par alias / token). Lors de chaque paiement, vos clients ont
+Le module supporte le paiement en un clic (ou paiement par alias / token). Cette option reste compatible avec
+le SmartForm et ses portefeuilles. Lors de chaque paiement, vos clients ont
 la possibilité d'enregistrer leurs informations de carte bancaire. Lors des achats suivants, ils n'auront alors plus
 besoin d'indiquer ces informations : un clic suffit à payer leur commande.
 Les informations de paiement sont enregistrées par PayZen, et ne sont jamais stockées ou manipulées par le module, une

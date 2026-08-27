@@ -71,6 +71,9 @@
                         <div class="col-md-4">
                             <p class="title title-without-tabs">{intl d=$_d l="Payment configuration"}</p>
 
+                            {render_form_field field="form_type"}
+                            {render_form_field field="smart_form_card_form_expanded"}
+                            {render_form_field field="excluded_payment_methods"}
                             {render_form_field field="popup_mode"}
                             {render_form_field field="allow_one_click_payments"}
                             {render_form_field field="payment_source"}

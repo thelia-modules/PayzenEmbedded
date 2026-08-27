@@ -17,6 +17,7 @@
 namespace PayzenEmbedded\Hook;
 
 use PayzenEmbedded\Form\ConfigurationForm;
+use PayzenEmbedded\LyraClient\LyraPaymentMethodsWrapper;
 use PayzenEmbedded\Form\TransactionGetForm;
 use PayzenEmbedded\Form\TransactionUpdateForm;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistory;
@@ -45,6 +46,8 @@ class BackHookManager extends BaseHook
 
     public function onModuleConfigure(HookRenderEvent $event): void
     {
+        $this->refreshAvailablePaymentMethods();
+
         $form = $this->formFactory->createForm(ConfigurationForm::getName());
 
         $defaultCurrency = CurrencyQuery::create()->findOneByByDefault(true);
@@ -60,6 +63,24 @@ class BackHookManager extends BaseHook
                 'ipn_callback_url' => URL::getInstance()->absoluteUrl('/payzen-embedded/ipn-callback'),
             ])
         );
+    }
+
+    /**
+     * Reads the payment methods offered by the shop contract, so that the configuration form can
+     * list them. A shop which is not configured yet, or a platform out of reach, leaves the last
+     * known list in place.
+     */
+    private function refreshAvailablePaymentMethods(): void
+    {
+        if (empty(PayzenEmbedded::getConfigValue('site_id'))) {
+            return;
+        }
+
+        $paymentMethods = (new LyraPaymentMethodsWrapper())->getAvailablePaymentMethods();
+
+        if ([] !== $paymentMethods) {
+            PayzenEmbedded::setConfigValue('available_payment_methods', implode(';', $paymentMethods));
+        }
     }
 
     public function onOrderEditBottom(HookRenderEvent $event): void

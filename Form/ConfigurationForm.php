@@ -209,6 +209,50 @@ class ConfigurationForm extends BaseForm
                 )
             )
             ->add(
+                'form_type',
+                ChoiceType::class,
+                array(
+                    'constraints' => array(new NotBlank()),
+                    'required' => true,
+                    'choices' => array(
+                        $this->trans('Card form') => PayzenEmbedded::FORM_TYPE_CARD,
+                        $this->trans('SmartForm, with wallets') => PayzenEmbedded::FORM_TYPE_SMART_FORM,
+                    ),
+                    'label' => $this->trans('Payment form'),
+                    'data' => PayzenEmbedded::getConfigValue('form_type', PayzenEmbedded::FORM_TYPE_CARD),
+                    'label_attr' => array(
+                        'help' => $this->trans('The card form only accepts credit cards. The SmartForm also offers the wallets activated on your PayZen contract, such as Apple Pay or Google Pay. The SmartForm needs the payment page: it is not displayed in the popup form.')
+                    )
+                )
+            )
+            ->add(
+                'smart_form_card_form_expanded',
+                CheckboxType::class,
+                array(
+                    'required' => false,
+                    'label' => $this->trans('Expand the card fields in the SmartForm'),
+                    'data' => boolval(PayzenEmbedded::getConfigValue('smart_form_card_form_expanded', true)),
+                    'label_attr' => array(
+                        'help' => $this->trans('If this box is checked, the card fields are displayed right away in the SmartForm, the other payment methods being listed below. Otherwise, the customer picks a payment method first.')
+                    )
+                )
+            )
+            ->add(
+                'excluded_payment_methods',
+                ChoiceType::class,
+                array(
+                    'required' => false,
+                    'multiple' => true,
+                    'expanded' => true,
+                    'choices' => $this->getPaymentMethodChoices(),
+                    'label' => $this->trans('Payment methods to switch off'),
+                    'data' => PayzenEmbedded::getExcludedPaymentMethods(),
+                    'label_attr' => array(
+                        'help' => $this->trans('Check a payment method to remove it from the form, for instance while it is out of service. The list holds the payment methods activated on your PayZen contract, as the platform reports them.')
+                    )
+                )
+            )
+            ->add(
                 'popup_mode',
                 CheckboxType::class,
                 array(
@@ -347,6 +391,38 @@ class ConfigurationForm extends BaseForm
                 ]
             )
         ;
+    }
+
+    /**
+     * The payment methods the contract offers, as read from the platform, labelled for the
+     * back-office. An unknown identifier is offered as is rather than hidden.
+     *
+     * @return array<string, string>
+     */
+    protected function getPaymentMethodChoices()
+    {
+        $labels = [
+            'CARDS' => $this->trans('Credit cards'),
+            'APPLE_PAY' => $this->trans('Apple Pay'),
+            'GOOGLE_PAY' => $this->trans('Google Pay'),
+            'PAYPAL' => $this->trans('PayPal'),
+        ];
+
+        $choices = [];
+
+        foreach (PayzenEmbedded::getAvailablePaymentMethods() as $paymentMethod) {
+            $choices[$labels[$paymentMethod] ?? $paymentMethod] = $paymentMethod;
+        }
+
+        // Methods switched off before a contract change stay listed, so that they can be switched
+        // back on, or unchecked.
+        foreach (PayzenEmbedded::getExcludedPaymentMethods() as $paymentMethod) {
+            if (! \in_array($paymentMethod, $choices, true)) {
+                $choices[$labels[$paymentMethod] ?? $paymentMethod] = $paymentMethod;
+            }
+        }
+
+        return $choices;
     }
 
     protected function trans($string, $args = [])
