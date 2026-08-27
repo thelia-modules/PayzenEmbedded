@@ -39,6 +39,10 @@ class PayzenEmbedded extends AbstractPaymentModule
     /** The transaction update event identifier */
     const TRANSACTION_UPDATE_EVENT = "payzenembedded.transaction_update_event";
 
+    /** Payment form types, see the form_type configuration variable */
+    const FORM_TYPE_CARD = 'CARD';
+    const FORM_TYPE_SMART_FORM = 'SMART_FORM';
+
     public function pay(Order $order): ?Response
     {
         // Use the embedded javascript client
@@ -68,6 +72,9 @@ class PayzenEmbedded extends AbstractPaymentModule
                     [
                         "order_id" => $order->getId(),
                         "cart_count" => $this->getRequest()->getSession()->getSessionCart($this->getDispatcher())->getCartItems()->count(),
+                        "smart_form" => self::isSmartFormEnabled(),
+                        "card_form_expanded" => (bool) self::getConfigValue('smart_form_card_form_expanded', true),
+                        "static_base_url" => self::getStaticResourcesBaseUrl(),
                     ],
                     $resultData
                 )
@@ -75,6 +82,73 @@ class PayzenEmbedded extends AbstractPaymentModule
 
             return new Response($renderedTemplate);
         }
+    }
+
+    /**
+     * The SmartForm displays the wallets activated on the shop contract, such as Apple Pay or
+     * Google Pay, which the card form never shows.
+     */
+    public static function isSmartFormEnabled(): bool
+    {
+        return self::FORM_TYPE_SMART_FORM === self::getConfigValue('form_type', self::FORM_TYPE_CARD);
+    }
+
+    /**
+     * The payment methods the shop contract offers, as last read from the platform. Refreshed when
+     * the module configuration page is displayed, see BackHookManager::onModuleConfigure().
+     *
+     * @return string[]
+     */
+    public static function getAvailablePaymentMethods(): array
+    {
+        return self::parsePaymentMethodList(self::getConfigValue('available_payment_methods'));
+    }
+
+    /**
+     * The payment methods the shop keeps out of the payment form, for instance while one of them is
+     * out of service.
+     *
+     * @return string[]
+     */
+    public static function getExcludedPaymentMethods(): array
+    {
+        return self::parsePaymentMethodList(self::getConfigValue('excluded_payment_methods'));
+    }
+
+    /**
+     * Configuration variables hold payment methods as a list, the back-office joining checkbox
+     * values with a semicolon.
+     *
+     * @return string[]
+     */
+    public static function parsePaymentMethodList($rawList): array
+    {
+        if (null === $rawList || '' === trim((string) $rawList)) {
+            return [];
+        }
+
+        $paymentMethods = array_map(
+            static fn ($paymentMethod) => strtoupper(trim($paymentMethod)),
+            preg_split('/[;,]/', (string) $rawList) ?: []
+        );
+
+        return array_values(array_filter($paymentMethods));
+    }
+
+    /**
+     * Base URL of the Krypton client resources. Derived from the web service end point, so that a
+     * shop running on another Lyra platform, such as SystemPay or Lyra Collect, loads the client
+     * from its own platform.
+     */
+    public static function getStaticResourcesBaseUrl(): string
+    {
+        $endPoint = rtrim((string) self::getConfigValue('webservice_endpoint'), '/');
+
+        if ('' === $endPoint) {
+            $endPoint = 'https://api.payzen.eu';
+        }
+
+        return $endPoint . '/static/js/krypton-client/V4.0';
     }
 
     public function isValidPayment(): bool

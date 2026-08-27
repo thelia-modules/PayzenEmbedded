@@ -89,6 +89,24 @@
                 <div class="col-md-4">
                     <p class="h6">{{ 'Payment configuration'|trans({}, _d) }}</p>
 
+                    <div class="mb-3">
+                        {{ form_label(form.form_type) }}
+                        {{ form_widget(form.form_type, {attr: {class: 'form-select'}}) }}
+                        {{ form_errors(form.form_type) }}
+                    </div>
+
+                    <div class="mb-3 form-check">
+                        {{ form_widget(form.smart_form_card_form_expanded, {attr: {class: 'form-check-input'}}) }}
+                        {{ form_label(form.smart_form_card_form_expanded, null, {label_attr: {class: 'form-check-label'}}) }}
+                        {{ form_errors(form.smart_form_card_form_expanded) }}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form_label(form.excluded_payment_methods) }}
+                        {{ form_widget(form.excluded_payment_methods) }}
+                        {{ form_errors(form.excluded_payment_methods) }}
+                    </div>
+
                     <div class="mb-3 form-check">
                         {{ form_widget(form.popup_mode, {attr: {class: 'form-check-input'}}) }}
                         {{ form_label(form.popup_mode, null, {label_attr: {class: 'form-check-label'}}) }}

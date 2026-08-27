@@ -1,0 +1,3 @@
+{# SmartForm: the platform lays out every payment method activated on the shop contract, the
+   card and the wallets alike. It renders its own error messages, hence no kr-form-error here. #}
+<div class="kr-smart-form" kr-form-token="{{ form_token }}"{% if card_form_expanded|default(true) %} kr-card-form-expanded{% endif %}></div>

@@ -104,6 +104,11 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             ],
         ];
 
+        // Without this, the platform offers every payment method activated on the shop contract.
+        if ([] !== $excludedPaymentMethods = PayzenEmbedded::getExcludedPaymentMethods()) {
+            $store['excludedPaymentMethods'] = $excludedPaymentMethods;
+        }
+
         // Add 1-click payment token if we have one, and if it is allowed
         if ($this->oneClickEnabled && (null !== $tokenData = PayzenEmbeddedCustomerTokenQuery::create()->findOneByCustomerId($customer->getId()))) {
             $store['paymentMethodToken'] = $tokenData->getPaymentToken();
