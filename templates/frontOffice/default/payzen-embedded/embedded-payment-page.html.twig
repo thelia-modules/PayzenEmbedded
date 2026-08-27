@@ -50,14 +50,14 @@
     </div>
 {% endblock %}
 
-{# The Krypton client and its theme come from the platform the shop is configured on, and the
-   SmartForm only works with the neon theme. #}
+{# The Krypton client and its theme come from the platform the shop is configured on. The neon
+   theme dresses both forms: the SmartForm only works with it, and the card form loses its field
+   placeholders and its brand logos under the older classic theme. #}
 {% set krypton_base_url = static_base_url|default('https://api.payzen.eu/static/js/krypton-client/V4.0') %}
-{% set krypton_theme = smart_form|default(false) ? 'neon' : 'classic' %}
 
 {% block stylesheets %}
     {{ parent() }}
-    <link rel="stylesheet" href="{{ krypton_base_url }}/ext/{{ krypton_theme == 'neon' ? 'neon-reset.css' : 'classic.css' }}">
+    <link rel="stylesheet" href="{{ krypton_base_url }}/ext/neon-reset.css">
 {% endblock %}
 
 {% block javascripts %}
@@ -70,5 +70,5 @@
             {# The client expects a dash separated locale: fr_FR would silently fall back to English. #}
             kr-language="{{ app.request.locale|replace({'_': '-'}) }}">
     </script>
-    <script type="text/javascript" src="{{ krypton_base_url }}/ext/{{ krypton_theme }}.js"></script>
+    <script type="text/javascript" src="{{ krypton_base_url }}/ext/neon.js"></script>
 {% endblock %}
