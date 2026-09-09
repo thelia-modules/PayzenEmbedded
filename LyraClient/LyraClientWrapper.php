@@ -84,7 +84,7 @@ class LyraClientWrapper extends Client
             ->setErrorcode($answer['errorCode'])
             ->setErrormessage($answer['errorMessage'])
             ->setDetailederrorcode($answer['detailedErrorCode'])
-            ->setDetailedstatus($answer['detailedErrorMessage'])
+            ->setDetailederrormessage($answer['detailedErrorMessage'])
             ->setFinished($finished)
             ->save();
     }
