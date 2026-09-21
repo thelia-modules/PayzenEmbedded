@@ -1,3 +1,10 @@
+# 3.3.0
+- The same order can be presented to the module on every payment attempt: `supportsPaymentRetry()` answers true, so a Thelia that carries the capability reuses the unpaid order instead of cancelling it and placing a new one. The shopper keeps their cart and their order reference after a refusal.
+- Notifications are applied in the order the platform created them. An order can carry one transaction per attempt, and the platform notifies each on its own schedule: applied as they arrived, the refusal of an attempt the shopper had given up on cancelled an order that was already paid for. A notification now moves the order only when its transaction outranks the one the order stands on.
+- One row per transaction in the history, keyed on the identifier the platform gives it. Every notification used to insert a row, so one payment left as many rows as notifications, and a shop could not tell a retry from a duplicate. An install holding duplicates folds them into the row it last wrote, on update.
+- `CardFormProvider::forOrder()` hands a template the form token and the public key of an order, without rendering a page. A Twig theme can mount the card fields inside its own checkout step. `pay()` is unchanged for the themes that redirect.
+- The one click path no longer empties the cart when a payment is in progress. It did so because the core emptied the cart at placement; a core that keeps the cart until the payment is confirmed consumes it itself.
+
 # 3.2.1
 - Fixed the transaction history, which could not record a refused payment: the detailed error message was written into the 32-character `detailedStatus` column, where the platform's sentence did not fit, and the insert failed. The message now lands in its own `detailedErrorMessage` column and `detailedStatus` keeps the status.
 

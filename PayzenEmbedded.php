@@ -14,6 +14,7 @@ namespace PayzenEmbedded;
 
 use PayzenEmbedded\LyraClient\LyraJavascriptClientManagementWrapper;
 use Propel\Runtime\Connection\ConnectionInterface;
+use Symfony\Component\Finder\Finder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ServicesConfigurator;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -151,6 +152,18 @@ class PayzenEmbedded extends AbstractPaymentModule
         return $endPoint . '/static/js/krypton-client/V4.0';
     }
 
+    /**
+     * PayZen asks for a payment token for each attempt, and its notification finds the order back by
+     * the order's own reference, so the same order can be presented to it as many times as the
+     * shopper tries. Nothing on the order is overwritten that a late notification of an earlier
+     * attempt would need: each transaction keeps its own row in the module's history, and a
+     * notification only moves the order when its transaction outranks the one the order stands on.
+     */
+    public function supportsPaymentRetry(): bool
+    {
+        return true;
+    }
+
     public function isValidPayment(): bool
     {
         $valid = false;
@@ -248,6 +261,33 @@ class PayzenEmbedded extends AbstractPaymentModule
         $database->insertSql(null, [__DIR__ . '/Config/create.sql']);
 
         return true;
+    }
+
+    /**
+     * Execute sql files in Config/update/ folder named with module version (ex: 1.0.1.sql).
+     */
+    public function update($currentVersion, $newVersion, ?ConnectionInterface $con = null): void
+    {
+        $updateDir = __DIR__ . DS . 'Config' . DS . 'update';
+
+        if (!is_dir($updateDir)) {
+            return;
+        }
+
+        $finder = Finder::create()
+            ->name('*.sql')
+            ->depth(0)
+            ->sortByName()
+            ->in($updateDir);
+
+        $database = new Database($con);
+
+        /** @var \SplFileInfo $file */
+        foreach ($finder as $file) {
+            if (version_compare($currentVersion, $file->getBasename('.sql'), '<')) {
+                $database->insertSql(null, [$file->getPathname()]);
+            }
+        }
     }
 
     public function destroy(?ConnectionInterface $con = null, $deleteModuleData = false): void

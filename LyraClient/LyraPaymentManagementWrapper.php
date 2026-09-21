@@ -156,6 +156,23 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         $orderStatus = $answer['status'];
         $transactionUuid = $answer['uuid'];
 
+        // An order can carry one transaction per payment attempt, and the platform notifies each of
+        // them on its own schedule: applied in the order they arrive, the refusal of an attempt the
+        // shopper gave up on would cancel an order that is paid for.
+        $incoming = TransactionOutcome::fromAnswer($answer);
+
+        if (!(new NotificationArbiter())->accepts($incoming, $this->governingTransaction($order))) {
+            $this->log->addInfo(
+                Translator::getInstance()->trans(
+                    "Order %ref: transaction %uuid (%status) is not the one the order stands on, the order is left as it is.",
+                    ['%ref' => $order->getRef(), '%uuid' => $transactionUuid, '%status' => $orderStatus],
+                    PayzenEmbedded::DOMAIN_NAME
+                )
+            );
+
+            return $this->paymentStatusOf($incoming);
+        }
+
         // Update transaction history
         $this->updateTransactionHistory($answer, $order);
 
@@ -204,6 +221,21 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         }
 
         return $status;
+    }
+
+    /**
+     * What the platform says about a transaction, in the terms the caller answers the platform in.
+     * Used when the shop declines to move the order on this transaction: the acknowledgement still
+     * has to report the transaction the platform asked about.
+     */
+    protected function paymentStatusOf(TransactionOutcome $outcome): int
+    {
+        return match ($outcome->status) {
+            TransactionOutcome::STATUS_PAID => self::PAYMENT_STATUS_PAID,
+            TransactionOutcome::STATUS_UNPAID => self::PAYMENT_STATUS_NOT_PAID,
+            TransactionOutcome::STATUS_RUNNING => self::PAYMENT_STATUS_IN_PROGRESS,
+            default => self::PAYMENT_STATUS_ERROR,
+        };
     }
 
     /**

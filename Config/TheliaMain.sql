@@ -49,6 +49,7 @@ CREATE TABLE `payzen_embedded_transaction_history`
     `created_at` DATETIME,
     `updated_at` DATETIME,
     PRIMARY KEY (`id`),
+    UNIQUE INDEX `payzen_embedded_transaction_history_uuid` (`uuid`),
     INDEX `payzen_embedded_transaction_history_fi_7e8f3e` (`customer_id`),
     INDEX `payzen_embedded_transaction_history_fi_75704f` (`order_id`),
     INDEX `payzen_embedded_transaction_history_fi_8e51ba` (`admin_id`),
