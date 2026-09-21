@@ -33,6 +33,8 @@ final readonly class CardFormPayload
         public bool $cardFormExpanded = true,
         public string $errorCode = '',
         public string $errorMessage = '',
+        public string $detailedErrorCode = '',
+        public string $detailedErrorMessage = '',
     ) {
     }
 
@@ -55,13 +57,20 @@ final readonly class CardFormPayload
         );
     }
 
-    public static function unavailable(int $orderId, string $errorCode, string $errorMessage): self
-    {
+    public static function unavailable(
+        int $orderId,
+        string $errorCode,
+        string $errorMessage,
+        string $detailedErrorCode = '',
+        string $detailedErrorMessage = '',
+    ): self {
         return new self(
             available: false,
             orderId: $orderId,
             errorCode: $errorCode,
             errorMessage: $errorMessage,
+            detailedErrorCode: $detailedErrorCode,
+            detailedErrorMessage: $detailedErrorMessage,
         );
     }
 }

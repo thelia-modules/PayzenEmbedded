@@ -12,7 +12,7 @@
 
 namespace PayzenEmbedded;
 
-use PayzenEmbedded\LyraClient\LyraJavascriptClientManagementWrapper;
+use PayzenEmbedded\Service\CardFormProvider;
 use Propel\Runtime\Connection\ConnectionInterface;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ServicesConfigurator;
@@ -46,10 +46,21 @@ class PayzenEmbedded extends AbstractPaymentModule
 
     public function pay(Order $order): ?Response
     {
-        // Use the embedded javascript client
-        $lyraClient = new LyraJavascriptClientManagementWrapper($this->getDispatcher());
+        // Through the provider, not the client: a theme showing the card fields in its own
+        // checkout step asks the provider for the same order in the same request, and the answer
+        // is held there, so the platform is called once whichever of the two asks first.
+        $payload = $this->getContainer()->get(CardFormProvider::class)->forOrder($order);
 
-        $resultData = $lyraClient->payOrder($order);
+        $resultData = [
+            'success' => $payload->available,
+            'order_id' => $payload->orderId,
+            'form_token' => $payload->formToken,
+            'public_key' => $payload->publicKey,
+            'errorCode' => $payload->errorCode,
+            'errorMessage' => $payload->errorMessage,
+            'detailedErrorCode' => $payload->detailedErrorCode,
+            'detailedErrorMessage' => $payload->detailedErrorMessage,
+        ];
 
         $popupMode = PayzenEmbedded::getConfigValue('popup_mode', false);
 
