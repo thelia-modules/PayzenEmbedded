@@ -30,6 +30,12 @@
         <column name="detailedErrorMessage" type="VARCHAR" size="255" />
         <column name="finished" type="BOOLEAN" required="true" />
 
+        <!-- One row per transaction: an order paid on its second attempt has two rows, and a
+             transaction the platform notifies twice keeps the one it already has. -->
+        <unique name="payzen_embedded_transaction_history_uuid">
+            <unique-column name="uuid" />
+        </unique>
+
         <foreign-key foreignTable="customer" onDelete="RESTRICT" onUpdate="RESTRICT">
             <reference local="customer_id" foreign="id" />
         </foreign-key>
