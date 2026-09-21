@@ -12,8 +12,6 @@ namespace PayzenEmbedded\LyraClient;
 
 use PayzenEmbedded\Events\ProcessPaymentResponseEvent;
 use PayzenEmbedded\PayzenEmbedded;
-use Thelia\Core\Event\Order\OrderEvent;
-use Thelia\Core\Event\TheliaEvents;
 use Thelia\Core\HttpKernel\Exception\RedirectException;
 use Thelia\Core\Translation\Translator;
 use Thelia\Log\Tlog;
@@ -102,13 +100,13 @@ class LyraJavascriptClientManagementWrapper extends LyraPaymentManagementWrapper
                             [],
                             PayzenEmbedded::DOMAIN_NAME
                         );
-                    } elseif ($paymentStatus === self::PAYMENT_STATUS_IN_PROGRESS) {
-                        // The cart was processed, let's clear it.
-                        $this->dispatcher->dispatch(
-                            new OrderEvent($order),
-                            TheliaEvents::ORDER_CART_CLEAR
-                        );
                     }
+
+                    // A one click payment in progress used to empty the cart here, because the core
+                    // emptied it at placement and this path bypassed the placement. The core now
+                    // keeps the cart until the payment is confirmed and consumes it on its own, so
+                    // emptying it here would take the cart away from a shopper whose payment has not
+                    // come back yet.
                 } else {
                     // Should not happen. Theorically :)
                     $errorMessage = Translator::getInstance()->trans(

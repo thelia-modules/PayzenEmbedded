@@ -152,6 +152,18 @@ class PayzenEmbedded extends AbstractPaymentModule
         return $endPoint . '/static/js/krypton-client/V4.0';
     }
 
+    /**
+     * PayZen asks for a payment token for each attempt, and its notification finds the order back by
+     * the order's own reference, so the same order can be presented to it as many times as the
+     * shopper tries. Nothing on the order is overwritten that a late notification of an earlier
+     * attempt would need: each transaction keeps its own row in the module's history, and a
+     * notification only moves the order when its transaction outranks the one the order stands on.
+     */
+    public function supportsPaymentRetry(): bool
+    {
+        return true;
+    }
+
     public function isValidPayment(): bool
     {
         $valid = false;
