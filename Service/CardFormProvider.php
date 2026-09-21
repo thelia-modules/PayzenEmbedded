@@ -17,6 +17,7 @@ namespace PayzenEmbedded\Service;
 
 use PayzenEmbedded\LyraClient\LyraJavascriptClientManagementWrapper;
 use PayzenEmbedded\PayzenEmbedded;
+use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Thelia\Model\Order;
 
@@ -31,6 +32,7 @@ use Thelia\Model\Order;
  * It is NOT held across requests: the lifetime PayZen gives a form token is not documented in this
  * module, and serving an expired token would show the shopper a form that refuses every card.
  */
+#[Autoconfigure(public: true)]
 class CardFormProvider
 {
     /** @var array<int, CardFormPayload> one entry per order, for the length of the request */
@@ -67,7 +69,9 @@ class CardFormProvider
         return CardFormPayload::unavailable(
             $orderId,
             (string) ($result['errorCode'] ?? ''),
-            (string) ($result['errorMessage'] ?? '')
+            (string) ($result['errorMessage'] ?? ''),
+            (string) ($result['detailedErrorCode'] ?? ''),
+            (string) ($result['detailedErrorMessage'] ?? '')
         );
     }
 }
