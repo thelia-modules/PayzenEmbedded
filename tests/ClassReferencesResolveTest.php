@@ -18,8 +18,9 @@ namespace PayzenEmbedded\Tests;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Every class a source file names through a static call resolves, with the imports the file
- * declares. A dropped "use" line is not a syntax error, and only shows up when the line runs.
+ * Every class a source file names through a static call, a constant or an instantiation
+ * resolves, with the imports the file declares. A dropped "use" line is not a syntax error,
+ * and only shows up when the line runs.
  */
 final class ClassReferencesResolveTest extends TestCase
 {
@@ -40,7 +41,12 @@ final class ClassReferencesResolveTest extends TestCase
                 $imports[$use[2] ?? substr((string) strrchr('\\' . $use[1], '\\'), 1)] = $use[1];
             }
 
-            preg_match_all('/(?<![\w\\$>])([A-Z]\w+)::(?:create|getInstance|fromAnswer|resolve|fromTransactions)\(/', $source, $calls);
+            // Static calls and constants (Foo::bar(), Foo::BAR) and instantiations (new Foo(), new Foo).
+            // Comments name classes too ("see BackHookManager::onModuleConfigure()"): they are not references.
+            $code = (string) preg_replace(['~/\*.*?\*/~s', '~^\s*//.*$~m'], '', $source);
+
+            preg_match_all('/(?<![\w\\\\$>])([A-Z]\w+)::\w+|\bnew\s+([A-Z]\w+)\b(?!\\\\)/', $code, $matches);
+            $calls = [null, array_values(array_filter(array_merge($matches[1], $matches[2])))];
 
             foreach (array_unique($calls[1]) as $shortName) {
                 if (\in_array($shortName, ['self', 'static', 'parent'], true)) {
