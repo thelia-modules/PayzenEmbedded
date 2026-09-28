@@ -12,6 +12,8 @@ namespace PayzenEmbedded\LyraClient;
 
 use Lyra\Client;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistory;
+use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistoryQuery;
+use Propel\Runtime\Exception\PropelException;
 use PayzenEmbedded\PayzenEmbedded;
 use Thelia\Model\Admin;
 use Thelia\Model\CurrencyQuery;
@@ -68,33 +70,58 @@ class LyraClientWrapper extends Client
      */
     protected function updateTransactionHistory($answer, Order $order, ?Admin $admin = null): void
     {
-        // Guess transaction status, terminated or not
-        $finished = in_array($answer['status'], [ 'PAID', 'UNPAID' ]);
-
-        $currency = CurrencyQuery::create()->findOneByCode($answer['currency']);
+        $outcome = TransactionOutcome::fromAnswer($answer);
+        $currency = isset($answer['currency']) ? CurrencyQuery::create()->findOneByCode($answer['currency']) : null;
 
         $transaction = PayzenEmbeddedTransactionHistoryQuery::create()
-            ->filterByUuid($answer['uuid'])
+            ->filterByUuid($outcome->uuid)
             ->findOne()
             ?? new PayzenEmbeddedTransactionHistory();
 
+        $this->fillTransactionHistory($transaction, $answer, $outcome, $order, $currency?->getId(), $admin);
+
+        try {
+            $transaction->save();
+        } catch (PropelException $exception) {
+            // The platform notifies the same transaction it just answered: the notification may have
+            // inserted the row between the read above and this write. The row is then brought up to date.
+            if (!$transaction->isNew() || null === $existing = PayzenEmbeddedTransactionHistoryQuery::create()->filterByUuid($outcome->uuid)->findOne()) {
+                throw $exception;
+            }
+
+            $this->fillTransactionHistory($existing, $answer, $outcome, $order, $currency?->getId(), $admin);
+            $existing->save();
+        }
+    }
+
+    private function fillTransactionHistory(
+        PayzenEmbeddedTransactionHistory $transaction,
+        array $answer,
+        TransactionOutcome $outcome,
+        Order $order,
+        ?int $currencyId,
+        ?Admin $admin,
+    ): void {
         $transaction
             ->setOrderId($order->getId())
             ->setCustomerId($order->getCustomerId())
-            ->setAdmin($admin)
-            ->setUuid($answer['uuid'])
-            ->setDetailedstatus($answer['detailedStatus'])
-            ->setStatus($answer['status'])
-            ->setOperationtype(strtoupper((string) ($answer['operationType'] ?? TransactionOutcome::OPERATION_DEBIT)))
-            ->setAmount($answer['amount'])
-            ->setCurrencyId($currency ? $currency->getId() : null)
-            ->setCreationdate(new \DateTime($answer['creationDate']) ?: null)
-            ->setErrorcode($answer['errorCode'])
-            ->setErrormessage($answer['errorMessage'])
-            ->setDetailederrorcode($answer['detailedErrorCode'])
-            ->setDetailederrormessage($answer['detailedErrorMessage'])
-            ->setFinished($finished)
-            ->save();
+            ->setUuid($outcome->uuid)
+            ->setDetailedstatus($answer['detailedStatus'] ?? null)
+            ->setStatus($outcome->status)
+            ->setOperationtype($outcome->operationType)
+            ->setAmount($outcome->amount)
+            ->setCurrencyId($currencyId)
+            ->setCreationdate($outcome->createdAt !== null ? \DateTime::createFromImmutable($outcome->createdAt) : null)
+            ->setErrorcode($answer['errorCode'] ?? null)
+            ->setErrormessage($answer['errorMessage'] ?? null)
+            ->setDetailederrorcode($answer['detailedErrorCode'] ?? null)
+            ->setDetailederrormessage($answer['detailedErrorMessage'] ?? null)
+            ->setFinished($outcome->isFinished());
+
+        // The author of a refund is kept; a notification, which has none, never erases it.
+        if (null !== $admin) {
+            $transaction->setAdmin($admin);
+        }
     }
 
     /**
