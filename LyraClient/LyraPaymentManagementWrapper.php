@@ -161,6 +161,22 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         // shopper gave up on would cancel an order that is paid for.
         $incoming = TransactionOutcome::fromAnswer($answer);
 
+        // A refund is a transaction of its own that gives money back: it is recorded, and it never
+        // moves the order. The refund service settles the order when the shop asks for the refund.
+        if ($incoming->isCredit()) {
+            $this->updateTransactionHistory($answer, $order);
+
+            $this->log->addInfo(
+                Translator::getInstance()->trans(
+                    "Order %ref: refund transaction %uuid (%status) recorded.",
+                    ['%ref' => $order->getRef(), '%uuid' => $transactionUuid, '%status' => $orderStatus],
+                    PayzenEmbedded::DOMAIN_NAME
+                )
+            );
+
+            return $this->paymentStatusOf($incoming);
+        }
+
         if (!(new NotificationArbiter())->accepts($incoming, $this->governingTransaction($order))) {
             $this->log->addInfo(
                 Translator::getInstance()->trans(

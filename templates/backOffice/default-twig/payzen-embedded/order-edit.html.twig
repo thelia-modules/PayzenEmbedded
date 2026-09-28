@@ -74,6 +74,46 @@
                         </div>
                     {{ form_end(update_form) }}
                 {% endif %}
+
+                {% if refundable_amount > 0 %}
+                    <hr>
+                    <h3 class="h6">{{ 'Cancel or refund the payment'|trans({}, _d) }}</h3>
+                    <div class="alert alert-info">
+                        {{ 'The customer paid %paid, %refunded was refunded so far and %refundable can still be refunded. A payment not captured yet is cancelled in full; a captured one is refunded, in full or in part. This cannot be undone.'|trans({
+                            '%paid': paid_amount|number_format(2, '.', ' ') ~ ' ' ~ currency_symbol,
+                            '%refunded': refunded_amount|number_format(2, '.', ' ') ~ ' ' ~ currency_symbol,
+                            '%refundable': refundable_amount|number_format(2, '.', ' ') ~ ' ' ~ currency_symbol,
+                        }, _d) }}
+                    </div>
+
+                    {{ form_start(refund_form, {'action': path('payzen_embedded_order_edit_refund_transaction', {'orderId': order_id}), 'method': 'post', 'attr': {'onsubmit': "return confirm('" ~ ('This refund cannot be undone. Continue?'|trans({}, _d)|e('js')) ~ "')"}}) }}
+                        {{ form_errors(refund_form) }}
+                        <input type="hidden" name="{{ refund_form.order_id.vars.full_name }}" value="{{ order_id }}">
+                        {% do refund_form.order_id.setRendered %}
+
+                        <div class="row">
+                            <div class="col-md-4">
+                                {{ form_label(refund_form.amount) }}
+                                <div class="input-group">
+                                    {{ form_widget(refund_form.amount, {'value': refundable_amount|number_format(2, '.', ''), 'attr': {'class': 'form-control' ~ (refund_form.amount.vars.errors|length ? ' is-invalid' : '')}}) }}
+                                    <span class="input-group-text">{{ currency_symbol }}</span>
+                                </div>
+                                {{ form_help(refund_form.amount) }}
+                                {{ form_errors(refund_form.amount) }}
+                            </div>
+                            <div class="col-md-8">
+                                {{ form_label(refund_form.comment) }}
+                                {{ form_widget(refund_form.comment, {'attr': {'class': 'form-control' ~ (refund_form.comment.vars.errors|length ? ' is-invalid' : '')}}) }}
+                                {{ form_help(refund_form.comment) }}
+                                {{ form_errors(refund_form.comment) }}
+                            </div>
+                        </div>
+
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-danger">{{ 'Refund'|trans({}, _d) }}</button>
+                        </div>
+                    {{ form_end(refund_form) }}
+                {% endif %}
             {% else %}
                 {{ form_start(get_form, {'action': path('payzen_embedded_order_edit_refresh_transaction', {'orderId': order_id}), 'method': 'post'}) }}
                     {{ form_errors(get_form) }}

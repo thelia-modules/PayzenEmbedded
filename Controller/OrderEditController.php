@@ -18,8 +18,10 @@
  */
 namespace PayzenEmbedded\Controller;
 
+use PayzenEmbedded\Event\TransactionRefundEvent;
 use PayzenEmbedded\Event\TransactionUpdateEvent;
 use PayzenEmbedded\Form\TransactionGetForm;
+use PayzenEmbedded\Form\TransactionRefundForm;
 use PayzenEmbedded\Form\TransactionUpdateForm;
 use PayzenEmbedded\LyraClient\LyraTransactionGetWrapper;
 use PayzenEmbedded\PayzenEmbedded;
@@ -88,6 +90,60 @@ class OrderEditController extends BaseAdminController
                 $translator->trans("PayzenEmbedded update transaction", [], PayzenEmbedded::DOMAIN_NAME),
                 $errorMsg,
                 $updateForm,
+                $ex
+            );
+        }
+
+        return $this->generateRedirect(URL::getInstance()->absoluteUrl("admin/order/update/$orderId") . '#payzen-embedded');
+    }
+
+    #[Route('/refund-transaction/{orderId}', name: 'refund_transaction', methods: 'POST')]
+    public function refundTransaction(EventDispatcherInterface $dispatcher, Translator $translator, $orderId)
+    {
+        if (null !== $response = $this->checkAuth(AdminResources::MODULE, 'PayzenEmbedded', AccessManager::UPDATE)) {
+            return $response;
+        }
+
+        $errorMsg = $ex = false;
+
+        $refundForm = $this->createForm(TransactionRefundForm::getName());
+
+        try {
+            $form = $this->validateForm($refundForm, "POST");
+
+            $data = $form->getData();
+
+            if (null !== $order = OrderQuery::create()->findPk($orderId)) {
+                $event = new TransactionRefundEvent(
+                    (int) $order->getId(),
+                    (float) str_replace(',', '.', (string) $data['amount']),
+                    $data['comment'] ?? null
+                );
+
+                $dispatcher->dispatch($event, PayzenEmbedded::TRANSACTION_REFUND_EVENT);
+
+                $this->adminLogAppend(
+                    "payzen-embedded.order-refund",
+                    AccessManager::UPDATE,
+                    sprintf(
+                        "Order %d: %s of %s",
+                        $order->getId(),
+                        $event->getOutcome()?->value ?? 'no outcome',
+                        number_format($event->getAmount(), 2, '.', '')
+                    )
+                );
+            }
+        } catch (FormValidationException $ex) {
+            $errorMsg = $this->createStandardFormValidationErrorMessage($ex);
+        } catch (\Exception $ex) {
+            $errorMsg = $ex->getMessage();
+        }
+
+        if ($errorMsg) {
+            $this->setupFormErrorContext(
+                $translator->trans("PayzenEmbedded refund transaction", [], PayzenEmbedded::DOMAIN_NAME),
+                $errorMsg,
+                $refundForm,
                 $ex
             );
         }

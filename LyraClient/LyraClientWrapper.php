@@ -12,7 +12,6 @@ namespace PayzenEmbedded\LyraClient;
 
 use Lyra\Client;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistory;
-use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistoryQuery;
 use PayzenEmbedded\PayzenEmbedded;
 use Thelia\Model\Admin;
 use Thelia\Model\CurrencyQuery;
@@ -86,6 +85,7 @@ class LyraClientWrapper extends Client
             ->setUuid($answer['uuid'])
             ->setDetailedstatus($answer['detailedStatus'])
             ->setStatus($answer['status'])
+            ->setOperationtype(isset($answer['operationType']) ? strtoupper((string) $answer['operationType']) : null)
             ->setAmount($answer['amount'])
             ->setCurrencyId($currency ? $currency->getId() : null)
             ->setCreationdate(new \DateTime($answer['creationDate']) ?: null)
@@ -102,23 +102,16 @@ class LyraClientWrapper extends Client
      *
      * A paid transaction speaks for the order whatever else it carries, since a shop does not take
      * back a payment it has received. Failing one, the latest attempt the platform dated speaks.
+     * A refund never speaks for the order: it is a credit the shop asked for, not a payment attempt.
      */
     protected function governingTransaction(Order $order): ?TransactionOutcome
     {
-        $transactions = PayzenEmbeddedTransactionHistoryQuery::create()
-            ->filterByOrderId($order->getId())
-            ->find();
-
         $governing = null;
 
-        foreach ($transactions as $transaction) {
-            $outcome = new TransactionOutcome(
-                (string) $transaction->getUuid(),
-                strtoupper((string) $transaction->getStatus()),
-                $transaction->getCreationdate() !== null
-                    ? \DateTimeImmutable::createFromInterface($transaction->getCreationdate())
-                    : null
-            );
+        foreach ((new TransactionHistoryReader())->outcomesOf($order) as $outcome) {
+            if ($outcome->isCredit()) {
+                continue;
+            }
 
             if (null === $governing) {
                 $governing = $outcome;

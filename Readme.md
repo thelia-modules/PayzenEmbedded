@@ -93,6 +93,33 @@ LyraClientWrapper::PAYMENT_STATUS_* :
 - PAYMENT_STATUS_ERROR : l'opération de modification a échoué, généralement parce que la transaction est terminée ou
 expirée.
 
+## Annulation et remboursement depuis le back-office
+
+Sur la page de détail d'une commande payée, l'administrateur peut rendre au client tout ou partie de ce qu'il a payé.
+Le module s'en remet à PayZen pour choisir l'opération :
+
+- une transaction non encore remise en banque est annulée, en totalité ;
+- une transaction remise en banque fait l'objet d'un remboursement, total ou partiel. Plusieurs remboursements partiels
+  sont possibles, jusqu'au montant payé.
+
+La commande passe au statut « remboursée » quand il ne reste rien à rembourser, au statut « annulée » quand la
+transaction a été annulée, et reste inchangée après un remboursement partiel. Chaque remboursement apparaît dans
+l'historique des transactions, avec un montant négatif.
+
+### Évènement de remboursement
+
+Nom de l'évènement : `PayzenEmbedded::TRANSACTION_REFUND_EVENT`
+
+L'action event `\PayzenEmbedded\Event\TransactionRefundEvent` reçoit :
+
+- l'ID ($orderId) de la commande concernée,
+- le montant ($amount) à rembourser, dans la devise de la commande,
+- un motif ($comment) facultatif, inscrit sur le remboursement dans le Back Office PayZen.
+
+Une fois dispatché, l'event retourne à travers `getOutcome()` ce que PayZen a fait, une des valeurs de
+`\PayzenEmbedded\LyraClient\RefundOutcome` : `Cancelled`, `Refunded` ou `PartiallyRefunded`. Un montant hors
+limites ou un refus de la plateforme lève une `TheliaProcessException`.
+
 ## Installation
 
 Vous pouvez installer ce module avec Composer :
@@ -202,6 +229,33 @@ Once dispatched, the event returns in $paymentStatus the status of the transacti
 - `PAYMENT_STATUS_IN_PROGRESS`: the transaction is in progress, and can be modified if necessary.
 - `PAYMENT_STATUS_ERROR`: The change operation failed, usually because the transaction is complete or
 expired.
+
+## Cancel or refund from the back-office
+
+On the page of a paid order, the administrator can give the customer back all or part of what they paid. The module
+lets PayZen choose the operation:
+
+- a transaction not captured yet is cancelled, in full;
+- a captured transaction gets a refund, in full or in part. Several partial refunds are possible, up to the amount
+  paid.
+
+The order moves to the refunded status once nothing is left to refund, to the cancelled status when the transaction was
+cancelled, and stays as it is after a partial refund. Each refund shows in the transaction history, with a negative
+amount.
+
+### Transaction refund event
+
+Event name: `PayzenEmbedded::TRANSACTION_REFUND_EVENT`
+
+The `\PayzenEmbedded\Event\TransactionRefundEvent` action event takes:
+
+- the ID ($orderId) of the order,
+- the amount ($amount) to refund, in the order currency,
+- an optional reason ($comment), written on the refund in the PayZen back-office.
+
+Once dispatched, `getOutcome()` tells what PayZen did, one of `\PayzenEmbedded\LyraClient\RefundOutcome`:
+`Cancelled`, `Refunded` or `PartiallyRefunded`. An amount out of range or a refusal from the platform raises a
+`TheliaProcessException`.
 
 ## Installation
 

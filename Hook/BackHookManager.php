@@ -19,7 +19,9 @@ namespace PayzenEmbedded\Hook;
 use PayzenEmbedded\Form\ConfigurationForm;
 use PayzenEmbedded\LyraClient\LyraPaymentMethodsWrapper;
 use PayzenEmbedded\Form\TransactionGetForm;
+use PayzenEmbedded\Form\TransactionRefundForm;
 use PayzenEmbedded\Form\TransactionUpdateForm;
+use PayzenEmbedded\LyraClient\TransactionHistoryReader;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistory;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistoryQuery;
 use PayzenEmbedded\PayzenEmbedded;
@@ -120,12 +122,20 @@ class BackHookManager extends BaseHook
         $lastTransactionAmount = 0;
 
         foreach ($transactions as $transaction) {
+            // A refund is a credit of its own: the payment it gives back is the one to update.
+            if ('CREDIT' === $transaction['OPERATION_TYPE']) {
+                continue;
+            }
+
             $finished = (bool) $transaction['IS_FINISHED'];
             $lastTransactionAmount = $transaction['AMOUNT'] / 100;
         }
 
+        $ledger = (new TransactionHistoryReader())->ledgerOf($order);
+
         $getForm = $this->formFactory->createForm(TransactionGetForm::getName());
         $updateForm = $this->formFactory->createForm(TransactionUpdateForm::getName());
+        $refundForm = $this->formFactory->createForm(TransactionRefundForm::getName());
 
         $event->add(
             $this->render('payzen-embedded/order-edit.html.twig', [
@@ -133,8 +143,13 @@ class BackHookManager extends BaseHook
                 'transactions' => $transactions,
                 'finished' => $finished,
                 'last_transaction_amount' => $lastTransactionAmount,
+                'paid_amount' => $ledger->paidAmount / 100,
+                'refunded_amount' => $ledger->refundedAmount / 100,
+                'refundable_amount' => $ledger->refundableAmount() / 100,
+                'currency_symbol' => $order->getCurrency()?->getSymbol() ?? '',
                 'get_form' => $getForm->createView()->getView(),
                 'update_form' => $updateForm->createView()->getView(),
+                'refund_form' => $refundForm->createView()->getView(),
             ])
         );
     }
@@ -198,6 +213,7 @@ class BackHookManager extends BaseHook
                 'TRANSACTION_REF' => $transaction->getUuid(),
                 'STATUS' => $transaction->getStatus(),
                 'DETAILED_STATUS' => $transaction->getDetailedstatus(),
+                'OPERATION_TYPE' => $transaction->getOperationtype() ?: 'DEBIT',
                 'AMOUNT' => $transaction->getAmount(),
                 'CURRENCY_ID' => $currencyId,
                 'CURRENCY_SYMBOL' => $currencyId ? ($currencySymbols[$currencyId] ?? '') : '',

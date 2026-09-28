@@ -40,6 +40,9 @@ class PayzenEmbedded extends AbstractPaymentModule
     /** The transaction update event identifier */
     const TRANSACTION_UPDATE_EVENT = "payzenembedded.transaction_update_event";
 
+    /** The transaction refund event identifier, see Event\TransactionRefundEvent */
+    const TRANSACTION_REFUND_EVENT = "payzenembedded.transaction_refund_event";
+
     /** Payment form types, see the form_type configuration variable */
     const FORM_TYPE_CARD = 'CARD';
     const FORM_TYPE_SMART_FORM = 'SMART_FORM';
