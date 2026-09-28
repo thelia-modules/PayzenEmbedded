@@ -14,4 +14,5 @@ return array(
     'You may also <a href="%url">contact us</a> to get help or more information.' => 'Vous pouvez aussi <a href="%url">nous contacter</a> pour obtenir de l\'aide.',
     'Your credit cards details has been previously saved at your request. Payment for your order will be made immediately after clicking the "Next Step" button.' => 'Vos informations de paiement ont été enregistrées à votre demande par PayZen. Votre commande sera payée immédiatement après avoir cliqué le bouton "Étape suivante".',
     'Your credit cards details has been registred by PayZen at your request. You no longer have to enter them to pay on our shop.' => 'Vos informations de paiement ont été enregistrées à votre demande par PayZen. Il n\'est plus nécessaire de les indiquer pour payer votre commande.',
+    'You may also contact us to get help or more information.' => 'Vous pouvez aussi nous contacter pour obtenir de l\'aide ou plus d\'informations.',
 );

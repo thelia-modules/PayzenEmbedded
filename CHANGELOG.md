@@ -19,6 +19,7 @@
 - An authorisation still waiting for its capture can be cancelled from the order page, in full: the manual validation flow left nothing to refund before the capture.
 - Refunding needs the permission on the orders as well as on the module. Failed attempts are written to the administrator log too.
 - The history holds credits from now on: a shop reading it by status has to keep the debits (`payzen_embedded_history` takes `operation_type="DEBIT"`).
+- The payment error page no longer links to a `contact` route: Flexy has none, and the missing route turned a refused payment form into a 500.
 - The SmartForm no longer asks to register the card when the one click payments are allowed: the platform left Apple Pay and Google Pay out of the form. A customer who already registered a card keeps paying with it.
 
 # 3.3.1
