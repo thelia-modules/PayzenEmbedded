@@ -29,6 +29,7 @@ class TransactionHistoryLoop extends BaseLoop implements PropelSearchLoopInterfa
         return new ArgumentCollection(
             Argument::createIntTypeArgument('order_id'),
             Argument::createIntTypeArgument('customer_id'),
+            Argument::createAnyTypeArgument('operation_type'),
             new Argument(
                 'order',
                 new TypeCollection(
@@ -57,6 +58,11 @@ class TransactionHistoryLoop extends BaseLoop implements PropelSearchLoopInterfa
 
         if (null !== $this->getCustomerId()) {
             $search->filterByCustomerId($this->getCustomerId());
+        }
+
+        // DEBIT keeps the payments, CREDIT the refunds; rows written before 3.4.0 are debits.
+        if (null !== $this->getOperationType()) {
+            $search->filterByOperationtype(strtoupper((string) $this->getOperationType()));
         }
 
         $orders  = $this->getOrder();

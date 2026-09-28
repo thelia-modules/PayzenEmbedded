@@ -6,6 +6,12 @@
 - Fixed the order page of a transaction still open in the Twig back-office, which broke on the capture date widget, and restored the field guidance the Twig back-office did not render.
 - The PayZen block reads the order id whichever name the back-office hands it: the Twig order page hands `order` to `order-edit.bottom` where every other hook receives `order_id`.
 
+- One refund at a time per order, under a lock: two requests reading the same balance would both have reached the platform. The form button is disabled once the refund is confirmed.
+- The amount typed in the refund form is read strictly, in the smallest unit of the currency: "1 234,56" or "12abc" are refused instead of being read as another amount. `TransactionRefundEvent` carries the amount in minor units, and the administrator who asked for the refund, kept on the history row.
+- An answer of the platform that is neither a credit nor the debit cancelled is refused before anything is written: an order is never cancelled on a guess. What the platform really answers is logged.
+- An authorisation still waiting for its capture can be cancelled from the order page, in full: the manual validation flow left nothing to refund before the capture.
+- Refunding needs the permission on the orders as well as on the module. Failed attempts are written to the administrator log too.
+- The history holds credits from now on: a shop reading it by status has to keep the debits (`payzen_embedded_history` takes `operation_type="DEBIT"`).
 - The SmartForm no longer asks to register the card when the one click payments are allowed: the platform left Apple Pay and Google Pay out of the form. A customer who already registered a card keeps paying with it.
 
 # 3.3.1

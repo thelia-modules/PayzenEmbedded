@@ -129,7 +129,26 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             $this->log->addInfo(Translator::getInstance()->trans("PayZen response received for order %ref.", ['%ref' => $orderRef], PayzenEmbedded::DOMAIN_NAME));
 
             if (null !== $order = $this->getOrderByRef($orderRef)) {
-                $status = $this->processOrderStatus($order, $response['transactions'][0]);
+                // A notification may carry several transactions: the debit of each attempt, and the
+                // credit of a refund. Each one is read; the order stands on the outcome of the last debit.
+                $creditStatus = null;
+
+                foreach ($response['transactions'] as $answer) {
+                    if (!\is_array($answer)) {
+                        continue;
+                    }
+
+                    if (TransactionOutcome::fromAnswer($answer)->isCredit()) {
+                        $creditStatus = $this->processOrderStatus($order, $answer);
+                        continue;
+                    }
+
+                    $status = $this->processOrderStatus($order, $answer);
+                }
+
+                if (null !== $creditStatus && self::PAYMENT_STATUS_NOT_PAID === $status) {
+                    $status = $creditStatus;
+                }
             }
 
             $this->log->info(Translator::getInstance()->trans("PayZen payment response for order %ref processing teminated.", ['%ref' => $orderRef], PayzenEmbedded::DOMAIN_NAME));
