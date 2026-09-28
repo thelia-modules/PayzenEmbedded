@@ -1,3 +1,8 @@
+# 3.4.0
+- A payment can be cancelled or refunded from the order page of the back-office, in full or in part. The platform decides: a transaction waiting for its capture is cancelled, a captured one gets a refund transaction. An order refunded in full moves to the refunded status, a cancelled one to the cancelled status, a partial refund leaves it as it is.
+- `PayzenEmbedded::TRANSACTION_REFUND_EVENT` does the same from code, for instance from a returns module: dispatch a `TransactionRefundEvent` with the order, the amount and a reason, and read the outcome on the event.
+- The history tells a refund from a payment: a new `operationType` column holds `DEBIT` or `CREDIT`, refunds show as such with a negative amount, and a refund notification never moves the order.
+
 # 3.3.1
 - `pay()` asks the same provider as a theme does, so the platform is called once per display of the payment step whichever of the two asks first.
 
