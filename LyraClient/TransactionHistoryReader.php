@@ -42,7 +42,8 @@ final readonly class TransactionHistoryReader
                     ? \DateTimeImmutable::createFromInterface($transaction->getCreationdate())
                     : null,
                 '' === $operationType ? TransactionOutcome::OPERATION_DEBIT : $operationType,
-                (int) $transaction->getAmount()
+                (int) $transaction->getAmount(),
+                strtoupper(trim((string) $transaction->getDetailedstatus()))
             );
         }
 
@@ -51,6 +52,6 @@ final readonly class TransactionHistoryReader
 
     public function ledgerOf(Order $order): RefundLedger
     {
-        return RefundLedger::fromTransactions($this->outcomesOf($order));
+        return RefundLedger::fromTransactions($this->outcomesOf($order), (string) $order->getTransactionRef());
     }
 }

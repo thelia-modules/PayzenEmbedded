@@ -15,21 +15,20 @@ declare(strict_types=1);
 
 namespace PayzenEmbedded\LyraClient;
 
+use Thelia\Exception\TheliaProcessException;
+
 /**
- * What the platform did with a refund request. It decides on its own: a transaction that was not
- * captured yet is cancelled, a captured one gets a refund transaction.
+ * The platform gave the money back and the history says so, but moving the order to its new
+ * status failed. The refund must not be reported as "not sent": the administrator has to check
+ * the order status instead.
  */
-enum RefundOutcome: string
+final class OrderStatusNotUpdatedException extends TheliaProcessException
 {
-    /** The transaction was cancelled before its capture: nothing was taken from the shopper. */
-    case Cancelled = 'CANCELLED';
-
-    /** The shopper got back everything they paid. */
-    case Refunded = 'REFUNDED';
-
-    /** The shopper got part of their money back, the rest can still be refunded. */
-    case PartiallyRefunded = 'PARTIALLY_REFUNDED';
-
-    /** The platform accepted the refund and is still processing it: the order is left as it is. */
-    case Pending = 'PENDING';
+    public function __construct(
+        public readonly RefundOutcome $outcome,
+        string $message,
+        ?\Throwable $previous = null,
+    ) {
+        parent::__construct($message, 0, $previous);
+    }
 }

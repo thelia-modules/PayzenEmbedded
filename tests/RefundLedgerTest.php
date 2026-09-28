@@ -20,48 +20,71 @@ use PayzenEmbedded\LyraClient\TransactionOutcome;
 use PHPUnit\Framework\TestCase;
 
 /**
- * What a shop may still give back on an order: the money it received, less the money it already
- * returned. Amounts are in the smallest unit of the currency, as the platform counts them.
+ * What a shop may still give back on an order: the money it received on the transaction the
+ * order stands on, less the money it already returned or is returning, and the authorisation
+ * still waiting for its capture, which can only be cancelled in full. Amounts are in the
+ * smallest unit of the currency, as the platform counts them.
  */
 final class RefundLedgerTest extends TestCase
 {
+    private const ORDER_DEBIT = 't1';
+
     public function testNothingIsRefundableBeforeThePaymentIsMade(): void
     {
-        $ledger = RefundLedger::fromTransactions([$this->debit('t1', 'RUNNING', 1000)]);
+        $ledger = $this->ledger([$this->debit(self::ORDER_DEBIT, 'RUNNING', 1000, 'AUTHORISED_TO_VALIDATE')]);
 
         self::assertSame(0, $ledger->refundableAmount());
         self::assertFalse($ledger->covers(1));
     }
 
-    public function testTheWholePaymentIsRefundableOnceItIsPaid(): void
+    public function testACapturedPaymentIsRefundableInFull(): void
     {
-        $ledger = RefundLedger::fromTransactions([$this->debit('t1', 'PAID', 1000)]);
+        $ledger = $this->ledger([$this->debit(self::ORDER_DEBIT, 'PAID', 1000, 'CAPTURED')]);
 
         self::assertSame(1000, $ledger->paidAmount);
         self::assertSame(1000, $ledger->refundableAmount());
-        self::assertTrue($ledger->covers(1000));
-        self::assertFalse($ledger->covers(1001));
-        self::assertFalse($ledger->covers(0));
+        self::assertFalse($ledger->isCancellable());
+        self::assertTrue($ledger->allows(400));
+        self::assertTrue($ledger->allows(1000));
+        self::assertFalse($ledger->allows(1001));
+        self::assertFalse($ledger->allows(0));
+    }
+
+    public function testAPaymentWithAnUnknownDetailedStatusCountsAsCaptured(): void
+    {
+        $ledger = $this->ledger([$this->debit(self::ORDER_DEBIT, 'PAID', 1000, 'Some legacy message')]);
+
+        self::assertSame(1000, $ledger->refundableAmount());
+        self::assertFalse($ledger->isCancellable());
     }
 
     public function testEachRefundLowersWhatIsLeftToRefund(): void
     {
-        $ledger = RefundLedger::fromTransactions([
-            $this->debit('t1', 'PAID', 1000),
+        $ledger = $this->ledger([
+            $this->debit(self::ORDER_DEBIT, 'PAID', 1000, 'CAPTURED'),
             $this->credit('r1', 'PAID', 300),
             $this->credit('r2', 'PAID', 200),
         ]);
 
         self::assertSame(500, $ledger->refundedAmount);
         self::assertSame(500, $ledger->refundableAmount());
-        self::assertTrue($ledger->isSettledBy(500));
-        self::assertFalse($ledger->isSettledBy(499));
+    }
+
+    public function testARefundStillRunningIsMoneyAlreadyPromised(): void
+    {
+        $ledger = $this->ledger([
+            $this->debit(self::ORDER_DEBIT, 'PAID', 1000, 'CAPTURED'),
+            $this->credit('r1', 'RUNNING', 300),
+        ]);
+
+        self::assertSame(300, $ledger->refundedAmount);
+        self::assertSame(700, $ledger->refundableAmount());
     }
 
     public function testARefusedRefundGivesNothingBack(): void
     {
-        $ledger = RefundLedger::fromTransactions([
-            $this->debit('t1', 'PAID', 1000),
+        $ledger = $this->ledger([
+            $this->debit(self::ORDER_DEBIT, 'PAID', 1000, 'CAPTURED'),
             $this->credit('r1', 'UNPAID', 300),
         ]);
 
@@ -70,46 +93,73 @@ final class RefundLedgerTest extends TestCase
 
     public function testACancelledPaymentLeavesNothingToRefund(): void
     {
-        $ledger = RefundLedger::fromTransactions([$this->debit('t1', 'UNPAID', 1000)]);
+        $ledger = $this->ledger([$this->debit(self::ORDER_DEBIT, 'UNPAID', 1000, 'CANCELLED')]);
 
         self::assertSame(0, $ledger->refundableAmount());
-        self::assertTrue($ledger->isSettledBy(0));
+        self::assertFalse($ledger->isCancellable());
+        self::assertSame(0, $ledger->maximumAmount());
     }
 
-    public function testOnlyThePaidAttemptOfARetriedOrderCounts(): void
+    public function testAnAuthorisationAwaitingItsValidationCanOnlyBeCancelledInFull(): void
     {
-        $ledger = RefundLedger::fromTransactions([
-            $this->debit('t1', 'UNPAID', 1000),
-            $this->debit('t2', 'PAID', 1000),
+        $ledger = $this->ledger([$this->debit(self::ORDER_DEBIT, 'RUNNING', 1000, 'AUTHORISED_TO_VALIDATE')]);
+
+        self::assertTrue($ledger->isCancellable());
+        self::assertSame(1000, $ledger->maximumAmount());
+        self::assertTrue($ledger->allows(1000));
+        self::assertFalse($ledger->allows(999));
+    }
+
+    public function testAnAuthorisationAwaitingItsCaptureCanOnlyBeCancelledInFull(): void
+    {
+        $ledger = $this->ledger([$this->debit(self::ORDER_DEBIT, 'PAID', 1000, 'AUTHORISED')]);
+
+        self::assertTrue($ledger->isCancellable());
+        self::assertSame(0, $ledger->refundableAmount());
+        self::assertTrue($ledger->allows(1000));
+        self::assertFalse($ledger->allows(500));
+    }
+
+    public function testOnlyTheTransactionTheOrderStandsOnCounts(): void
+    {
+        $ledger = $this->ledger([
+            $this->debit('abandoned', 'RUNNING', 1000, 'AUTHORISED_TO_VALIDATE'),
+            $this->debit('refused', 'UNPAID', 1000, 'REFUSED'),
+            $this->debit(self::ORDER_DEBIT, 'RUNNING', 1000, 'AUTHORISED_TO_VALIDATE'),
+        ]);
+
+        self::assertSame(1000, $ledger->authorisedAmount);
+        self::assertTrue($ledger->allows(1000));
+    }
+
+    public function testTwoPaidAttemptsOnlyCountTheOneTheOrderStandsOn(): void
+    {
+        $ledger = $this->ledger([
+            $this->debit('other', 'PAID', 1000, 'CAPTURED'),
+            $this->debit(self::ORDER_DEBIT, 'PAID', 1000, 'CAPTURED'),
         ]);
 
         self::assertSame(1000, $ledger->paidAmount);
     }
 
-    public function testAnAuthorisationAwaitingItsCaptureCanBeCancelledInFull(): void
+    public function testWithoutAReferenceEveryDebitCounts(): void
     {
-        $ledger = RefundLedger::fromTransactions([$this->debit('t1', 'RUNNING', 1000)]);
+        $ledger = RefundLedger::fromTransactions([$this->debit('legacy', 'PAID', 800, 'CAPTURED')], '');
 
-        self::assertSame(1000, $ledger->authorisedAmount);
-        self::assertSame(0, $ledger->refundableAmount());
-        self::assertTrue($ledger->isCancellable());
-        self::assertTrue($ledger->allows(1000));
-        self::assertFalse($ledger->allows(999));
+        self::assertSame(800, $ledger->paidAmount);
     }
 
-    public function testAPaidTransactionIsNotCancellableButRefundable(): void
+    /**
+     * @param list<TransactionOutcome> $transactions
+     */
+    private function ledger(array $transactions): RefundLedger
     {
-        $ledger = RefundLedger::fromTransactions([$this->debit('t1', 'PAID', 1000)]);
-
-        self::assertFalse($ledger->isCancellable());
-        self::assertTrue($ledger->allows(400));
-        self::assertTrue($ledger->allows(1000));
-        self::assertFalse($ledger->allows(1001));
+        return RefundLedger::fromTransactions($transactions, self::ORDER_DEBIT);
     }
 
-    private function debit(string $uuid, string $status, int $amount): TransactionOutcome
+    private function debit(string $uuid, string $status, int $amount, string $detailedStatus): TransactionOutcome
     {
-        return new TransactionOutcome($uuid, $status, null, TransactionOutcome::OPERATION_DEBIT, $amount);
+        return new TransactionOutcome($uuid, $status, null, TransactionOutcome::OPERATION_DEBIT, $amount, $detailedStatus);
     }
 
     private function credit(string $uuid, string $status, int $amount): TransactionOutcome

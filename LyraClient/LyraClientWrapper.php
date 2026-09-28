@@ -15,6 +15,7 @@ use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistory;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistoryQuery;
 use Propel\Runtime\Exception\PropelException;
 use PayzenEmbedded\PayzenEmbedded;
+use Thelia\Log\Tlog;
 use Thelia\Model\Admin;
 use Thelia\Model\CurrencyQuery;
 use Thelia\Model\Order;
@@ -68,15 +69,32 @@ class LyraClientWrapper extends Client
      *
      * @throws \Exception
      */
-    protected function updateTransactionHistory($answer, Order $order, ?Admin $admin = null): void
+    /**
+     * @param string|null $debitUuid the debit the order stands on, when the caller knows it: a transaction
+     *                               of its own that does not say its operation type is then a credit
+     */
+    protected function updateTransactionHistory($answer, Order $order, ?Admin $admin = null, ?string $debitUuid = null): void
     {
-        $outcome = TransactionOutcome::fromAnswer($answer);
+        $outcome = TransactionOutcome::fromAnswer($answer, $debitUuid);
         $currency = isset($answer['currency']) ? CurrencyQuery::create()->findOneByCode($answer['currency']) : null;
 
         $transaction = PayzenEmbeddedTransactionHistoryQuery::create()
             ->filterByUuid($outcome->uuid)
             ->findOne()
             ?? new PayzenEmbeddedTransactionHistory();
+
+        // A transaction already recorded for another order is not this order's: the platform lists
+        // transactions by the merchant's order reference, which two shops on one contract may share.
+        if (!$transaction->isNew() && null !== $transaction->getOrderId() && (int) $transaction->getOrderId() !== (int) $order->getId()) {
+            Tlog::getInstance()->addWarning(sprintf(
+                'PayZen transaction %s belongs to order #%d, not to order %s: ignored.',
+                $outcome->uuid,
+                (int) $transaction->getOrderId(),
+                $order->getRef()
+            ));
+
+            return;
+        }
 
         $this->fillTransactionHistory($transaction, $answer, $outcome, $order, $currency?->getId(), $admin);
 
@@ -85,7 +103,9 @@ class LyraClientWrapper extends Client
         } catch (PropelException $exception) {
             // The platform notifies the same transaction it just answered: the notification may have
             // inserted the row between the read above and this write. The row is then brought up to date.
-            if (!$transaction->isNew() || null === $existing = PayzenEmbeddedTransactionHistoryQuery::create()->filterByUuid($outcome->uuid)->findOne()) {
+            $duplicate = $exception->getPrevious() instanceof \PDOException && '23000' === (string) $exception->getPrevious()->getCode();
+
+            if (!$duplicate || !$transaction->isNew() || null === $existing = PayzenEmbeddedTransactionHistoryQuery::create()->filterByUuid($outcome->uuid)->findOne()) {
                 throw $exception;
             }
 
@@ -106,7 +126,7 @@ class LyraClientWrapper extends Client
             ->setOrderId($order->getId())
             ->setCustomerId($order->getCustomerId())
             ->setUuid($outcome->uuid)
-            ->setDetailedstatus($answer['detailedStatus'] ?? null)
+            ->setDetailedstatus('' !== $outcome->detailedStatus ? $outcome->detailedStatus : null)
             ->setStatus($outcome->status)
             ->setOperationtype($outcome->operationType)
             ->setAmount($outcome->amount)

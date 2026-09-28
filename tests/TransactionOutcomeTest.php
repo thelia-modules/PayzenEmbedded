@@ -46,6 +46,24 @@ final class TransactionOutcomeTest extends TestCase
         self::assertTrue(TransactionOutcome::fromAnswer(['uuid' => 'r1', 'status' => 'PAID', 'operationType' => 'credit'])->isCredit());
     }
 
+    public function testATransactionOfItsOwnWithoutAnOperationTypeIsACreditWhenTheDebitIsKnown(): void
+    {
+        $outcome = TransactionOutcome::fromAnswer(['uuid' => 'other', 'status' => 'PAID', 'amount' => 300], 'debit-1');
+
+        self::assertTrue($outcome->isCredit());
+        self::assertFalse(TransactionOutcome::fromAnswer(['uuid' => 'debit-1', 'status' => 'PAID'], 'debit-1')->isCredit());
+        self::assertFalse(TransactionOutcome::fromAnswer(['uuid' => 'other', 'status' => 'PAID'])->isCredit());
+    }
+
+    public function testTheDetailedStatusTellsWhetherThePaymentWasCaptured(): void
+    {
+        self::assertTrue(TransactionOutcome::fromAnswer(['uuid' => 't', 'status' => 'PAID', 'detailedStatus' => 'CAPTURED'])->isCaptured());
+        self::assertFalse(TransactionOutcome::fromAnswer(['uuid' => 't', 'status' => 'PAID', 'detailedStatus' => 'AUTHORISED'])->isCaptured());
+        self::assertFalse(TransactionOutcome::fromAnswer(['uuid' => 't', 'status' => 'RUNNING', 'detailedStatus' => 'AUTHORISED_TO_VALIDATE'])->isCaptured());
+        // A paid row whose detailed status is unknown (legacy rows carried error messages there) counts as captured.
+        self::assertTrue(TransactionOutcome::fromAnswer(['uuid' => 't', 'status' => 'PAID', 'detailedStatus' => 'legacy text'])->isCaptured());
+    }
+
     public function testAnAnswerWithoutAmountCountsForNothing(): void
     {
         self::assertSame(0, TransactionOutcome::fromAnswer(['uuid' => 't1', 'status' => 'RUNNING'])->amount);

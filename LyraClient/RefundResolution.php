@@ -20,7 +20,8 @@ use Thelia\Exception\TheliaProcessException;
 /**
  * What the platform's answer to Transaction/CancelOrRefund means. The platform either creates a
  * credit transaction of its own (a refund), or brings the debit back as cancelled. Anything else
- * is refused, and never read as a cancellation: an order is not cancelled on a guess.
+ * is refused, and never read as a cancellation: an order is not cancelled on a guess. A credit the
+ * platform is still processing is accepted as pending.
  */
 final readonly class RefundResolution
 {
@@ -51,15 +52,12 @@ final readonly class RefundResolution
             ]));
         }
 
-        // A transaction of its own is, by construction, the credit the refund created.
-        if ((string) $answer['uuid'] !== $orderTransactionRef && !isset($answer['operationType'])) {
-            $answer['operationType'] = TransactionOutcome::OPERATION_CREDIT;
-        }
-
-        $transaction = TransactionOutcome::fromAnswer($answer);
+        $transaction = TransactionOutcome::fromAnswer($answer, $orderTransactionRef);
+        $answer['operationType'] = $transaction->operationType;
 
         if ($transaction->isCredit()) {
-            if (!$transaction->isPaid()) {
+            // A credit the platform refused gives nothing back; one still running is on its way.
+            if (TransactionOutcome::STATUS_UNPAID === $transaction->status) {
                 throw new TheliaProcessException($translate('The refund was refused: %message (code %code)', [
                     '%code' => (string) ($answer['errorCode'] ?? $answer['detailedStatus'] ?? ''),
                     '%message' => (string) ($answer['errorMessage'] ?? $answer['detailedErrorMessage'] ?? ''),
@@ -69,14 +67,12 @@ final readonly class RefundResolution
             return new self($answer, $transaction);
         }
 
-        $detailedStatus = strtoupper(trim((string) ($answer['detailedStatus'] ?? '')));
-
         if ($transaction->uuid !== $orderTransactionRef
             || TransactionOutcome::STATUS_UNPAID !== $transaction->status
-            || 'CANCELLED' !== $detailedStatus) {
+            || 'CANCELLED' !== $transaction->detailedStatus) {
             throw new TheliaProcessException($translate('The transaction %uuid was neither cancelled nor refunded (status %status).', [
                 '%uuid' => $transaction->uuid,
-                '%status' => '' !== $detailedStatus ? $detailedStatus : $transaction->status,
+                '%status' => '' !== $transaction->detailedStatus ? $transaction->detailedStatus : $transaction->status,
             ]));
         }
 
@@ -95,6 +91,10 @@ final readonly class RefundResolution
     {
         if (!$this->isCredit()) {
             return RefundOutcome::Cancelled;
+        }
+
+        if ($this->transaction->isRunning()) {
+            return RefundOutcome::Pending;
         }
 
         return $ledgerAfterRecording->refundableAmount() > 0

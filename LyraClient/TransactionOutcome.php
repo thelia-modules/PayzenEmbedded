@@ -17,7 +17,7 @@ namespace PayzenEmbedded\LyraClient;
 
 /**
  * What the platform says about one transaction: its identifier, its status, when it was created,
- * whether it takes money from the shopper or gives it back, and for how much.
+ * whether it takes money from the shopper or gives it back, for how much, and how far it got.
  */
 final readonly class TransactionOutcome
 {
@@ -31,6 +31,9 @@ final readonly class TransactionOutcome
     /** A refund: the platform creates a transaction of its own that gives money back to the shopper. */
     public const OPERATION_CREDIT = 'CREDIT';
 
+    /** Detailed statuses of a debit the bank has not captured yet: it can still be cancelled, in full. */
+    private const NOT_CAPTURED = ['AUTHORISED', 'AUTHORISED_TO_VALIDATE', 'WAITING_AUTHORISATION', 'WAITING_AUTHORISATION_TO_VALIDATE', 'WAITING_FOR_PAYMENT', 'INITIAL', 'UNDER_VERIFICATION'];
+
     /**
      * @param int $amount in the smallest unit of the currency, as the platform counts it
      */
@@ -40,10 +43,16 @@ final readonly class TransactionOutcome
         public ?\DateTimeImmutable $createdAt,
         public string $operationType = self::OPERATION_DEBIT,
         public int $amount = 0,
+        public string $detailedStatus = '',
     ) {
     }
 
-    public static function fromAnswer(array $answer): self
+    /**
+     * @param string|null $debitUuid the debit the order stands on, when known: a transaction of its
+     *                               own that does not say its operation type is then the credit of a
+     *                               refund, since the platform creates nothing else for an order
+     */
+    public static function fromAnswer(array $answer, ?string $debitUuid = null): self
     {
         $createdAt = null;
 
@@ -55,14 +64,22 @@ final readonly class TransactionOutcome
             }
         }
 
+        $uuid = (string) ($answer['uuid'] ?? '');
         $operationType = strtoupper(trim((string) ($answer['operationType'] ?? '')));
 
+        if ('' === $operationType) {
+            $operationType = null !== $debitUuid && '' !== $debitUuid && $uuid !== $debitUuid
+                ? self::OPERATION_CREDIT
+                : self::OPERATION_DEBIT;
+        }
+
         return new self(
-            (string) ($answer['uuid'] ?? ''),
+            $uuid,
             strtoupper((string) ($answer['status'] ?? '')),
             $createdAt,
-            '' === $operationType ? self::OPERATION_DEBIT : $operationType,
-            (int) ($answer['amount'] ?? 0)
+            $operationType,
+            (int) ($answer['amount'] ?? 0),
+            strtoupper(trim((string) ($answer['detailedStatus'] ?? '')))
         );
     }
 
@@ -76,8 +93,23 @@ final readonly class TransactionOutcome
         return self::STATUS_PAID === $this->status;
     }
 
+    public function isRunning(): bool
+    {
+        return self::STATUS_RUNNING === $this->status;
+    }
+
     public function isCredit(): bool
     {
         return self::OPERATION_CREDIT === $this->operationType;
+    }
+
+    /**
+     * Whether the bank took the money. A paid transaction whose detailed status is not one of the
+     * "authorised, not captured yet" ones counts as captured: rows written by older versions carry
+     * no usable detailed status, and the shop has been paid for them long ago.
+     */
+    public function isCaptured(): bool
+    {
+        return $this->isPaid() && !\in_array($this->detailedStatus, self::NOT_CAPTURED, true);
     }
 }

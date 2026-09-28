@@ -16,9 +16,10 @@ declare(strict_types=1);
 namespace PayzenEmbedded\LyraClient;
 
 /**
- * What a shop may still give back on an order: the money it received, less the money it already
- * returned, and the authorisation still waiting for its capture, which can only be cancelled in
- * full. Amounts are in the smallest unit of the currency, as the platform counts them.
+ * What a shop may still give back on an order: the money it received on the transaction the order
+ * stands on, less the money it already returned or is returning, and the authorisation still
+ * waiting for its capture, which can only be cancelled in full. Amounts are in the smallest unit
+ * of the currency, as the platform counts them.
  */
 final readonly class RefundLedger
 {
@@ -30,9 +31,12 @@ final readonly class RefundLedger
     }
 
     /**
-     * @param iterable<TransactionOutcome> $transactions every transaction of the order
+     * @param iterable<TransactionOutcome> $transactions        every transaction of the order
+     * @param string                       $orderTransactionRef the debit the order stands on; the other
+     *                                                          debits are attempts the shopper gave up
+     *                                                          on. Empty when unknown: every debit counts.
      */
-    public static function fromTransactions(iterable $transactions): self
+    public static function fromTransactions(iterable $transactions, string $orderTransactionRef): self
     {
         $paidAmount = 0;
         $refundedAmount = 0;
@@ -40,16 +44,21 @@ final readonly class RefundLedger
 
         foreach ($transactions as $transaction) {
             if ($transaction->isCredit()) {
-                if ($transaction->isPaid()) {
+                // A refund on its way is money already promised: it is never offered twice.
+                if ($transaction->isPaid() || $transaction->isRunning()) {
                     $refundedAmount += $transaction->amount;
                 }
 
                 continue;
             }
 
-            if ($transaction->isPaid()) {
+            if ('' !== $orderTransactionRef && $transaction->uuid !== $orderTransactionRef) {
+                continue;
+            }
+
+            if ($transaction->isCaptured()) {
                 $paidAmount += $transaction->amount;
-            } elseif (TransactionOutcome::STATUS_RUNNING === $transaction->status) {
+            } elseif ($transaction->isRunning() || $transaction->isPaid()) {
                 $authorisedAmount += $transaction->amount;
             }
         }
@@ -68,10 +77,10 @@ final readonly class RefundLedger
         return $amount > 0 && $amount <= $this->refundableAmount();
     }
 
-    /** An authorisation waiting for its capture, with nothing paid yet: it can be cancelled, in full. */
+    /** An authorisation the bank has not captured, with nothing captured nor refunded: it can be cancelled, in full. */
     public function isCancellable(): bool
     {
-        return 0 === $this->paidAmount && $this->authorisedAmount > 0;
+        return 0 === $this->paidAmount && 0 === $this->refundedAmount && $this->authorisedAmount > 0;
     }
 
     /** Whether the platform can be asked to give this amount back: a refund, or the cancellation of the whole authorisation. */
@@ -84,11 +93,5 @@ final readonly class RefundLedger
     public function maximumAmount(): int
     {
         return $this->isCancellable() ? $this->authorisedAmount : $this->refundableAmount();
-    }
-
-    /** Whether a refund of this amount gives the shopper back everything they paid. */
-    public function isSettledBy(int $amount): bool
-    {
-        return $amount >= $this->refundableAmount();
     }
 }

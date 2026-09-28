@@ -47,6 +47,11 @@ final class RefundAmountTest extends TestCase
         yield 'zero is refused' => ['0', 'EUR', null];
         yield 'empty is refused' => ['', 'EUR', null];
         yield 'decimals on a zero decimal currency are refused' => ['10.50', 'XPF', null];
+        yield 'three decimal currency' => ['1.234', 'TND', 1234];
+        yield 'smallest unit of a three decimal currency' => ['0.001', 'KWD', 1];
+        yield 'four decimals on a three decimal currency are refused' => ['1.2345', 'KWD', null];
+        yield 'central african franc has no decimal' => ['1500', 'XAF', 1500];
+        yield 'thirteen digits are refused' => ['1234567890123', 'EUR', null];
     }
 
     #[DataProvider('inputs')]
@@ -59,5 +64,14 @@ final class RefundAmountTest extends TestCase
     {
         self::assertSame('12.50', RefundAmount::format(1250, 'EUR'));
         self::assertSame('1000', RefundAmount::format(1000, 'XPF'));
+        self::assertSame('1.250', RefundAmount::format(1250, 'KWD'));
+    }
+
+    public function testAMajorAmountFromTheShopIsWrittenInMinorUnits(): void
+    {
+        self::assertSame(1250, RefundAmount::fromMajor(12.5, 'EUR'));
+        self::assertSame(1250, RefundAmount::fromMajor('12.50', 'EUR'));
+        self::assertSame(1000, RefundAmount::fromMajor(1000.0, 'JPY'));
+        self::assertSame(1235, RefundAmount::fromMajor(12.345, 'EUR'));
     }
 }

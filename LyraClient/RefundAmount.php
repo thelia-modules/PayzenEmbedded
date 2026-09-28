@@ -16,14 +16,18 @@ declare(strict_types=1);
 namespace PayzenEmbedded\LyraClient;
 
 /**
- * An amount in the smallest unit of a currency, as the platform counts it, read from what an
- * administrator typed and written back for display. No float in between: "1 234,56" is refused
+ * An amount in the smallest unit of a currency, as the platform counts it: read from what an
+ * administrator typed, converted from the shop's major unit, and written back for display. No float in between: "1 234,56" is refused
  * rather than read as 1.00, and "12abc" rather than 12.00.
  */
 final readonly class RefundAmount
 {
-    /** Currencies the platform counts without a fractional unit, or with three. */
-    private const DECIMALS = ['JPY' => 0, 'KRW' => 0, 'XOF' => 0, 'XPF' => 0, 'KWD' => 3, 'TND' => 3];
+    /** Currencies counted without a fractional unit, or with three (ISO 4217 minor units); every other one has two. */
+    private const DECIMALS = [
+        'BIF' => 0, 'CLP' => 0, 'DJF' => 0, 'GNF' => 0, 'ISK' => 0, 'JPY' => 0, 'KMF' => 0, 'KRW' => 0, 'PYG' => 0,
+        'RWF' => 0, 'UGX' => 0, 'UYI' => 0, 'VND' => 0, 'VUV' => 0, 'XAF' => 0, 'XOF' => 0, 'XPF' => 0,
+        'BHD' => 3, 'IQD' => 3, 'JOD' => 3, 'KWD' => 3, 'LYD' => 3, 'OMR' => 3, 'TND' => 3,
+    ];
 
     public static function decimals(string $currencyCode): int
     {
@@ -49,6 +53,15 @@ final readonly class RefundAmount
         $amount = (int) $units * 10 ** $decimals + (int) str_pad($fraction, $decimals, '0');
 
         return $amount > 0 ? $amount : null;
+    }
+
+    /**
+     * An amount the shop holds in the major unit (an order total, a form field of the update form),
+     * written in minor units the way the platform counts them.
+     */
+    public static function fromMajor(float|string $amount, string $currencyCode): int
+    {
+        return (int) round((float) $amount * 10 ** self::decimals($currencyCode));
     }
 
     public static function format(int $amount, string $currencyCode): string

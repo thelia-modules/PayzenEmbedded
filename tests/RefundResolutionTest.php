@@ -75,6 +75,17 @@ final class RefundResolutionTest extends TestCase
         self::assertSame(RefundOutcome::Cancelled, $resolution->outcome($this->ledger(paid: 0, refunded: 0)));
     }
 
+    public function testACreditStillRunningIsPendingAndLeavesTheOrderAlone(): void
+    {
+        $resolution = RefundResolution::fromAnswer(
+            ['uuid' => 'credit-1', 'status' => 'RUNNING', 'operationType' => 'CREDIT', 'amount' => 300],
+            self::DEBIT_UUID,
+        );
+
+        self::assertTrue($resolution->isCredit());
+        self::assertSame(RefundOutcome::Pending, $resolution->outcome($this->ledger(paid: 1000, refunded: 300)));
+    }
+
     public function testARefusedCreditIsRefused(): void
     {
         $this->expectException(TheliaProcessException::class);
@@ -114,12 +125,12 @@ final class RefundResolutionTest extends TestCase
 
     private function ledger(int $paid, int $refunded): RefundLedger
     {
-        $transactions = [new TransactionOutcome('d', 'PAID', null, TransactionOutcome::OPERATION_DEBIT, $paid)];
+        $transactions = [new TransactionOutcome('d', 'PAID', null, TransactionOutcome::OPERATION_DEBIT, $paid, 'CAPTURED')];
 
         if ($refunded > 0) {
             $transactions[] = new TransactionOutcome('c', 'PAID', null, TransactionOutcome::OPERATION_CREDIT, $refunded);
         }
 
-        return RefundLedger::fromTransactions($transactions);
+        return RefundLedger::fromTransactions($transactions, 'd');
     }
 }
