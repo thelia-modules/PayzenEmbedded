@@ -22,7 +22,7 @@
         <column name="status" type="VARCHAR" size="10" />
         <column name="detailedStatus" type="VARCHAR" size="32" />
         <!-- DEBIT for a payment, CREDIT for the refund transaction the platform creates. -->
-        <column name="operationType" type="VARCHAR" size="16" />
+        <column name="operationType" type="VARCHAR" size="16" defaultValue="DEBIT" />
         <column name="amount" type="INTEGER" size="11" />
         <column name="currency_id" type="INTEGER" required="true" />
         <column name="creationDate" type="TIMESTAMP" />

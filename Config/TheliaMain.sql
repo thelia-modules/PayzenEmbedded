@@ -38,7 +38,7 @@ CREATE TABLE `payzen_embedded_transaction_history`
     `uuid` VARCHAR(128),
     `status` VARCHAR(10),
     `detailedStatus` VARCHAR(32),
-    `operationType` VARCHAR(16),
+    `operationType` VARCHAR(16) DEFAULT 'DEBIT',
     `amount` INTEGER(11),
     `currency_id` INTEGER NOT NULL,
     `creationDate` DATETIME,

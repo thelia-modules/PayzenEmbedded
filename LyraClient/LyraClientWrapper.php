@@ -85,7 +85,7 @@ class LyraClientWrapper extends Client
             ->setUuid($answer['uuid'])
             ->setDetailedstatus($answer['detailedStatus'])
             ->setStatus($answer['status'])
-            ->setOperationtype(isset($answer['operationType']) ? strtoupper((string) $answer['operationType']) : null)
+            ->setOperationtype(strtoupper((string) ($answer['operationType'] ?? TransactionOutcome::OPERATION_DEBIT)))
             ->setAmount($answer['amount'])
             ->setCurrencyId($currency ? $currency->getId() : null)
             ->setCreationdate(new \DateTime($answer['creationDate']) ?: null)
