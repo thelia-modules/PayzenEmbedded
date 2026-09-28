@@ -50,6 +50,9 @@ certification PCI-DSS n'est pas nécessaire.
 Les clients peuvent demander à tout moment la suppression des informations de paiement enregistrées, depuis leur compte
 client, ou au moment de payer leur commande.
 
+Avec le formulaire SmartForm, l'enregistrement de la carte n'est pas proposé : PayZen retire Apple Pay et Google Pay
+d'un formulaire qui demande un enregistrement. Un client qui a déjà enregistré sa carte continue de payer en un clic.
+
 ## Historique des transactions
 
 L'historique des transactions PayZen est disponible pour chaque commande sur le détail de la commande dans le 
@@ -188,6 +191,9 @@ PCI-DSS certification is not required.
 
 Customers may request at any time the removal of the registered payment information from their account
 customer page, or before paying an order.
+
+With the SmartForm, the card registration is not offered: PayZen leaves Apple Pay and Google Pay out of a form that
+asks for a registration. A customer who already registered a card keeps paying in one click.
 
 ## Transaction History
 

@@ -6,6 +6,8 @@
 - Fixed the order page of a transaction still open in the Twig back-office, which broke on the capture date widget, and restored the field guidance the Twig back-office did not render.
 - The PayZen block reads the order id whichever name the back-office hands it: the Twig order page hands `order` to `order-edit.bottom` where every other hook receives `order_id`.
 
+- The SmartForm no longer asks to register the card when the one click payments are allowed: the platform left Apple Pay and Google Pay out of the form. A customer who already registered a card keeps paying with it.
+
 # 3.3.1
 - `pay()` asks the same provider as a theme does, so the platform is called once per display of the payment step whichever of the two asks first.
 

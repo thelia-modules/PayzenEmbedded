@@ -73,11 +73,8 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         $currency = $order->getCurrency();
         $customer = $order->getCustomer();
 
-        if ($this->oneClickEnabled) {
-            $formAction = 'ASK_REGISTER_PAY';
-        } else {
-            $formAction = 'PAYMENT';
-        }
+        // A SmartForm asked to register the card would lose its wallets, see PaymentFormAction.
+        $formAction = PaymentFormAction::resolve($this->oneClickEnabled, PayzenEmbedded::isSmartFormEnabled());
 
         // Request parameters (see https://payzen.io/en-EN/rest/V4.0/api/playground.html?ws=Charge/CreatePayment)
         $store = [
