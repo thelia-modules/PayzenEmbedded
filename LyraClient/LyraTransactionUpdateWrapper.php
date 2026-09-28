@@ -78,7 +78,7 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
         $parameters = [
             'uuid' => $order->getTransactionRef(),
             'cardUpdate' => [
-                'amount' => intval(strval($amount * 100)),
+                'amount' => RefundAmount::fromMajor((string) $amount, $order->getCurrency()->getCode()),
                 'currency' => strtoupper($order->getCurrency()->getCode()),
                 'expectedCaptureDate' => $captureDateParam,
                 'manualValidation' => $manualValidationParam

@@ -23,6 +23,7 @@ use PayzenEmbedded\Event\TransactionUpdateEvent;
 use PayzenEmbedded\Form\TransactionGetForm;
 use PayzenEmbedded\Form\TransactionRefundForm;
 use PayzenEmbedded\Form\TransactionUpdateForm;
+use PayzenEmbedded\LyraClient\OrderStatusNotUpdatedException;
 use PayzenEmbedded\LyraClient\RefundAmount;
 use PayzenEmbedded\LyraClient\RefundOutcome;
 use Thelia\Exception\TheliaProcessException;
@@ -47,10 +48,11 @@ use Symfony\Component\Routing\Attribute\Route;
 #[Route('/admin/module/payzen-embedded', name: 'payzen_embedded_order_edit_')]
 class OrderEditController extends BaseAdminController
 {
-    #[Route('/update-transaction/{orderId}', name: 'update_transaction', methods: 'POST')]
-    public function updateTransaction(EventDispatcherInterface $dispatcher, Translator $translator, $orderId)
+    #[Route('/update-transaction/{orderId}', name: 'update_transaction', requirements: ['orderId' => '\d+'], methods: 'POST')]
+    public function updateTransaction(EventDispatcherInterface $dispatcher, Translator $translator, int $orderId)
     {
-        if (null !== $response = $this->checkAuth(AdminResources::MODULE, 'PayzenEmbedded', AccessManager::UPDATE)) {
+        // Lowering or validating a payment is an operation on the order, not only on the module.
+        if (null !== $response = $this->checkAuth([AdminResources::MODULE, AdminResources::ORDER], 'PayzenEmbedded', AccessManager::UPDATE)) {
             return $response;
         }
 
@@ -86,12 +88,21 @@ class OrderEditController extends BaseAdminController
         } catch (FormValidationException $ex) {
             // Form cannot be validated. Create the error message using the BaseAdminController helper method.
             $errorMsg = $this->createStandardFormValidationErrorMessage($ex);
+        } catch (TheliaProcessException $ex) {
+            $errorMsg = $ex->getMessage();
         } catch (\Exception $ex) {
-            // Any other error
-             $errorMsg = $ex->getMessage();
+            Tlog::getInstance()->addError(sprintf('PayZen transaction update of order %d failed: %s', $orderId, $ex->getMessage()));
+            $errorMsg = $translator->trans('The transaction update could not be sent to PayZen, see the logs.', [], PayzenEmbedded::DOMAIN_NAME);
         }
 
         if ($errorMsg) {
+            $this->adminLogAppend(
+                "payzen-embedded.order-update",
+                AccessManager::UPDATE,
+                sprintf("Order %d: transaction update failed: %s", $orderId, mb_substr($errorMsg, 0, 500)),
+                $orderId
+            );
+
             $this->setupFormErrorContext(
                 $translator->trans("PayzenEmbedded update transaction", [], PayzenEmbedded::DOMAIN_NAME),
                 $errorMsg,
@@ -151,22 +162,33 @@ class OrderEditController extends BaseAdminController
                 $admin?->getId()
             );
 
-            $dispatcher->dispatch($event, PayzenEmbedded::TRANSACTION_REFUND_EVENT);
+            try {
+                $dispatcher->dispatch($event, PayzenEmbedded::TRANSACTION_REFUND_EVENT);
 
-            $this->addFlash('success', $this->refundOutcomeMessage($translator, $event, $currencyCode));
+                $this->addFlash('success', $this->refundOutcomeMessage($translator, $event->getOutcome(), $amount, $currencyCode));
+            } catch (OrderStatusNotUpdatedException $statusFailure) {
+                // The money moved: said as such, with the order to check.
+                $event->setOutcome($statusFailure->outcome);
+                $this->addFlash('warning', $statusFailure->getMessage());
+            }
 
-            $this->adminLogAppend(
-                "payzen-embedded.order-refund",
-                AccessManager::UPDATE,
-                sprintf(
-                    "Order %d: %s of %s %s",
-                    $order->getId(),
-                    $event->getOutcome()?->value ?? 'no outcome',
-                    RefundAmount::format($amount, $currencyCode),
-                    $currencyCode
-                ),
-                (int) $order->getId()
-            );
+            // From here on the platform has answered: a failure to write the trace is not a failed refund.
+            try {
+                $this->adminLogAppend(
+                    "payzen-embedded.order-refund",
+                    AccessManager::UPDATE,
+                    sprintf(
+                        "Order %d: %s of %s %s",
+                        $order->getId(),
+                        $event->getOutcome()?->value ?? 'no outcome',
+                        RefundAmount::format($amount, $currencyCode),
+                        $currencyCode
+                    ),
+                    (int) $order->getId()
+                );
+            } catch (\Throwable $logFailure) {
+                Tlog::getInstance()->addError(sprintf('PayZen refund of order %d done, admin log failed: %s', $orderId, $logFailure->getMessage()));
+            }
         } catch (FormValidationException $ex) {
             $errorMsg = $this->createStandardFormValidationErrorMessage($ex);
         } catch (TheliaProcessException $ex) {
@@ -183,12 +205,7 @@ class OrderEditController extends BaseAdminController
             $this->adminLogAppend(
                 "payzen-embedded.order-refund",
                 AccessManager::UPDATE,
-                sprintf(
-                    "Order %d: refund of %s failed: %s",
-                    $orderId,
-                    (string) ($data['amount'] ?? $this->getRequest()->request->all(TransactionRefundForm::getName())['amount'] ?? '?'),
-                    $errorMsg
-                ),
+                sprintf("Order %d: refund of %s failed: %s", $orderId, $this->typedAmount($data), mb_substr($errorMsg, 0, 500)),
                 $orderId
             );
 
@@ -206,22 +223,44 @@ class OrderEditController extends BaseAdminController
         return $this->generateRedirect(URL::getInstance()->absoluteUrl("admin/order/update/$orderId") . '#payzen-embedded');
     }
 
-    private function refundOutcomeMessage(Translator $translator, TransactionRefundEvent $event, string $currencyCode): string
+    private function refundOutcomeMessage(Translator $translator, ?RefundOutcome $outcome, int $amount, string $currencyCode): string
     {
-        $amount = RefundAmount::format($event->getAmount(), $currencyCode) . ' ' . $currencyCode;
+        $formattedAmount = RefundAmount::format($amount, $currencyCode) . ' ' . $currencyCode;
 
-        return match ($event->getOutcome()) {
+        return match ($outcome) {
             RefundOutcome::Cancelled => $translator->trans('The transaction was cancelled before its capture, the order is cancelled.', [], PayzenEmbedded::DOMAIN_NAME),
             RefundOutcome::Refunded => $translator->trans('The order was refunded in full.', [], PayzenEmbedded::DOMAIN_NAME),
-            RefundOutcome::PartiallyRefunded => $translator->trans('%amount was refunded, the rest can still be refunded.', ['%amount' => $amount], PayzenEmbedded::DOMAIN_NAME),
+            RefundOutcome::PartiallyRefunded => $translator->trans('%amount was refunded, the rest can still be refunded.', ['%amount' => $formattedAmount], PayzenEmbedded::DOMAIN_NAME),
+            RefundOutcome::Pending => $translator->trans('The refund of %amount was accepted by PayZen and is being processed; the order is left as it is.', ['%amount' => $formattedAmount], PayzenEmbedded::DOMAIN_NAME),
             null => $translator->trans('The refund request was sent.', [], PayzenEmbedded::DOMAIN_NAME),
         };
     }
 
-    #[Route('/refresh-transaction/{orderId}', name: 'refresh_transaction', methods: 'POST')]
-    public function refreshTransaction(EventDispatcherInterface $dispatcher, Translator $translator, $orderId)
+    /**
+     * What the administrator typed as an amount, for the log: digits and separators only, bounded.
+     */
+    private function typedAmount(array $data): string
     {
-        if (null !== $response = $this->checkAuth(AdminResources::MODULE, 'PayzenEmbedded', AccessManager::UPDATE)) {
+        $raw = $data['amount'] ?? null;
+
+        if (null === $raw) {
+            $posted = $this->getRequest()->request->all()[TransactionRefundForm::getName()] ?? null;
+            $raw = \is_array($posted) ? ($posted['amount'] ?? null) : null;
+        }
+
+        if (!\is_scalar($raw)) {
+            return '?';
+        }
+
+        $clean = mb_substr((string) preg_replace('/[^\d.,\s]/', '', (string) $raw), 0, 20);
+
+        return '' !== $clean ? $clean : '?';
+    }
+
+    #[Route('/refresh-transaction/{orderId}', name: 'refresh_transaction', requirements: ['orderId' => '\d+'], methods: 'POST')]
+    public function refreshTransaction(EventDispatcherInterface $dispatcher, Translator $translator, int $orderId)
+    {
+        if (null !== $response = $this->checkAuth([AdminResources::MODULE, AdminResources::ORDER], 'PayzenEmbedded', AccessManager::UPDATE)) {
             return $response;
         }
 
@@ -248,12 +287,21 @@ class OrderEditController extends BaseAdminController
 
                 $this->addFlash('success', $translator->trans('The transaction history was refreshed.', [], PayzenEmbedded::DOMAIN_NAME));
             }
-        } catch (\Exception $ex) {
-            // Any other error
+        } catch (TheliaProcessException $ex) {
             $errorMsg = $ex->getMessage();
+        } catch (\Exception $ex) {
+            Tlog::getInstance()->addError(sprintf('PayZen transaction refresh of order %d failed: %s', $orderId, $ex->getMessage()));
+            $errorMsg = $translator->trans('The transaction could not be read from PayZen, see the logs.', [], PayzenEmbedded::DOMAIN_NAME);
         }
 
         if ($errorMsg) {
+            $this->adminLogAppend(
+                "payzen-embedded.order-update",
+                AccessManager::UPDATE,
+                sprintf("Order %d: transaction refresh failed: %s", $orderId, mb_substr($errorMsg, 0, 500)),
+                $orderId
+            );
+
             $this->setupFormErrorContext(
                 $translator->trans("PayzenEmbedded refresh transaction", [], PayzenEmbedded::DOMAIN_NAME),
                 $errorMsg,

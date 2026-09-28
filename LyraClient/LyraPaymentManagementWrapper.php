@@ -78,7 +78,7 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
 
         // Request parameters (see https://payzen.io/en-EN/rest/V4.0/api/playground.html?ws=Charge/CreatePayment)
         $store = [
-            "amount" => (int)((string)($order->getTotalAmount() * 100)),
+            "amount" => RefundAmount::fromMajor((string) $order->getTotalAmount(), $currency->getCode()),
             'contrib' => 'Thelia version ' . ConfigQuery::read('thelia_version'),
             'currency' => strtoupper($currency->getCode()),
             'orderId' => $order->getRef(),
@@ -130,25 +130,18 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
 
             if (null !== $order = $this->getOrderByRef($orderRef)) {
                 // A notification may carry several transactions: the debit of each attempt, and the
-                // credit of a refund. Each one is read; the order stands on the outcome of the last debit.
-                $creditStatus = null;
+                // credit of a refund. Each one is read. The platform is answered about the transaction
+                // the order stands on once they are all recorded, not about the last one in the list.
+                $lastStatus = self::PAYMENT_STATUS_NOT_PAID;
 
                 foreach ($response['transactions'] as $answer) {
-                    if (!\is_array($answer)) {
-                        continue;
+                    if (\is_array($answer)) {
+                        $lastStatus = $this->processOrderStatus($order, $answer);
                     }
-
-                    if (TransactionOutcome::fromAnswer($answer)->isCredit()) {
-                        $creditStatus = $this->processOrderStatus($order, $answer);
-                        continue;
-                    }
-
-                    $status = $this->processOrderStatus($order, $answer);
                 }
 
-                if (null !== $creditStatus && self::PAYMENT_STATUS_NOT_PAID === $status) {
-                    $status = $creditStatus;
-                }
+                $governing = $this->governingTransaction($order);
+                $status = null !== $governing ? $this->paymentStatusOf($governing) : $lastStatus;
             }
 
             $this->log->info(Translator::getInstance()->trans("PayZen payment response for order %ref processing teminated.", ['%ref' => $orderRef], PayzenEmbedded::DOMAIN_NAME));

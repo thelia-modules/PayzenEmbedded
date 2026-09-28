@@ -19,6 +19,7 @@ use Thelia\Type\TypeCollection;
  * @method getOrderId() int|null
  * @method getCustomerId() int|null
  * @method string[] getOrder()
+ * @method string[]|null getOperationType()
  */
 class TransactionHistoryLoop extends BaseLoop implements PropelSearchLoopInterface
 {
@@ -29,7 +30,7 @@ class TransactionHistoryLoop extends BaseLoop implements PropelSearchLoopInterfa
         return new ArgumentCollection(
             Argument::createIntTypeArgument('order_id'),
             Argument::createIntTypeArgument('customer_id'),
-            Argument::createAnyTypeArgument('operation_type'),
+            Argument::createEnumListTypeArgument('operation_type', ['DEBIT', 'CREDIT']),
             new Argument(
                 'order',
                 new TypeCollection(
@@ -62,7 +63,7 @@ class TransactionHistoryLoop extends BaseLoop implements PropelSearchLoopInterfa
 
         // DEBIT keeps the payments, CREDIT the refunds; rows written before 3.4.0 are debits.
         if (null !== $this->getOperationType()) {
-            $search->filterByOperationtype(strtoupper((string) $this->getOperationType()));
+            $search->filterByOperationtype(array_map('strtoupper', (array) $this->getOperationType()));
         }
 
         $orders  = $this->getOrder();

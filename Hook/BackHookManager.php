@@ -130,7 +130,7 @@ class BackHookManager extends BaseHook
             }
 
             $finished = (bool) $transaction['IS_FINISHED'];
-            $lastTransactionAmount = $transaction['AMOUNT'] / 100;
+            $lastTransactionAmount = $transaction['AMOUNT_FORMATTED'];
         }
 
         $ledger = (new TransactionHistoryReader())->ledgerOf($order);
@@ -195,6 +195,7 @@ class BackHookManager extends BaseHook
         $rows = [];
         $orderRefs = [];
         $currencySymbols = [];
+        $currencyCodes = [];
 
         /** @var PayzenEmbeddedTransactionHistory $transaction */
         foreach ($search->find() as $transaction) {
@@ -210,6 +211,7 @@ class BackHookManager extends BaseHook
             if ($currencyId && !\array_key_exists($currencyId, $currencySymbols)) {
                 $currency = CurrencyQuery::create()->findPk($currencyId);
                 $currencySymbols[$currencyId] = null !== $currency ? $currency->getSymbol() : '';
+                $currencyCodes[$currencyId] = null !== $currency ? (string) $currency->getCode() : '';
             }
 
             $rows[] = [
@@ -221,6 +223,7 @@ class BackHookManager extends BaseHook
                 'DETAILED_STATUS' => $transaction->getDetailedstatus(),
                 'OPERATION_TYPE' => $transaction->getOperationtype() ?: 'DEBIT',
                 'AMOUNT' => $transaction->getAmount(),
+                'AMOUNT_FORMATTED' => RefundAmount::format((int) $transaction->getAmount(), $currencyId ? ($currencyCodes[$currencyId] ?? '') : ''),
                 'CURRENCY_ID' => $currencyId,
                 'CURRENCY_SYMBOL' => $currencyId ? ($currencySymbols[$currencyId] ?? '') : '',
                 'CREATION_DATE' => $transaction->getCreationdate(),

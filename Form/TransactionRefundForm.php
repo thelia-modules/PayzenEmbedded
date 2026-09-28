@@ -16,7 +16,6 @@ declare(strict_types=1);
 namespace PayzenEmbedded\Form;
 
 use PayzenEmbedded\LyraClient\RefundAmount;
-use PayzenEmbedded\LyraClient\TransactionHistoryReader;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Validator\Constraints\Callback;
@@ -58,7 +57,7 @@ class TransactionRefundForm extends BaseForm
                     'required' => true,
                     'label' => $this->trans('Amount to refund'),
                     'label_attr' => [
-                        'help' => $this->trans('Up to what the customer paid, less what was already refunded. A transaction not captured yet is cancelled in full.'),
+                        'help' => $this->trans('Up to what the customer paid, less what was already refunded. A payment not captured yet is cancelled in full.'),
                     ],
                 ]
             )
@@ -78,6 +77,11 @@ class TransactionRefundForm extends BaseForm
             );
     }
 
+    /**
+     * Only the shape of the amount is checked here. Its ceiling is decided by the refund service,
+     * once the history has caught up with the platform: a ceiling read before that could refuse
+     * a refund the platform allows, or announce another maximum than the one enforced.
+     */
     public function checkRefundAmount($value, ExecutionContextInterface $context): void
     {
         $orderId = (int) ($context->getRoot()->getData()['order_id'] ?? 0);
@@ -89,23 +93,11 @@ class TransactionRefundForm extends BaseForm
         }
 
         $currencyCode = strtoupper($order->getCurrency()->getCode());
-        $amount = RefundAmount::fromInput((string) $value, $currencyCode);
 
-        if (null === $amount) {
+        if (null === RefundAmount::fromInput((string) $value, $currencyCode)) {
             $context->addViolation($this->trans('The amount to refund should be a positive number with at most %decimals decimals, such as %example.', [
                 '%decimals' => RefundAmount::decimals($currencyCode),
                 '%example' => RefundAmount::format(1250, $currencyCode),
-            ]));
-
-            return;
-        }
-
-        $ledger = (new TransactionHistoryReader())->ledgerOf($order);
-
-        if (!$ledger->allows($amount)) {
-            $context->addViolation($this->trans('The amount to refund should be greater than 0 and at most %amount %currency.', [
-                '%amount' => RefundAmount::format($ledger->maximumAmount(), $currencyCode),
-                '%currency' => $currencyCode,
             ]));
         }
     }

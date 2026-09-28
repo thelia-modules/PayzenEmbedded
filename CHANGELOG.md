@@ -6,6 +6,12 @@
 - Fixed the order page of a transaction still open in the Twig back-office, which broke on the capture date widget, and restored the field guidance the Twig back-office did not render.
 - The PayZen block reads the order id whichever name the back-office hands it: the Twig order page hands `order` to `order-edit.bottom` where every other hook receives `order_id`.
 
+- A refund the platform is still processing counts as money already given back, and is reported as pending rather than refused: asking again would have refunded twice.
+- The balance is read on the transaction the order stands on: the attempts the shopper gave up on, now listed by the platform, no longer add up. A payment authorised but not captured yet, whatever its validation mode, can only be cancelled in full.
+- The lock on a refund goes through the framework's lock factory, shared by every node of the shop, and is named per shop. The transactions the platform lists for another order, currency or shop are left out of the history.
+- Amounts are converted with the decimals of the currency (none for JPY or XPF, three for KWD or TND) when a payment is created, updated, refunded or displayed.
+- The platform is answered about the transaction the order stands on, whatever the order of the transactions in its notification.
+- A refund recorded whose order status could not be updated is reported as such, never as "not sent". The update and refresh actions get the same permissions, messages and log as the refund.
 - Before a refund, the platform's own list of the order's transactions is recorded (`Order/Get`): a refund whose answer was lost to a timeout, or one made from the PayZen back-office, is counted before the balance is checked.
 - One refund at a time per order, under a lock: two requests reading the same balance would both have reached the platform. The form button is disabled once the refund is confirmed.
 - The amount typed in the refund form is read strictly, in the smallest unit of the currency: "1 234,56" or "12abc" are refused instead of being read as another amount. `TransactionRefundEvent` carries the amount in minor units, and the administrator who asked for the refund, kept on the history row.
