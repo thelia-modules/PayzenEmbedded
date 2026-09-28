@@ -12,6 +12,7 @@ return array(
     'Call Center: payment made through a call center.' => 'Call Center: paiement effectué via un centre d’appel.',
     'Cannnot get transaction information %code : %message' => 'Ne peut obtenir le détail de la transaction %code : %message',
     'Cannot change transaction. Error is : %message (code %code)' => 'Echec de la modification de la transaction. L\'erreur est :  %message (code %code)',
+    'Cannot check the order with PayZen before refunding it. Error is : %message (code %code)' => 'Impossible de vérifier la commande auprès de PayZen avant de la rembourser. L\'erreur est : %message (code %code)',
     'Cannot refund the transaction. Error is : %message (code %code)' => 'Echec du remboursement de la transaction. L\'erreur est : %message (code %code)',
     'Capture delay' => 'Délai de remise en banque',
     'Card form' => 'Formulaire carte bancaire',

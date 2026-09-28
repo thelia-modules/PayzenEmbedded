@@ -57,6 +57,11 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
         }
 
         try {
+            // The history may be behind the platform: a refund whose answer was lost to a timeout,
+            // or one made from the PayZen back-office. The platform's own list of the order's
+            // transactions is recorded first, so the ledger counts what was really given back.
+            $this->syncTransactions($order);
+
             $ledger = (new TransactionHistoryReader())->ledgerOf($order);
             $currencyCode = strtoupper($order->getCurrency()->getCode());
 
@@ -75,6 +80,39 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
             return $this->processCancelOrRefundResponse($order, $response, $admin);
         } finally {
             $lock->release();
+        }
+    }
+
+    /**
+     * Record every transaction the platform holds for the order, credits included, through the
+     * Order/Get service. Nothing here moves the order: the history only catches up.
+     *
+     * @throws LyraException
+     * @throws TheliaProcessException when the platform cannot list the order's transactions
+     */
+    public function syncTransactions(Order $order): void
+    {
+        $response = $this->post('V4/Order/Get', ['orderId' => $order->getRef()]);
+
+        $transactions = $response['answer']['transactions'] ?? null;
+
+        if (($response['status'] ?? null) !== 'SUCCESS' || !\is_array($transactions)) {
+            throw new TheliaProcessException(
+                Translator::getInstance()->trans(
+                    'Cannot check the order with PayZen before refunding it. Error is : %message (code %code)',
+                    [
+                        '%code' => (string) ($response['answer']['errorCode'] ?? 'undefined error code'),
+                        '%message' => (string) ($response['answer']['errorMessage'] ?? 'undefined error message'),
+                    ],
+                    PayzenEmbedded::DOMAIN_NAME
+                )
+            );
+        }
+
+        foreach ($transactions as $answer) {
+            if (\is_array($answer) && isset($answer['uuid'])) {
+                $this->updateTransactionHistory($answer, $order);
+            }
         }
     }
 
