@@ -43,7 +43,8 @@ final readonly class TransactionHistoryReader
                     : null,
                 '' === $operationType ? TransactionOutcome::OPERATION_DEBIT : $operationType,
                 (int) $transaction->getAmount(),
-                strtoupper(trim((string) $transaction->getDetailedstatus()))
+                strtoupper(trim((string) $transaction->getDetailedstatus())),
+                '' !== trim((string) $transaction->getParentuuid()) ? trim((string) $transaction->getParentuuid()) : null
             );
         }
 

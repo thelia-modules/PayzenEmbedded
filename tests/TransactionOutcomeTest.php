@@ -64,6 +64,24 @@ final class TransactionOutcomeTest extends TestCase
         self::assertTrue(TransactionOutcome::fromAnswer(['uuid' => 't', 'status' => 'PAID', 'detailedStatus' => 'legacy text'])->isCaptured());
     }
 
+    public function testTheProvenanceFieldsAreReadFromTheAnswer(): void
+    {
+        $outcome = TransactionOutcome::fromAnswer([
+            'uuid' => 'c1',
+            'status' => 'PAID',
+            'operationType' => 'CREDIT',
+            'transactionDetails' => ['parentTransactionUuid' => 'd1'],
+            'metadata' => ['thelia_shop' => 'shop-a'],
+            'orderDetails' => ['orderId' => 'ORD1', 'mode' => 'test'],
+        ]);
+
+        self::assertSame('d1', $outcome->parentUuid);
+        self::assertSame('shop-a', $outcome->shopMarker);
+        self::assertSame('TEST', $outcome->mode);
+        self::assertSame('ORD1', $outcome->orderRef);
+        self::assertNull(TransactionOutcome::fromAnswer(['uuid' => 'd1', 'status' => 'PAID'])->parentUuid);
+    }
+
     public function testAnAnswerWithoutAmountCountsForNothing(): void
     {
         self::assertSame(0, TransactionOutcome::fromAnswer(['uuid' => 't1', 'status' => 'RUNNING'])->amount);

@@ -2,7 +2,7 @@
 
 
 {% block title %}
-    {{ 'Payment'|trans }}
+    {{ 'Payment'|trans({}, 'payzenembedded.fo.default') }}
 {% endblock %}
 
 {# The theme draws the checkout steps, this page being the payment one. #}
@@ -21,7 +21,7 @@
 
             <div class="mt-6">
                 <a href="{{ path('payzen_embedded_front_abort_payment', {orderId: order_id}) }}" class="button">
-                    {{ 'Cancel payment'|trans }}
+                    {{ 'Cancel payment'|trans({}, 'payzenembedded.fo.default') }}
                 </a>
             </div>
         {% else %}
@@ -29,22 +29,22 @@
                 <div class="lg:w-[250px] mb-6">
                     {{ source('assets/images/not-found.svg', true) }}
                 </div>
-                <h3 class="mt-4 mb-4 h4">{{ 'We\'re sorry, the payment form could not be displayed.'|trans }}</h3>
+                <h3 class="mt-4 mb-4 h4">{{ 'We\'re sorry, the payment form could not be displayed.'|trans({}, 'payzenembedded.fo.default') }}</h3>
 
                 {% if errorCode is defined and errorCode %}
                     <div class="mb-6 text-sm text-gray-600">
-                        <p><strong>{{ 'Error code'|trans }}:</strong> {{ errorCode }}{% if detailedErrorCode is defined and detailedErrorCode %} ({{ detailedErrorCode }}){% endif %}</p>
-                        <p><strong>{{ 'Error message'|trans }}:</strong> {{ errorMessage }}{% if detailedErrorMessage is defined and detailedErrorMessage %} ({{ detailedErrorMessage }}){% endif %}</p>
+                        <p><strong>{{ 'Error code'|trans({}, 'payzenembedded.fo.default') }}:</strong> {{ errorCode }}{% if detailedErrorCode is defined and detailedErrorCode %} ({{ detailedErrorCode }}){% endif %}</p>
+                        <p><strong>{{ 'Error message'|trans({}, 'payzenembedded.fo.default') }}:</strong> {{ errorMessage }}{% if detailedErrorMessage is defined and detailedErrorMessage %} ({{ detailedErrorMessage }}){% endif %}</p>
                     </div>
                 {% endif %}
 
                 <a href="{{ path('payzen_embedded_front_abort_payment', {orderId: order_id}) }}" class="button">
-                    {{ 'Try again your payment'|trans }}
+                    {{ 'Try again your payment'|trans({}, 'payzenembedded.fo.default') }}
                 </a>
 
                 <p class="mt-4 text-sm">
                     {# No theme route is assumed here: Flexy has no "contact" route, and a missing one turned this page into a 500. #}
-                    {{ 'You may also contact us to get help or more information.'|trans }}
+                    {{ 'You may also contact us to get help or more information.'|trans({}, 'payzenembedded.fo.default') }}
                 </p>
             </div>
         {% endif %}

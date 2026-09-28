@@ -78,7 +78,8 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
         $parameters = [
             'uuid' => $order->getTransactionRef(),
             'cardUpdate' => [
-                'amount' => RefundAmount::fromMajor((string) $amount, $order->getCurrency()->getCode()),
+                'amount' => RefundAmount::fromInput((string) $amount, $order->getCurrency()->getCode())
+                    ?? throw new TheliaProcessException(Translator::getInstance()->trans('The amount to refund should be a positive number with at most %decimals decimals, such as %example.', ['%decimals' => RefundAmount::decimals($order->getCurrency()->getCode()), '%example' => RefundAmount::format(1250, $order->getCurrency()->getCode())], PayzenEmbedded::DOMAIN_NAME)),
                 'currency' => strtoupper($order->getCurrency()->getCode()),
                 'expectedCaptureDate' => $captureDateParam,
                 'manualValidation' => $manualValidationParam
@@ -107,9 +108,9 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
 
             if (null !== $order = $this->getOrderByTransaction($orderTransaction)) {
                 $paymentStatus = $this->processOrderStatus($order, $response['answer']);
-            }
 
-            $this->log->info(Translator::getInstance()->trans("PayZen response for order %ref processing teminated.", ['%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
+                $this->log->info(Translator::getInstance()->trans("PayZen response for order %ref processing teminated.", ['%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
+            }
         } else {
             throw new TheliaProcessException(
                 Translator::getInstance()->trans(

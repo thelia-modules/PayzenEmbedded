@@ -90,6 +90,8 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             ],
 
             'strongAuthentication' => PayzenEmbedded::getConfigValue('strong_authentication', 'AUTO'),
+            // Names this shop on the platform: what it lists or notifies is checked against it.
+            'metadata' => [TransactionOutcome::SHOP_MARKER_KEY => PayzenEmbedded::shopMarker()],
             'ipnTargetUrl' => URL::getInstance()->absoluteUrl('/payzen-embedded/ipn-callback'),
 
             'transactionOptions' => [
@@ -135,9 +137,21 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
                 $lastStatus = self::PAYMENT_STATUS_NOT_PAID;
 
                 foreach ($response['transactions'] as $answer) {
-                    if (\is_array($answer)) {
-                        $lastStatus = $this->processOrderStatus($order, $answer);
+                    if (!\is_array($answer)) {
+                        continue;
                     }
+
+                    // A notification carrying another shop's marker, or another space, is not this
+                    // order's, whatever reference it names: two shops on one contract share them.
+                    $incoming = TransactionOutcome::fromAnswer($answer);
+
+                    if ((null !== $incoming->shopMarker && $incoming->shopMarker !== PayzenEmbedded::shopMarker())
+                        || ('' !== $incoming->mode && $incoming->mode !== PayzenEmbedded::platformMode())) {
+                        $this->log->addWarning(sprintf('PayZen notification for order %s ignored: transaction %s belongs to another shop or space.', $orderRef, $incoming->uuid));
+                        continue;
+                    }
+
+                    $lastStatus = $this->processOrderStatus($order, $answer);
                 }
 
                 $governing = $this->governingTransaction($order);
@@ -182,6 +196,14 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
                     PayzenEmbedded::DOMAIN_NAME
                 )
             );
+
+            // A refund that was pending when the shop asked for it settles the order once the
+            // platform confirms it and nothing is left to refund.
+            $ledger = (new TransactionHistoryReader())->ledgerOf($order);
+
+            if ($incoming->isPaid() && $ledger->paidAmount > 0 && 0 === $ledger->refundableAmount()) {
+                $this->setOrderStatus($order, OrderStatusQuery::getRefundedStatus());
+            }
 
             return $this->paymentStatusOf($incoming);
         }

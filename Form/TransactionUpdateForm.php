@@ -115,7 +115,7 @@ class TransactionUpdateForm extends BaseForm
         $orderId = \intval($context->getRoot()->getData()['order_id']);
 
         if (null !== $order = OrderQuery::create()->findPk($orderId)) {
-            if (\floatval($value> $order->getTotalAmount())) {
+            if ((float) str_replace(',', '.', (string) $value) > $order->getTotalAmount()) {
                 $context->addViolation(
                     $this->trans("The amount should be less or equal to the order current amount.")
                 );

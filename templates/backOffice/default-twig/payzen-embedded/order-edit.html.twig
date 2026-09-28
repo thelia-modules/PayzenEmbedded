@@ -28,7 +28,7 @@
                     </table>
                 </div>
 
-                {% if not finished %}
+                {% if not finished and can_act|default(true) %}
                     <hr>
                     <h3 class="h6">{{ 'Update PayZen transaction'|trans({}, _d) }}</h3>
                     <div class="alert alert-info">
@@ -79,7 +79,7 @@
                     {{ form_end(update_form) }}
                 {% endif %}
 
-                {% if can_give_back %}
+                {% if can_give_back and can_act|default(true) %}
                     <hr>
                     <h3 class="h6">{{ 'Cancel or refund the payment'|trans({}, _d) }}</h3>
                     <div class="alert alert-info">

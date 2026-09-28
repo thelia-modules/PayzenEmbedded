@@ -31,6 +31,9 @@ final readonly class TransactionOutcome
     /** A refund: the platform creates a transaction of its own that gives money back to the shopper. */
     public const OPERATION_CREDIT = 'CREDIT';
 
+    /** The metadata key a payment carries to name the shop that created it. */
+    public const SHOP_MARKER_KEY = 'thelia_shop';
+
     /** Detailed statuses of a debit the bank has not captured yet: it can still be cancelled, in full. */
     private const NOT_CAPTURED = ['AUTHORISED', 'AUTHORISED_TO_VALIDATE', 'WAITING_AUTHORISATION', 'WAITING_AUTHORISATION_TO_VALIDATE', 'WAITING_FOR_PAYMENT', 'INITIAL', 'UNDER_VERIFICATION'];
 
@@ -44,6 +47,14 @@ final readonly class TransactionOutcome
         public string $operationType = self::OPERATION_DEBIT,
         public int $amount = 0,
         public string $detailedStatus = '',
+        /** The debit a credit gives money back on, when the platform says it. */
+        public ?string $parentUuid = null,
+        /** The shop that created the transaction, when it was sent along at creation. */
+        public ?string $shopMarker = null,
+        /** TEST or PRODUCTION, as the platform says. */
+        public string $mode = '',
+        /** The merchant's order reference the platform lists the transaction under. */
+        public string $orderRef = '',
     ) {
     }
 
@@ -79,8 +90,23 @@ final readonly class TransactionOutcome
             $createdAt,
             $operationType,
             (int) ($answer['amount'] ?? 0),
-            strtoupper(trim((string) ($answer['detailedStatus'] ?? '')))
+            strtoupper(trim((string) ($answer['detailedStatus'] ?? ''))),
+            self::stringOrNull($answer['transactionDetails']['parentTransactionUuid'] ?? null),
+            self::stringOrNull($answer['metadata'][self::SHOP_MARKER_KEY] ?? null),
+            strtoupper(trim((string) ($answer['orderDetails']['mode'] ?? ''))),
+            trim((string) ($answer['orderDetails']['orderId'] ?? ''))
         );
+    }
+
+    private static function stringOrNull(mixed $value): ?string
+    {
+        if (!\is_scalar($value)) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return '' === $value ? null : $value;
     }
 
     public function isFinished(): bool

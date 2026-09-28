@@ -124,6 +124,17 @@ Une fois dispatché, l'event retourne à travers `getOutcome()` ce que PayZen a 
 `\PayzenEmbedded\LyraClient\RefundOutcome` : `Cancelled`, `Refunded` ou `PartiallyRefunded`. Un montant hors
 limites ou un refus de la plateforme lève une `TheliaProcessException`.
 
+### Verrou et instances multiples
+
+Un remboursement verrouille la commande le temps des appels à PayZen. Le verrou passe par le composant `lock` de
+Symfony : avec le magasin par défaut (`LOCK_DSN=semaphore` ou `flock`), il ne vaut que pour un serveur. Une boutique
+servie par plusieurs serveurs doit configurer un magasin partagé (`LOCK_DSN=redis://…` ou `pdo`).
+
+Chaque paiement porte en `metadata` un marqueur de la boutique (empreinte de l'URL du site et de l'identifiant
+PayZen). Ce que la plateforme liste ou notifie sans ce marqueur n'est rattaché à une commande que s'il s'agit de
+sa transaction connue, ou d'un remboursement de celle-ci : deux boutiques sur un même contrat, ou deux
+environnements dans l'espace TEST, produisent les mêmes références de commande.
+
 ## Installation
 
 Vous pouvez installer ce module avec Composer :
@@ -264,6 +275,17 @@ The `\PayzenEmbedded\Event\TransactionRefundEvent` action event takes:
 Once dispatched, `getOutcome()` tells what PayZen did, one of `\PayzenEmbedded\LyraClient\RefundOutcome`:
 `Cancelled`, `Refunded` or `PartiallyRefunded`. An amount out of range or a refusal from the platform raises a
 `TheliaProcessException`.
+
+### Lock and multiple instances
+
+A refund locks the order while the platform is called. The lock goes through Symfony's `lock` component: with the
+default store (`LOCK_DSN=semaphore` or `flock`) it holds one server. A shop served by several servers needs a shared
+store (`LOCK_DSN=redis://…` or `pdo`).
+
+Every payment carries a shop marker in its `metadata` (a fingerprint of the site URL and of the PayZen shop id).
+What the platform lists or notifies without that marker is tied to an order only when it is its known transaction,
+or a refund of it: two shops on one contract, or two environments in the TEST space, produce the same order
+references.
 
 ## Installation
 

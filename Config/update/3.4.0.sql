@@ -13,3 +13,11 @@ DEALLOCATE PREPARE add_column_statement;
 UPDATE `payzen_embedded_transaction_history`
     SET `operationType` = 'DEBIT'
     WHERE `operationType` IS NULL;
+
+-- The debit a credit gives money back on, so that a refund of another payment of the order (a
+-- double payment refunded from the PayZen back-office) is not deducted from this one.
+SET @add_parent := (SELECT COUNT(*) = 0 FROM `information_schema`.`COLUMNS` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = 'payzen_embedded_transaction_history' AND `COLUMN_NAME` = 'parentUuid');
+SET @statement := IF(@add_parent, 'ALTER TABLE `payzen_embedded_transaction_history` ADD COLUMN `parentUuid` VARCHAR(128) AFTER `operationType`', 'DO 0');
+PREPARE add_parent_statement FROM @statement;
+EXECUTE add_parent_statement;
+DEALLOCATE PREPARE add_parent_statement;

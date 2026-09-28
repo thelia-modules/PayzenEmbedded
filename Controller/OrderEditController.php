@@ -26,6 +26,7 @@ use PayzenEmbedded\Form\TransactionUpdateForm;
 use PayzenEmbedded\LyraClient\OrderStatusNotUpdatedException;
 use PayzenEmbedded\LyraClient\RefundAmount;
 use PayzenEmbedded\LyraClient\RefundOutcome;
+use PayzenEmbedded\LyraClient\RefundOutcomeUnknownException;
 use Thelia\Exception\TheliaProcessException;
 use Thelia\Log\Tlog;
 use PayzenEmbedded\LyraClient\LyraTransactionGetWrapper;
@@ -76,20 +77,20 @@ class OrderEditController extends BaseAdminController
                         ->setManualValidation(! $data['automatic_validation']),
                 PayzenEmbedded::TRANSACTION_UPDATE_EVENT);
 
-                // Log order modification
-                $this->adminLogAppend(
-                    "payzen-embedded.order-update",
-                    AccessManager::UPDATE,
-                    sprintf("Order %d updated", $order->getId())
-                );
-
                 $this->addFlash('success', $translator->trans('The transaction was updated.', [], PayzenEmbedded::DOMAIN_NAME));
+
+                // The platform has answered: a failure to write the trace is not a failed update.
+                try {
+                    $this->adminLogAppend("payzen-embedded.order-update", AccessManager::UPDATE, sprintf("Order %d updated", $order->getId()), (int) $order->getId());
+                } catch (\Throwable $logFailure) {
+                    Tlog::getInstance()->addError(sprintf('PayZen transaction update of order %d done, admin log failed: %s', $orderId, $logFailure->getMessage()));
+                }
             }
         } catch (FormValidationException $ex) {
             // Form cannot be validated. Create the error message using the BaseAdminController helper method.
             $errorMsg = $this->createStandardFormValidationErrorMessage($ex);
         } catch (TheliaProcessException $ex) {
-            $errorMsg = $ex->getMessage();
+            $errorMsg = mb_substr($ex->getMessage(), 0, 500);
         } catch (\Exception $ex) {
             Tlog::getInstance()->addError(sprintf('PayZen transaction update of order %d failed: %s', $orderId, $ex->getMessage()));
             $errorMsg = $translator->trans('The transaction update could not be sent to PayZen, see the logs.', [], PayzenEmbedded::DOMAIN_NAME);
@@ -170,6 +171,9 @@ class OrderEditController extends BaseAdminController
                 // The money moved: said as such, with the order to check.
                 $event->setOutcome($statusFailure->outcome);
                 $this->addFlash('warning', $statusFailure->getMessage());
+            } catch (RefundOutcomeUnknownException $unknown) {
+                // The platform answered: the next attempt refreshes the order before anything else.
+                $this->addFlash('warning', $unknown->getMessage());
             }
 
             // From here on the platform has answered: a failure to write the trace is not a failed refund.
@@ -193,7 +197,7 @@ class OrderEditController extends BaseAdminController
             $errorMsg = $this->createStandardFormValidationErrorMessage($ex);
         } catch (TheliaProcessException $ex) {
             // A refusal the administrator can act on: the platform's or the module's own.
-            $errorMsg = $ex->getMessage();
+            $errorMsg = mb_substr($ex->getMessage(), 0, 500);
         } catch (\Exception $ex) {
             // Anything else stays in the log: a transport or database error is not for the screen.
             Tlog::getInstance()->addError(sprintf('PayZen refund of order %d failed: %s', $orderId, $ex->getMessage()));
@@ -252,7 +256,7 @@ class OrderEditController extends BaseAdminController
             return '?';
         }
 
-        $clean = mb_substr((string) preg_replace('/[^\d.,\s]/', '', (string) $raw), 0, 20);
+        $clean = mb_substr((string) preg_replace('/[^\d., ]/', '', (string) $raw), 0, 20);
 
         return '' !== $clean ? $clean : '?';
     }
@@ -278,17 +282,18 @@ class OrderEditController extends BaseAdminController
                 $lyraClient = new LyraTransactionGetWrapper($dispatcher);
                 $lyraClient->getTransaction($order);
 
-                // Log order modification
-                $this->adminLogAppend(
-                    "payzen-embedded.order-update",
-                    AccessManager::UPDATE,
-                    sprintf("Order %d refreshed", $order->getId())
-                );
-
                 $this->addFlash('success', $translator->trans('The transaction history was refreshed.', [], PayzenEmbedded::DOMAIN_NAME));
+
+                try {
+                    $this->adminLogAppend("payzen-embedded.order-update", AccessManager::UPDATE, sprintf("Order %d refreshed", $order->getId()), (int) $order->getId());
+                } catch (\Throwable $logFailure) {
+                    Tlog::getInstance()->addError(sprintf('PayZen transaction refresh of order %d done, admin log failed: %s', $orderId, $logFailure->getMessage()));
+                }
             }
+        } catch (FormValidationException $ex) {
+            $errorMsg = $this->createStandardFormValidationErrorMessage($ex);
         } catch (TheliaProcessException $ex) {
-            $errorMsg = $ex->getMessage();
+            $errorMsg = mb_substr($ex->getMessage(), 0, 500);
         } catch (\Exception $ex) {
             Tlog::getInstance()->addError(sprintf('PayZen transaction refresh of order %d failed: %s', $orderId, $ex->getMessage()));
             $errorMsg = $translator->trans('The transaction could not be read from PayZen, see the logs.', [], PayzenEmbedded::DOMAIN_NAME);

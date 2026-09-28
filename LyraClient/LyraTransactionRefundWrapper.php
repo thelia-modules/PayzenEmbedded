@@ -41,8 +41,10 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
     private LockFactory $lockFactory;
 
     /**
-     * @param LockFactory|null $lockFactory the framework's lock factory, shared by every node of the
-     *                                      shop; without it, a lock on this node's file system
+     * @param LockFactory|null $lockFactory the framework's lock factory. It spans every node of the
+     *                                      shop only when LOCK_DSN names a network store (redis,
+     *                                      pdo); the default semaphore or flock store holds one
+     *                                      host. Without it, a lock on this node's file system.
      */
     public function __construct(EventDispatcherInterface $dispatcher, ?LockFactory $lockFactory = null)
     {
@@ -69,6 +71,18 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
      */
     public function refundTransaction(Order $order, int $amount, ?string $comment = null, ?Admin $admin = null): RefundOutcome
     {
+        if (PayzenEmbedded::getModuleId() !== (int) $order->getPaymentModuleId()) {
+            throw new TheliaProcessException(
+                Translator::getInstance()->trans('This order was not paid with PayZen.', [], PayzenEmbedded::DOMAIN_NAME)
+            );
+        }
+
+        if ('' === (string) $order->getTransactionRef()) {
+            throw new TheliaProcessException(
+                Translator::getInstance()->trans('This order carries no PayZen transaction yet.', [], PayzenEmbedded::DOMAIN_NAME)
+            );
+        }
+
         $lock = $this->lockFactory->createLock($this->lockName($order), self::LOCK_TTL);
 
         if (!$lock->acquire()) {
@@ -101,7 +115,19 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
 
             $response = $this->sendCancelOrRefundRequest($order, $amount, $comment);
 
-            return $this->processCancelOrRefundResponse($order, $response, $admin);
+            try {
+                return $this->processCancelOrRefundResponse($order, $response, $admin);
+            } catch (TheliaProcessException $exception) {
+                throw $exception;
+            } catch (\Throwable $exception) {
+                // The platform has answered: whatever failed afterwards, the money may have moved.
+                $this->log->addError(sprintf('Order %s: PayZen answered the refund, but recording it failed: %s', $order->getRef(), $exception->getMessage()));
+
+                throw new RefundOutcomeUnknownException(
+                    Translator::getInstance()->trans('PayZen answered the refund, but its result could not be recorded: refresh the order before trying again.', [], PayzenEmbedded::DOMAIN_NAME),
+                    $exception
+                );
+            }
         } finally {
             $lock->release();
         }
@@ -110,7 +136,8 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
     /**
      * Record every transaction the platform holds for the order, credits included, through the
      * Order/Get service. Nothing here moves the order: the history only catches up. A transaction
-     * the platform lists under this reference for another order, currency or shop is left out.
+     * the platform lists under this reference for another shop, another space or another order
+     * is left out, see TransactionProvenance.
      *
      * @throws LyraException
      * @throws TheliaProcessException when the platform cannot list the order's transactions
@@ -142,30 +169,34 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
             ));
         }
 
-        $currencyCode = strtoupper($order->getCurrency()->getCode());
-        $debitUuid = (string) $order->getTransactionRef();
+        $provenance = new TransactionProvenance(
+            (string) $order->getRef(),
+            PayzenEmbedded::platformMode(),
+            PayzenEmbedded::shopMarker(),
+            (string) $order->getTransactionRef()
+        );
 
         foreach ($transactions as $answer) {
-            if (!\is_array($answer) || !isset($answer['uuid'])) {
+            if (!\is_array($answer) || !\is_string($answer['uuid'] ?? null) || 1 !== preg_match('/^[0-9a-f]{32}$/i', $answer['uuid'])) {
                 continue;
             }
 
-            $answerOrderRef = $answer['orderDetails']['orderId'] ?? $order->getRef();
-            $answerCurrency = strtoupper((string) ($answer['currency'] ?? $currencyCode));
+            // Order/Get lists every attempt of the order: no debit hint here, a transaction that
+            // does not say its operation type is a debit like any attempt.
+            $outcome = TransactionOutcome::fromAnswer($answer);
 
-            if ($answerOrderRef !== $order->getRef() || $answerCurrency !== $currencyCode) {
+            if (!$provenance->accepts($outcome)) {
                 $this->log->addWarning(sprintf(
-                    'PayZen transaction %s listed for order %s belongs to %s in %s: ignored.',
-                    $answer['uuid'],
+                    'PayZen transaction %s listed for order %s is not this shop\'s, for this order: ignored (%s).',
+                    $outcome->uuid,
                     $order->getRef(),
-                    (string) $answerOrderRef,
-                    $answerCurrency
+                    json_encode(['orderId' => $outcome->orderRef, 'mode' => $outcome->mode, 'marked' => null !== $outcome->shopMarker, 'parent' => $outcome->parentUuid])
                 ));
 
                 continue;
             }
 
-            $this->updateTransactionHistory($answer, $order, null, $debitUuid);
+            $this->updateTransactionHistory($answer, $order);
         }
     }
 

@@ -14,8 +14,7 @@ use Thelia\Type;
 use Thelia\Type\TypeCollection;
 
 /**
- * Class CustomerCardLoop
- * @package ETransaction\Loop
+ * The PayZen transactions recorded for an order or a customer.
  * @method getOrderId() int|null
  * @method getCustomerId() int|null
  * @method string[] getOrder()
@@ -63,7 +62,7 @@ class TransactionHistoryLoop extends BaseLoop implements PropelSearchLoopInterfa
 
         // DEBIT keeps the payments, CREDIT the refunds; rows written before 3.4.0 are debits.
         if (null !== $this->getOperationType()) {
-            $search->filterByOperationtype(array_map('strtoupper', (array) $this->getOperationType()));
+            $search->filterByOperationtype((array) $this->getOperationType());
         }
 
         $orders  = $this->getOrder();

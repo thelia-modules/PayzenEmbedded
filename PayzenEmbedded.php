@@ -21,6 +21,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Thelia\Core\Template\Parser\ParserResolver;
 use Thelia\Core\Translation\Translator;
 use Thelia\Core\Install\Database;
+use Thelia\Model\ConfigQuery;
 use Thelia\Model\Lang;
 use Thelia\Model\LangQuery;
 use Thelia\Model\Message;
@@ -97,6 +98,22 @@ class PayzenEmbedded extends AbstractPaymentModule
 
             return new Response($renderedTemplate);
         }
+    }
+
+    /**
+     * What names this shop on the platform: two shops on one contract, or two environments in the
+     * TEST space, produce the same order references. Sent with every payment as metadata, and
+     * required back on what the platform lists or notifies.
+     */
+    public static function shopMarker(): string
+    {
+        return md5((string) ConfigQuery::read('url_site', '') . '#' . (string) self::getConfigValue('site_id', ''));
+    }
+
+    /** TEST or PRODUCTION, the space the platform files this shop's transactions in. */
+    public static function platformMode(): string
+    {
+        return 'TEST' === self::getConfigValue('mode', 'TEST') ? 'TEST' : 'PRODUCTION';
     }
 
     /**

@@ -23,6 +23,8 @@
         <column name="detailedStatus" type="VARCHAR" size="32" />
         <!-- DEBIT for a payment, CREDIT for the refund transaction the platform creates. -->
         <column name="operationType" type="VARCHAR" size="16" defaultValue="DEBIT" />
+        <!-- For a credit, the debit it gives money back on, as the platform names it. -->
+        <column name="parentUuid" type="VARCHAR" size="128" />
         <column name="amount" type="INTEGER" size="11" />
         <column name="currency_id" type="INTEGER" required="true" />
         <column name="creationDate" type="TIMESTAMP" />

@@ -109,6 +109,12 @@ class LyraClientWrapper extends Client
                 throw $exception;
             }
 
+            if (null !== $existing->getOrderId() && (int) $existing->getOrderId() !== (int) $order->getId()) {
+                Tlog::getInstance()->addWarning(sprintf('PayZen transaction %s belongs to order #%d, not to order %s: ignored.', $outcome->uuid, (int) $existing->getOrderId(), $order->getRef()));
+
+                return;
+            }
+
             $this->fillTransactionHistory($existing, $answer, $outcome, $order, $currency?->getId(), $admin);
             $existing->save();
         }
@@ -129,6 +135,7 @@ class LyraClientWrapper extends Client
             ->setDetailedstatus('' !== $outcome->detailedStatus ? $outcome->detailedStatus : null)
             ->setStatus($outcome->status)
             ->setOperationtype($outcome->operationType)
+            ->setParentuuid($outcome->parentUuid)
             ->setAmount($outcome->amount)
             ->setCurrencyId($currencyId)
             ->setCreationdate($outcome->createdAt !== null ? \DateTime::createFromImmutable($outcome->createdAt) : null)
@@ -145,38 +152,10 @@ class LyraClientWrapper extends Client
     }
 
     /**
-     * The transaction the order currently stands on.
-     *
-     * A paid transaction speaks for the order whatever else it carries, since a shop does not take
-     * back a payment it has received. Failing one, the latest attempt the platform dated speaks.
-     * A refund never speaks for the order: it is a credit the shop asked for, not a payment attempt.
+     * The transaction the order currently stands on, see GoverningTransaction.
      */
     protected function governingTransaction(Order $order): ?TransactionOutcome
     {
-        $governing = null;
-
-        foreach ((new TransactionHistoryReader())->outcomesOf($order) as $outcome) {
-            if ($outcome->isCredit()) {
-                continue;
-            }
-
-            if (null === $governing) {
-                $governing = $outcome;
-                continue;
-            }
-
-            if ($outcome->isPaid() && !$governing->isPaid()) {
-                $governing = $outcome;
-                continue;
-            }
-
-            if (!$governing->isPaid()
-                && null !== $outcome->createdAt
-                && (null === $governing->createdAt || $outcome->createdAt > $governing->createdAt)) {
-                $governing = $outcome;
-            }
-        }
-
-        return $governing;
+        return GoverningTransaction::among((new TransactionHistoryReader())->outcomesOf($order), (string) $order->getTransactionRef());
     }
 }

@@ -142,6 +142,28 @@ final class RefundLedgerTest extends TestCase
         self::assertSame(1000, $ledger->paidAmount);
     }
 
+    public function testACreditOfAnotherDebitIsNotDeductedFromThisOne(): void
+    {
+        $ledger = $this->ledger([
+            $this->debit('other', 'PAID', 1000, 'CAPTURED'),
+            $this->debit(self::ORDER_DEBIT, 'PAID', 1000, 'CAPTURED'),
+            new TransactionOutcome('c-other', 'PAID', null, TransactionOutcome::OPERATION_CREDIT, 1000, '', 'other'),
+        ]);
+
+        self::assertSame(0, $ledger->refundedAmount);
+        self::assertSame(1000, $ledger->refundableAmount());
+    }
+
+    public function testACreditWithoutAKnownParentIsDeductedAllTheSame(): void
+    {
+        $ledger = $this->ledger([
+            $this->debit(self::ORDER_DEBIT, 'PAID', 1000, 'CAPTURED'),
+            new TransactionOutcome('c-legacy', 'PAID', null, TransactionOutcome::OPERATION_CREDIT, 300),
+        ]);
+
+        self::assertSame(300, $ledger->refundedAmount);
+    }
+
     public function testWithoutAReferenceEveryDebitCounts(): void
     {
         $ledger = RefundLedger::fromTransactions([$this->debit('legacy', 'PAID', 800, 'CAPTURED')], '');

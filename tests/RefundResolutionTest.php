@@ -96,6 +96,16 @@ final class RefundResolutionTest extends TestCase
         );
     }
 
+    public function testACreditInAnUnknownStatusIsRefused(): void
+    {
+        $this->expectException(TheliaProcessException::class);
+
+        RefundResolution::fromAnswer(
+            ['uuid' => 'credit-1', 'status' => 'PARTIALLY_PAID', 'operationType' => 'CREDIT', 'amount' => 300],
+            self::DEBIT_UUID,
+        );
+    }
+
     public function testTheDebitStillRunningIsNotReadAsACancellation(): void
     {
         $this->expectException(TheliaProcessException::class);

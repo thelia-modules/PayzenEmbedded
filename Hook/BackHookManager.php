@@ -31,6 +31,9 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Thelia\Core\Event\Hook\HookRenderEvent;
 use Thelia\Core\Form\TheliaFormFactory;
 use Thelia\Core\Hook\BaseHook;
+use Thelia\Core\Security\AccessManager;
+use Thelia\Core\Security\Resource\AdminResources;
+use Thelia\Core\Security\SecurityContext;
 use Thelia\Core\Template\Parser\ParserResolver;
 use Thelia\Model\CurrencyQuery;
 use Thelia\Model\MessageQuery;
@@ -41,6 +44,7 @@ class BackHookManager extends BaseHook
 {
     public function __construct(
         private readonly TheliaFormFactory $formFactory,
+        private readonly SecurityContext $securityContext,
         ?EventDispatcherInterface $dispatcher = null,
         ?ParserResolver $parserResolver = null,
     ) {
@@ -120,21 +124,24 @@ class BackHookManager extends BaseHook
 
         $transactions = $this->getTransactionHistory(orderId: $orderId);
 
-        $finished = false;
-        $lastTransactionAmount = 0;
+        // The transaction to update is the one the order stands on, not the last one listed: the
+        // history also holds the attempts the shopper gave up on. It can be updated until captured.
+        $reference = (string) $order->getTransactionRef();
+        $finished = true;
+        $lastTransactionAmount = '0';
 
         foreach ($transactions as $transaction) {
-            // A refund is a credit of its own: the payment it gives back is the one to update.
-            if ('CREDIT' === $transaction['OPERATION_TYPE']) {
+            if ('CREDIT' === $transaction['OPERATION_TYPE'] || ('' !== $reference && $transaction['TRANSACTION_REF'] !== $reference)) {
                 continue;
             }
 
-            $finished = (bool) $transaction['IS_FINISHED'];
+            $finished = 'UNPAID' === $transaction['STATUS'] || $transaction['IS_CAPTURED'];
             $lastTransactionAmount = $transaction['AMOUNT_FORMATTED'];
         }
 
         $ledger = (new TransactionHistoryReader())->ledgerOf($order);
         $currencyCode = strtoupper((string) $order->getCurrency()?->getCode());
+        $canAct = $this->securityContext->isGranted(['ADMIN'], [AdminResources::MODULE, AdminResources::ORDER], ['PayzenEmbedded'], [AccessManager::UPDATE]);
 
         $getForm = $this->formFactory->createForm(TransactionGetForm::getName());
         $updateForm = $this->formFactory->createForm(TransactionUpdateForm::getName());
@@ -152,6 +159,7 @@ class BackHookManager extends BaseHook
                 'is_cancellable' => $ledger->isCancellable(),
                 'maximum_amount' => RefundAmount::format($ledger->maximumAmount(), $currencyCode),
                 'can_give_back' => $ledger->maximumAmount() > 0,
+                'can_act' => $canAct,
                 'currency_symbol' => $order->getCurrency()?->getSymbol() ?? '',
                 'get_form' => $getForm->createView()->getView(),
                 'update_form' => $updateForm->createView()->getView(),
@@ -222,6 +230,8 @@ class BackHookManager extends BaseHook
                 'STATUS' => $transaction->getStatus(),
                 'DETAILED_STATUS' => $transaction->getDetailedstatus(),
                 'OPERATION_TYPE' => $transaction->getOperationtype() ?: 'DEBIT',
+                'IS_CAPTURED' => 'PAID' === strtoupper((string) $transaction->getStatus())
+                    && !\in_array(strtoupper(trim((string) $transaction->getDetailedstatus())), ['AUTHORISED', 'AUTHORISED_TO_VALIDATE', 'WAITING_AUTHORISATION', 'WAITING_AUTHORISATION_TO_VALIDATE', 'WAITING_FOR_PAYMENT', 'INITIAL', 'UNDER_VERIFICATION'], true),
                 'AMOUNT' => $transaction->getAmount(),
                 'AMOUNT_FORMATTED' => RefundAmount::format((int) $transaction->getAmount(), $currencyId ? ($currencyCodes[$currencyId] ?? '') : ''),
                 'CURRENCY_ID' => $currencyId,

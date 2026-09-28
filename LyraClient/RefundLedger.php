@@ -44,8 +44,15 @@ final readonly class RefundLedger
 
         foreach ($transactions as $transaction) {
             if ($transaction->isCredit()) {
+                // A credit of another debit (a double payment refunded from the PayZen back-office)
+                // is not this one's; a credit whose parent is unknown counts, since older rows and
+                // older answers carry none.
+                $ofThisDebit = '' === $orderTransactionRef
+                    || null === $transaction->parentUuid
+                    || $transaction->parentUuid === $orderTransactionRef;
+
                 // A refund on its way is money already promised: it is never offered twice.
-                if ($transaction->isPaid() || $transaction->isRunning()) {
+                if ($ofThisDebit && ($transaction->isPaid() || $transaction->isRunning())) {
                     $refundedAmount += $transaction->amount;
                 }
 
