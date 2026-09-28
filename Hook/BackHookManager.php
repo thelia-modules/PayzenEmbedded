@@ -108,7 +108,8 @@ class BackHookManager extends BaseHook
 
     public function onOrderEditBottom(HookRenderEvent $event): void
     {
-        $orderId = (int) $event->getArgument('order_id');
+        // The Smarty back-office hands order_id, the Twig one hands order for this hook only.
+        $orderId = (int) ($event->hasArgument('order_id') ? $event->getArgument('order_id') : $event->getArgument('order'));
 
         $order = OrderQuery::create()->findPk($orderId);
 
