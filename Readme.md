@@ -116,8 +116,9 @@ Nom de l'évènement : `PayzenEmbedded::TRANSACTION_REFUND_EVENT`
 L'action event `\PayzenEmbedded\Event\TransactionRefundEvent` reçoit :
 
 - l'ID ($orderId) de la commande concernée,
-- le montant ($amount) à rembourser, dans la devise de la commande,
-- un motif ($comment) facultatif, inscrit sur le remboursement dans le Back Office PayZen.
+- le montant ($amount) à rembourser, dans la plus petite unité de la devise (1250 pour 12,50 EUR),
+- un motif ($comment) facultatif, inscrit sur le remboursement dans le Back Office PayZen,
+- l'ID ($adminId) facultatif de l'administrateur, conservé sur la ligne d'historique.
 
 Une fois dispatché, l'event retourne à travers `getOutcome()` ce que PayZen a fait, une des valeurs de
 `\PayzenEmbedded\LyraClient\RefundOutcome` : `Cancelled`, `Refunded` ou `PartiallyRefunded`. Un montant hors
@@ -256,8 +257,9 @@ Event name: `PayzenEmbedded::TRANSACTION_REFUND_EVENT`
 The `\PayzenEmbedded\Event\TransactionRefundEvent` action event takes:
 
 - the ID ($orderId) of the order,
-- the amount ($amount) to refund, in the order currency,
-- an optional reason ($comment), written on the refund in the PayZen back-office.
+- the amount ($amount) to refund, in the smallest unit of the currency (1250 for 12.50 EUR),
+- an optional reason ($comment), written on the refund in the PayZen back-office,
+- the optional ID ($adminId) of the administrator, kept on the history row.
 
 Once dispatched, `getOutcome()` tells what PayZen did, one of `\PayzenEmbedded\LyraClient\RefundOutcome`:
 `Cancelled`, `Refunded` or `PartiallyRefunded`. An amount out of range or a refusal from the platform raises a

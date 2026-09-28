@@ -17,8 +17,11 @@ namespace PayzenEmbedded\LyraClient;
 
 use Lyra\Exceptions\LyraException;
 use PayzenEmbedded\PayzenEmbedded;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\FlockStore;
 use Thelia\Core\Translation\Translator;
 use Thelia\Exception\TheliaProcessException;
+use Thelia\Log\Tlog;
 use Thelia\Model\Admin;
 use Thelia\Model\Order;
 use Thelia\Model\OrderStatusQuery;
@@ -35,6 +38,9 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
      * cancelled, a captured one gets a refund transaction of its own. A cancellation is always
      * total; lowering a transaction before its capture is the job of the update service.
      *
+     * One refund at a time per order: two requests reading the same ledger would both pass its
+     * check and both reach the platform.
+     *
      * @param int $amount in the smallest unit of the order currency
      *
      * @throws LyraException
@@ -42,21 +48,34 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
      */
     public function refundTransaction(Order $order, int $amount, ?string $comment = null, ?Admin $admin = null): RefundOutcome
     {
-        $ledger = (new TransactionHistoryReader())->ledgerOf($order);
+        $lock = (new LockFactory(new FlockStore()))->createLock('payzen-embedded-refund-' . $order->getId(), 60.0);
 
-        if (!$ledger->covers($amount)) {
+        if (!$lock->acquire()) {
             throw new TheliaProcessException(
-                Translator::getInstance()->trans(
-                    'The amount to refund should be between 0 and %amount.',
-                    ['%amount' => number_format($ledger->refundableAmount() / 100, 2, '.', '')],
-                    PayzenEmbedded::DOMAIN_NAME
-                )
+                Translator::getInstance()->trans('A refund of this order is already running.', [], PayzenEmbedded::DOMAIN_NAME)
             );
         }
 
-        $response = $this->sendCancelOrRefundRequest($order, $amount, $comment);
+        try {
+            $ledger = (new TransactionHistoryReader())->ledgerOf($order);
+            $currencyCode = strtoupper($order->getCurrency()->getCode());
 
-        return $this->processCancelOrRefundResponse($order, $response, $admin);
+            if (!$ledger->allows($amount)) {
+                throw new TheliaProcessException(
+                    Translator::getInstance()->trans(
+                        'The amount to refund should be greater than 0 and at most %amount %currency.',
+                        ['%amount' => RefundAmount::format($ledger->maximumAmount(), $currencyCode), '%currency' => $currencyCode],
+                        PayzenEmbedded::DOMAIN_NAME
+                    )
+                );
+            }
+
+            $response = $this->sendCancelOrRefundRequest($order, $amount, $comment);
+
+            return $this->processCancelOrRefundResponse($order, $response, $admin);
+        } finally {
+            $lock->release();
+        }
     }
 
     /**
@@ -86,89 +105,58 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
     }
 
     /**
-     * Record what the platform did, and move the order accordingly: cancelled when the transaction
-     * was cancelled, refunded when nothing is left to refund, untouched after a partial refund.
+     * Read what the platform did, record it, and move the order accordingly: cancelled when the
+     * transaction was cancelled, refunded when nothing is left to refund, untouched after a
+     * partial refund. An answer of another shape is refused before anything is written.
      *
      * @throws TheliaProcessException when the platform refused, or answered something unexpected
      */
     public function processCancelOrRefundResponse(Order $order, array $response, ?Admin $admin = null): RefundOutcome
     {
-        if (!isset($response['answer']['uuid'])) {
-            throw new TheliaProcessException(
-                Translator::getInstance()->trans(
-                    'Cannot refund the transaction. Error is : %message (code %code)',
-                    [
-                        '%code' => $response['answer']['errorCode'] ?? 'undefined error code',
-                        '%message' => $response['answer']['errorMessage'] ?? 'undefined error message',
-                    ],
-                    PayzenEmbedded::DOMAIN_NAME
-                )
-            );
-        }
+        $answer = \is_array($response['answer'] ?? null) ? $response['answer'] : [];
 
-        $answer = $response['answer'];
-        $outcome = TransactionOutcome::fromAnswer($answer);
+        // The shape of this answer was taken from the documentation: keep what the platform really sends.
+        $this->log->addInfo(sprintf(
+            'PayZen CancelOrRefund answer for order %s: %s',
+            $order->getRef(),
+            json_encode(array_intersect_key($answer, array_flip(['uuid', 'status', 'detailedStatus', 'operationType', 'amount', 'currency', 'errorCode', 'errorMessage', 'detailedErrorCode'])))
+        ));
 
-        $this->updateTransactionHistory($answer, $order, $admin);
-
-        if ($outcome->isCredit()) {
-            if (!$outcome->isPaid()) {
-                throw new TheliaProcessException(
-                    Translator::getInstance()->trans(
-                        'The refund was refused: %message (code %code)',
-                        [
-                            '%code' => $answer['errorCode'] ?? $answer['detailedStatus'] ?? '',
-                            '%message' => $answer['errorMessage'] ?? $answer['detailedErrorMessage'] ?? '',
-                        ],
-                        PayzenEmbedded::DOMAIN_NAME
-                    )
-                );
-            }
-
-            $ledger = (new TransactionHistoryReader())->ledgerOf($order);
-
-            if ($ledger->refundableAmount() > 0) {
-                $this->log->addInfo(
-                    Translator::getInstance()->trans(
-                        'Order %ref: %amount refunded, %left left to refund.',
-                        [
-                            '%ref' => $order->getRef(),
-                            '%amount' => number_format($outcome->amount / 100, 2, '.', ''),
-                            '%left' => number_format($ledger->refundableAmount() / 100, 2, '.', ''),
-                        ],
-                        PayzenEmbedded::DOMAIN_NAME
-                    )
-                );
-
-                return RefundOutcome::PartiallyRefunded;
-            }
-
-            $this->log->addInfo(
-                Translator::getInstance()->trans('Order %ref refunded in full.', ['%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME)
-            );
-
-            $this->setOrderStatus($order, OrderStatusQuery::getRefundedStatus());
-
-            return RefundOutcome::Refunded;
-        }
-
-        // The debit itself came back: the transaction was not captured, so the platform cancelled it.
-        if ($outcome->isPaid()) {
-            throw new TheliaProcessException(
-                Translator::getInstance()->trans(
-                    'The transaction %uuid was neither cancelled nor refunded (status %status).',
-                    ['%uuid' => $outcome->uuid, '%status' => $answer['detailedStatus'] ?? $outcome->status],
-                    PayzenEmbedded::DOMAIN_NAME
-                )
-            );
-        }
-
-        $this->log->addInfo(
-            Translator::getInstance()->trans('Order %ref: transaction cancelled before its capture.', ['%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME)
+        $resolution = RefundResolution::fromAnswer(
+            $answer,
+            (string) $order->getTransactionRef(),
+            static fn (string $message, array $parameters): string => Translator::getInstance()->trans($message, $parameters, PayzenEmbedded::DOMAIN_NAME)
         );
 
-        $this->setOrderStatus($order, OrderStatusQuery::getCancelledStatus());
+        $this->updateTransactionHistory($resolution->answer, $order, $admin);
 
-        return RefundOutcome::Cancelled;
+        $outcome = $resolution->outcome((new TransactionHistoryReader())->ledgerOf($order));
+        $currencyCode = strtoupper($order->getCurrency()->getCode());
+
+        switch ($outcome) {
+            case RefundOutcome::Cancelled:
+                $this->log->addInfo(Translator::getInstance()->trans('Order %ref: transaction cancelled before its capture.', ['%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
+                $this->setOrderStatus($order, OrderStatusQuery::getCancelledStatus());
+                break;
+
+            case RefundOutcome::Refunded:
+                $this->log->addInfo(Translator::getInstance()->trans('Order %ref refunded in full.', ['%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
+                $this->setOrderStatus($order, OrderStatusQuery::getRefundedStatus());
+                break;
+
+            case RefundOutcome::PartiallyRefunded:
+                $this->log->addInfo(Translator::getInstance()->trans(
+                    'Order %ref: %amount refunded, %left left to refund.',
+                    [
+                        '%ref' => $order->getRef(),
+                        '%amount' => RefundAmount::format($resolution->transaction->amount, $currencyCode),
+                        '%left' => RefundAmount::format((new TransactionHistoryReader())->ledgerOf($order)->refundableAmount(), $currencyCode),
+                    ],
+                    PayzenEmbedded::DOMAIN_NAME
+                ));
+                break;
+        }
+
+        return $outcome;
     }
 }

@@ -21,6 +21,7 @@ use PayzenEmbedded\LyraClient\LyraPaymentMethodsWrapper;
 use PayzenEmbedded\Form\TransactionGetForm;
 use PayzenEmbedded\Form\TransactionRefundForm;
 use PayzenEmbedded\Form\TransactionUpdateForm;
+use PayzenEmbedded\LyraClient\RefundAmount;
 use PayzenEmbedded\LyraClient\TransactionHistoryReader;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistory;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistoryQuery;
@@ -133,6 +134,7 @@ class BackHookManager extends BaseHook
         }
 
         $ledger = (new TransactionHistoryReader())->ledgerOf($order);
+        $currencyCode = strtoupper((string) $order->getCurrency()?->getCode());
 
         $getForm = $this->formFactory->createForm(TransactionGetForm::getName());
         $updateForm = $this->formFactory->createForm(TransactionUpdateForm::getName());
@@ -144,9 +146,12 @@ class BackHookManager extends BaseHook
                 'transactions' => $transactions,
                 'finished' => $finished,
                 'last_transaction_amount' => $lastTransactionAmount,
-                'paid_amount' => $ledger->paidAmount / 100,
-                'refunded_amount' => $ledger->refundedAmount / 100,
-                'refundable_amount' => $ledger->refundableAmount() / 100,
+                'paid_amount' => RefundAmount::format($ledger->paidAmount, $currencyCode),
+                'refunded_amount' => RefundAmount::format($ledger->refundedAmount, $currencyCode),
+                'refundable_amount' => RefundAmount::format($ledger->refundableAmount(), $currencyCode),
+                'is_cancellable' => $ledger->isCancellable(),
+                'maximum_amount' => RefundAmount::format($ledger->maximumAmount(), $currencyCode),
+                'can_give_back' => $ledger->maximumAmount() > 0,
                 'currency_symbol' => $order->getCurrency()?->getSymbol() ?? '',
                 'get_form' => $getForm->createView()->getView(),
                 'update_form' => $updateForm->createView()->getView(),

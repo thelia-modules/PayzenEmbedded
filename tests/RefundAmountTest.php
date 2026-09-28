@@ -1,0 +1,63 @@
+<?php
+
+declare(strict_types=1);
+
+/*************************************************************************************/
+/*      This file is part of the Thelia package.                                     */
+/*                                                                                   */
+/*      Copyright (c) OpenStudio                                                     */
+/*      email : dev@thelia.net                                                       */
+/*      web : http://www.thelia.net                                                  */
+/*                                                                                   */
+/*      For the full copyright and license information, please view the LICENSE.txt  */
+/*      file that was distributed with this source code.                             */
+/*************************************************************************************/
+
+namespace PayzenEmbedded\Tests;
+
+use PayzenEmbedded\LyraClient\RefundAmount;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
+
+/**
+ * What an administrator types in the refund form, read into the smallest unit of the currency
+ * without a float in between: "1 234,56" is not 1.00, and "12abc" is not 12.00.
+ */
+final class RefundAmountTest extends TestCase
+{
+    /**
+     * @return iterable<string, array{string, string, ?int}>
+     */
+    public static function inputs(): iterable
+    {
+        yield 'plain euros' => ['12.50', 'EUR', 1250];
+        yield 'french decimal comma' => ['12,50', 'EUR', 1250];
+        yield 'one decimal' => ['12.5', 'EUR', 1250];
+        yield 'no decimal' => ['12', 'EUR', 1200];
+        yield 'surrounding spaces' => [' 12.50 ', 'EUR', 1250];
+        yield 'zero decimal currency' => ['1000', 'XPF', 1000];
+        yield 'yen' => ['250', 'JPY', 250];
+        yield 'thousands separator is refused' => ['1 234,56', 'EUR', null];
+        yield 'mixed separators are refused' => ['1.234,56', 'EUR', null];
+        yield 'letters are refused' => ['12abc', 'EUR', null];
+        yield 'two commas are refused' => ['12,5.3', 'EUR', null];
+        yield 'scientific notation is refused' => ['1e2', 'EUR', null];
+        yield 'three decimals are refused' => ['10.005', 'EUR', null];
+        yield 'negative is refused' => ['-5', 'EUR', null];
+        yield 'zero is refused' => ['0', 'EUR', null];
+        yield 'empty is refused' => ['', 'EUR', null];
+        yield 'decimals on a zero decimal currency are refused' => ['10.50', 'XPF', null];
+    }
+
+    #[DataProvider('inputs')]
+    public function testAnInputReadsAsMinorUnitsOrIsRefused(string $input, string $currency, ?int $expected): void
+    {
+        self::assertSame($expected, RefundAmount::fromInput($input, $currency));
+    }
+
+    public function testMinorUnitsAreWrittenBackInTheCurrency(): void
+    {
+        self::assertSame('12.50', RefundAmount::format(1250, 'EUR'));
+        self::assertSame('1000', RefundAmount::format(1000, 'XPF'));
+    }
+}

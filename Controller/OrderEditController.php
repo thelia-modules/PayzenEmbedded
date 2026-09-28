@@ -23,7 +23,10 @@ use PayzenEmbedded\Event\TransactionUpdateEvent;
 use PayzenEmbedded\Form\TransactionGetForm;
 use PayzenEmbedded\Form\TransactionRefundForm;
 use PayzenEmbedded\Form\TransactionUpdateForm;
+use PayzenEmbedded\LyraClient\RefundAmount;
 use PayzenEmbedded\LyraClient\RefundOutcome;
+use Thelia\Exception\TheliaProcessException;
+use Thelia\Log\Tlog;
 use PayzenEmbedded\LyraClient\LyraTransactionGetWrapper;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
@@ -102,14 +105,16 @@ class OrderEditController extends BaseAdminController
         return $this->generateRedirect(URL::getInstance()->absoluteUrl("admin/order/update/$orderId") . '#payzen-embedded');
     }
 
-    #[Route('/refund-transaction/{orderId}', name: 'refund_transaction', methods: 'POST')]
-    public function refundTransaction(EventDispatcherInterface $dispatcher, Translator $translator, $orderId)
+    #[Route('/refund-transaction/{orderId}', name: 'refund_transaction', requirements: ['orderId' => '\d+'], methods: 'POST')]
+    public function refundTransaction(EventDispatcherInterface $dispatcher, Translator $translator, int $orderId)
     {
-        if (null !== $response = $this->checkAuth(AdminResources::MODULE, 'PayzenEmbedded', AccessManager::UPDATE)) {
+        // Giving money back is an operation on the order, not only on the module.
+        if (null !== $response = $this->checkAuth([AdminResources::MODULE, AdminResources::ORDER], 'PayzenEmbedded', AccessManager::UPDATE)) {
             return $response;
         }
 
         $errorMsg = $ex = false;
+        $data = [];
 
         $refundForm = $this->createForm(TransactionRefundForm::getName());
 
@@ -118,35 +123,75 @@ class OrderEditController extends BaseAdminController
 
             $data = $form->getData();
 
-            if (null !== $order = OrderQuery::create()->findPk($orderId)) {
-                $event = new TransactionRefundEvent(
-                    (int) $order->getId(),
-                    (float) str_replace(',', '.', (string) $data['amount']),
-                    $data['comment'] ?? null
-                );
-
-                $dispatcher->dispatch($event, PayzenEmbedded::TRANSACTION_REFUND_EVENT);
-
-                $this->addFlash('success', $this->refundOutcomeMessage($translator, $event));
-
-                $this->adminLogAppend(
-                    "payzen-embedded.order-refund",
-                    AccessManager::UPDATE,
-                    sprintf(
-                        "Order %d: %s of %s",
-                        $order->getId(),
-                        $event->getOutcome()?->value ?? 'no outcome',
-                        number_format($event->getAmount(), 2, '.', '')
-                    )
-                );
+            if (null === $order = OrderQuery::create()->findPk($orderId)) {
+                throw new TheliaProcessException($translator->trans('Undefined order.', [], PayzenEmbedded::DOMAIN_NAME));
             }
+
+            // The route names the order; the form field only has to agree with it.
+            if ((int) $data['order_id'] !== $orderId) {
+                throw new TheliaProcessException($translator->trans('The order of the form does not match the order of the page.', [], PayzenEmbedded::DOMAIN_NAME));
+            }
+
+            $currencyCode = strtoupper($order->getCurrency()->getCode());
+            $amount = RefundAmount::fromInput((string) $data['amount'], $currencyCode);
+
+            if (null === $amount) {
+                throw new TheliaProcessException($translator->trans('The amount to refund should be a positive number with at most %decimals decimals, such as %example.', [
+                    '%decimals' => RefundAmount::decimals($currencyCode),
+                    '%example' => RefundAmount::format(1250, $currencyCode),
+                ], PayzenEmbedded::DOMAIN_NAME));
+            }
+
+            $admin = $this->getSecurityContext()->getAdminUser();
+
+            $event = new TransactionRefundEvent(
+                (int) $order->getId(),
+                $amount,
+                $data['comment'] ?? null,
+                $admin?->getId()
+            );
+
+            $dispatcher->dispatch($event, PayzenEmbedded::TRANSACTION_REFUND_EVENT);
+
+            $this->addFlash('success', $this->refundOutcomeMessage($translator, $event, $currencyCode));
+
+            $this->adminLogAppend(
+                "payzen-embedded.order-refund",
+                AccessManager::UPDATE,
+                sprintf(
+                    "Order %d: %s of %s %s",
+                    $order->getId(),
+                    $event->getOutcome()?->value ?? 'no outcome',
+                    RefundAmount::format($amount, $currencyCode),
+                    $currencyCode
+                ),
+                (int) $order->getId()
+            );
         } catch (FormValidationException $ex) {
             $errorMsg = $this->createStandardFormValidationErrorMessage($ex);
-        } catch (\Exception $ex) {
+        } catch (TheliaProcessException $ex) {
+            // A refusal the administrator can act on: the platform's or the module's own.
             $errorMsg = $ex->getMessage();
+        } catch (\Exception $ex) {
+            // Anything else stays in the log: a transport or database error is not for the screen.
+            Tlog::getInstance()->addError(sprintf('PayZen refund of order %d failed: %s', $orderId, $ex->getMessage()));
+            $errorMsg = $translator->trans('The refund could not be sent to PayZen, see the logs.', [], PayzenEmbedded::DOMAIN_NAME);
         }
 
         if ($errorMsg) {
+            // A failed attempt at giving money back is worth a trace too.
+            $this->adminLogAppend(
+                "payzen-embedded.order-refund",
+                AccessManager::UPDATE,
+                sprintf(
+                    "Order %d: refund of %s failed: %s",
+                    $orderId,
+                    (string) ($data['amount'] ?? $this->getRequest()->request->all(TransactionRefundForm::getName())['amount'] ?? '?'),
+                    $errorMsg
+                ),
+                $orderId
+            );
+
             // The Smarty back-office reads the parser context, the Twig one reads the flashes.
             $this->setupFormErrorContext(
                 $translator->trans("PayzenEmbedded refund transaction", [], PayzenEmbedded::DOMAIN_NAME),
@@ -161,9 +206,9 @@ class OrderEditController extends BaseAdminController
         return $this->generateRedirect(URL::getInstance()->absoluteUrl("admin/order/update/$orderId") . '#payzen-embedded');
     }
 
-    private function refundOutcomeMessage(Translator $translator, TransactionRefundEvent $event): string
+    private function refundOutcomeMessage(Translator $translator, TransactionRefundEvent $event, string $currencyCode): string
     {
-        $amount = number_format($event->getAmount(), 2, '.', ' ');
+        $amount = RefundAmount::format($event->getAmount(), $currencyCode) . ' ' . $currencyCode;
 
         return match ($event->getOutcome()) {
             RefundOutcome::Cancelled => $translator->trans('The transaction was cancelled before its capture, the order is cancelled.', [], PayzenEmbedded::DOMAIN_NAME),

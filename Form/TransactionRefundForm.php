@@ -15,6 +15,7 @@ declare(strict_types=1);
 
 namespace PayzenEmbedded\Form;
 
+use PayzenEmbedded\LyraClient\RefundAmount;
 use PayzenEmbedded\LyraClient\TransactionHistoryReader;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
@@ -79,29 +80,33 @@ class TransactionRefundForm extends BaseForm
 
     public function checkRefundAmount($value, ExecutionContextInterface $context): void
     {
-        $amount = (float) str_replace(',', '.', (string) $value);
+        $orderId = (int) ($context->getRoot()->getData()['order_id'] ?? 0);
 
-        if ($amount <= 0) {
-            $context->addViolation($this->trans('The amount to refund should be greater than 0.'));
+        if (null === $order = OrderQuery::create()->findPk($orderId)) {
+            $context->addViolation($this->trans('Undefined order.'));
 
             return;
         }
 
-        $orderId = (int) ($context->getRoot()->getData()['order_id'] ?? 0);
+        $currencyCode = strtoupper($order->getCurrency()->getCode());
+        $amount = RefundAmount::fromInput((string) $value, $currencyCode);
 
-        if (null === $order = OrderQuery::create()->findPk($orderId)) {
+        if (null === $amount) {
+            $context->addViolation($this->trans('The amount to refund should be a positive number with at most %decimals decimals, such as %example.', [
+                '%decimals' => RefundAmount::decimals($currencyCode),
+                '%example' => RefundAmount::format(1250, $currencyCode),
+            ]));
+
             return;
         }
 
         $ledger = (new TransactionHistoryReader())->ledgerOf($order);
 
-        if (!$ledger->covers((int) round($amount * 100))) {
-            $context->addViolation(
-                $this->trans(
-                    'The amount to refund should be between 0 and %amount.',
-                    ['%amount' => number_format($ledger->refundableAmount() / 100, 2, '.', '')]
-                )
-            );
+        if (!$ledger->allows($amount)) {
+            $context->addViolation($this->trans('The amount to refund should be greater than 0 and at most %amount %currency.', [
+                '%amount' => RefundAmount::format($ledger->maximumAmount(), $currencyCode),
+                '%currency' => $currencyCode,
+            ]));
         }
     }
 

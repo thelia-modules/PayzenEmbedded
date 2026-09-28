@@ -86,6 +86,27 @@ final class RefundLedgerTest extends TestCase
         self::assertSame(1000, $ledger->paidAmount);
     }
 
+    public function testAnAuthorisationAwaitingItsCaptureCanBeCancelledInFull(): void
+    {
+        $ledger = RefundLedger::fromTransactions([$this->debit('t1', 'RUNNING', 1000)]);
+
+        self::assertSame(1000, $ledger->authorisedAmount);
+        self::assertSame(0, $ledger->refundableAmount());
+        self::assertTrue($ledger->isCancellable());
+        self::assertTrue($ledger->allows(1000));
+        self::assertFalse($ledger->allows(999));
+    }
+
+    public function testAPaidTransactionIsNotCancellableButRefundable(): void
+    {
+        $ledger = RefundLedger::fromTransactions([$this->debit('t1', 'PAID', 1000)]);
+
+        self::assertFalse($ledger->isCancellable());
+        self::assertTrue($ledger->allows(400));
+        self::assertTrue($ledger->allows(1000));
+        self::assertFalse($ledger->allows(1001));
+    }
+
     private function debit(string $uuid, string $status, int $amount): TransactionOutcome
     {
         return new TransactionOutcome($uuid, $status, null, TransactionOutcome::OPERATION_DEBIT, $amount);

@@ -17,13 +17,15 @@ namespace PayzenEmbedded\LyraClient;
 
 /**
  * What a shop may still give back on an order: the money it received, less the money it already
- * returned. Amounts are in the smallest unit of the currency, as the platform counts them.
+ * returned, and the authorisation still waiting for its capture, which can only be cancelled in
+ * full. Amounts are in the smallest unit of the currency, as the platform counts them.
  */
 final readonly class RefundLedger
 {
     private function __construct(
         public int $paidAmount,
         public int $refundedAmount,
+        public int $authorisedAmount,
     ) {
     }
 
@@ -34,20 +36,25 @@ final readonly class RefundLedger
     {
         $paidAmount = 0;
         $refundedAmount = 0;
+        $authorisedAmount = 0;
 
         foreach ($transactions as $transaction) {
-            if (!$transaction->isPaid()) {
+            if ($transaction->isCredit()) {
+                if ($transaction->isPaid()) {
+                    $refundedAmount += $transaction->amount;
+                }
+
                 continue;
             }
 
-            if ($transaction->isCredit()) {
-                $refundedAmount += $transaction->amount;
-            } else {
+            if ($transaction->isPaid()) {
                 $paidAmount += $transaction->amount;
+            } elseif (TransactionOutcome::STATUS_RUNNING === $transaction->status) {
+                $authorisedAmount += $transaction->amount;
             }
         }
 
-        return new self($paidAmount, $refundedAmount);
+        return new self($paidAmount, $refundedAmount, $authorisedAmount);
     }
 
     public function refundableAmount(): int
@@ -55,10 +62,28 @@ final readonly class RefundLedger
         return max(0, $this->paidAmount - $this->refundedAmount);
     }
 
-    /** Whether a refund of this amount can be asked for. */
+    /** Whether a refund of this amount can be asked for on a captured payment. */
     public function covers(int $amount): bool
     {
         return $amount > 0 && $amount <= $this->refundableAmount();
+    }
+
+    /** An authorisation waiting for its capture, with nothing paid yet: it can be cancelled, in full. */
+    public function isCancellable(): bool
+    {
+        return 0 === $this->paidAmount && $this->authorisedAmount > 0;
+    }
+
+    /** Whether the platform can be asked to give this amount back: a refund, or the cancellation of the whole authorisation. */
+    public function allows(int $amount): bool
+    {
+        return $this->covers($amount) || ($this->isCancellable() && $amount === $this->authorisedAmount);
+    }
+
+    /** What the administrator may ask for: the refundable amount, or the authorisation to cancel. */
+    public function maximumAmount(): int
+    {
+        return $this->isCancellable() ? $this->authorisedAmount : $this->refundableAmount();
     }
 
     /** Whether a refund of this amount gives the shopper back everything they paid. */

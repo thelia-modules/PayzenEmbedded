@@ -18,13 +18,17 @@ namespace PayzenEmbedded\EventListener;
 use PayzenEmbedded\Event\TransactionRefundEvent;
 use PayzenEmbedded\LyraClient\LyraTransactionRefundWrapper;
 use PayzenEmbedded\PayzenEmbedded;
-use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Thelia\Exception\TheliaProcessException;
+use Thelia\Model\AdminQuery;
 use Thelia\Model\OrderQuery;
 
-class TransactionRefundListener implements EventSubscriberInterface
+final readonly class TransactionRefundListener implements EventSubscriberInterface
 {
+    public function __construct(private LyraTransactionRefundWrapper $refundWrapper)
+    {
+    }
+
     public static function getSubscribedEvents(): array
     {
         return [
@@ -35,16 +39,16 @@ class TransactionRefundListener implements EventSubscriberInterface
     /**
      * @throws \Lyra\Exceptions\LyraException
      */
-    public function transactionRefund(TransactionRefundEvent $event, string $eventName, EventDispatcherInterface $dispatcher): void
+    public function transactionRefund(TransactionRefundEvent $event): void
     {
         if (null === $order = OrderQuery::create()->findPk($event->getOrderId())) {
             throw new TheliaProcessException('Undefined order ID ' . $event->getOrderId());
         }
 
-        $lyraClient = new LyraTransactionRefundWrapper($dispatcher);
+        $admin = null !== $event->getAdminId() ? AdminQuery::create()->findPk($event->getAdminId()) : null;
 
         $event->setOutcome(
-            $lyraClient->refundTransaction($order, (int) round($event->getAmount() * 100), $event->getComment())
+            $this->refundWrapper->refundTransaction($order, $event->getAmount(), $event->getComment(), $admin)
         );
     }
 }

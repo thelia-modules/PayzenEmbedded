@@ -79,18 +79,22 @@
                     {{ form_end(update_form) }}
                 {% endif %}
 
-                {% if refundable_amount > 0 %}
+                {% if can_give_back %}
                     <hr>
                     <h3 class="h6">{{ 'Cancel or refund the payment'|trans({}, _d) }}</h3>
                     <div class="alert alert-info">
-                        {{ 'The customer paid %paid, %refunded was refunded so far and %refundable can still be refunded. A payment not captured yet is cancelled in full; a captured one is refunded, in full or in part. This cannot be undone.'|trans({
-                            '%paid': paid_amount|number_format(2, '.', ' ') ~ ' ' ~ currency_symbol,
-                            '%refunded': refunded_amount|number_format(2, '.', ' ') ~ ' ' ~ currency_symbol,
-                            '%refundable': refundable_amount|number_format(2, '.', ' ') ~ ' ' ~ currency_symbol,
-                        }, _d) }}
+                        {% if is_cancellable %}
+                            {{ 'The payment of %amount is waiting for its capture: it can only be cancelled, in full. This cannot be undone.'|trans({'%amount': maximum_amount ~ ' ' ~ currency_symbol}, _d) }}
+                        {% else %}
+                            {{ 'The customer paid %paid, %refunded was refunded so far and %refundable can still be refunded. A payment not captured yet is cancelled in full; a captured one is refunded, in full or in part. This cannot be undone.'|trans({
+                                '%paid': paid_amount ~ ' ' ~ currency_symbol,
+                                '%refunded': refunded_amount ~ ' ' ~ currency_symbol,
+                                '%refundable': refundable_amount ~ ' ' ~ currency_symbol,
+                            }, _d) }}
+                        {% endif %}
                     </div>
 
-                    {{ form_start(refund_form, {'action': path('payzen_embedded_order_edit_refund_transaction', {'orderId': order_id}), 'method': 'post', 'attr': {'onsubmit': "return confirm('" ~ ('This refund cannot be undone. Continue?'|trans({}, _d)|e('js')) ~ "')"}}) }}
+                    {{ form_start(refund_form, {'action': path('payzen_embedded_order_edit_refund_transaction', {'orderId': order_id}), 'method': 'post', 'attr': {'onsubmit': "if (!confirm('" ~ ('This refund cannot be undone. Continue?'|trans({}, _d)|e('js')) ~ "')) { return false; } this.querySelector('[type=submit]').disabled = true; return true;"}}) }}
                         {{ form_errors(refund_form) }}
                         <input type="hidden" name="{{ refund_form.order_id.vars.full_name }}" value="{{ order_id }}">
                         {% do refund_form.order_id.setRendered %}
@@ -99,7 +103,7 @@
                             <div class="col-md-4">
                                 {{ form_label(refund_form.amount) }}
                                 <div class="input-group">
-                                    {{ form_widget(refund_form.amount, {'value': refundable_amount|number_format(2, '.', ''), 'attr': {'class': 'form-control' ~ (refund_form.amount.vars.errors|length ? ' is-invalid' : '')}}) }}
+                                    {{ form_widget(refund_form.amount, {'value': maximum_amount, 'attr': {'class': 'form-control' ~ (refund_form.amount.vars.errors|length ? ' is-invalid' : ''), 'readonly': is_cancellable ? 'readonly' : false}}) }}
                                     <span class="input-group-text">{{ currency_symbol }}</span>
                                 </div>
                                 {% if refund_form.amount.vars.label_attr.help is defined %}<div class="form-text">{{ refund_form.amount.vars.label_attr.help }}</div>{% endif %}
@@ -114,7 +118,7 @@
                         </div>
 
                         <div class="text-end">
-                            <button type="submit" class="btn btn-danger">{{ 'Refund'|trans({}, _d) }}</button>
+                            <button type="submit" class="btn btn-danger">{{ (is_cancellable ? 'Cancel the payment' : 'Refund')|trans({}, _d) }}</button>
                         </div>
                     {{ form_end(refund_form) }}
                 {% endif %}
