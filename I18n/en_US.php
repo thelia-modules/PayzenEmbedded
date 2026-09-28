@@ -1,6 +1,7 @@
 <?php
 
 return array(
+    '%amount was refunded, the rest can still be refunded.' => '%amount was refunded, the rest can still be refunded.',
     'Allow 1-click payments' => 'Allow 1-click payments',
     'Allowed IPs in test or restricted production modes' => 'Allowed IPs in test or restricted production modes',
     'Amount to refund' => 'Amount to refund',
@@ -90,10 +91,15 @@ return array(
     'The amount to refund should be greater than 0.' => 'The amount to refund should be greater than 0.',
     'The card form only accepts credit cards. The SmartForm also offers the wallets activated on your PayZen contract, such as Apple Pay or Google Pay. The SmartForm needs the payment page: it is not displayed in the popup form.' => 'The card form only accepts credit cards. The SmartForm also offers the wallets activated on your PayZen contract, such as Apple Pay or Google Pay. The SmartForm needs the payment page: it is not displayed in the popup form.',
     'The date  the transaction will be captured. Leave empty to use the transaction capture delay (currently %days days)' => 'The date  the transaction will be captured. Leave empty to use the transaction capture delay (currently %days days)',
+    'The order was refunded in full.' => 'The order was refunded in full.',
     'The password used in production. This is the "Production Password" in the PayZen Expert Back Office' => 'The password used in production. This is the "Production Password" in the PayZen Expert Back Office',
+    'The refund request was sent.' => 'The refund request was sent.',
     'The refund was refused: %message (code %code)' => 'The refund was refused: %message (code %code)',
     'The test password. This is the "Test Password" in the PayZen Expert Back Office' => 'The test password. This is the "Test Password" in the PayZen Expert Back Office',
     'The transaction %uuid was neither cancelled nor refunded (status %status).' => 'The transaction %uuid was neither cancelled nor refunded (status %status).',
+    'The transaction history was refreshed.' => 'The transaction history was refreshed.',
+    'The transaction was cancelled before its capture, the order is cancelled.' => 'The transaction was cancelled before its capture, the order is cancelled.',
+    'The transaction was updated.' => 'The transaction was updated.',
     'This amount should be greater or equal to the current transaction amount' => 'This amount should be greater or equal to the current transaction amount',
     'This information is passed with the payment request, and will be available in your PayZen back-office' => 'This information is passed with the payment request, and will be available in your PayZen back-office',
     'This is the URL of the web service. You should change this value if you\'re usin a specific Lyra implementation instead of PayZen' => 'This is the URL of the web service. You should change this value if you\'re usin a specific Lyra implementation instead of PayZen',

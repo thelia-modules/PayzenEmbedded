@@ -23,6 +23,7 @@ use PayzenEmbedded\Event\TransactionUpdateEvent;
 use PayzenEmbedded\Form\TransactionGetForm;
 use PayzenEmbedded\Form\TransactionRefundForm;
 use PayzenEmbedded\Form\TransactionUpdateForm;
+use PayzenEmbedded\LyraClient\RefundOutcome;
 use PayzenEmbedded\LyraClient\LyraTransactionGetWrapper;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
@@ -76,6 +77,8 @@ class OrderEditController extends BaseAdminController
                     AccessManager::UPDATE,
                     sprintf("Order %d updated", $order->getId())
                 );
+
+                $this->addFlash('success', $translator->trans('The transaction was updated.', [], PayzenEmbedded::DOMAIN_NAME));
             }
         } catch (FormValidationException $ex) {
             // Form cannot be validated. Create the error message using the BaseAdminController helper method.
@@ -92,6 +95,8 @@ class OrderEditController extends BaseAdminController
                 $updateForm,
                 $ex
             );
+
+            $this->addFlash('danger', $errorMsg);
         }
 
         return $this->generateRedirect(URL::getInstance()->absoluteUrl("admin/order/update/$orderId") . '#payzen-embedded');
@@ -122,6 +127,8 @@ class OrderEditController extends BaseAdminController
 
                 $dispatcher->dispatch($event, PayzenEmbedded::TRANSACTION_REFUND_EVENT);
 
+                $this->addFlash('success', $this->refundOutcomeMessage($translator, $event));
+
                 $this->adminLogAppend(
                     "payzen-embedded.order-refund",
                     AccessManager::UPDATE,
@@ -140,15 +147,30 @@ class OrderEditController extends BaseAdminController
         }
 
         if ($errorMsg) {
+            // The Smarty back-office reads the parser context, the Twig one reads the flashes.
             $this->setupFormErrorContext(
                 $translator->trans("PayzenEmbedded refund transaction", [], PayzenEmbedded::DOMAIN_NAME),
                 $errorMsg,
                 $refundForm,
                 $ex
             );
+
+            $this->addFlash('danger', $errorMsg);
         }
 
         return $this->generateRedirect(URL::getInstance()->absoluteUrl("admin/order/update/$orderId") . '#payzen-embedded');
+    }
+
+    private function refundOutcomeMessage(Translator $translator, TransactionRefundEvent $event): string
+    {
+        $amount = number_format($event->getAmount(), 2, '.', ' ');
+
+        return match ($event->getOutcome()) {
+            RefundOutcome::Cancelled => $translator->trans('The transaction was cancelled before its capture, the order is cancelled.', [], PayzenEmbedded::DOMAIN_NAME),
+            RefundOutcome::Refunded => $translator->trans('The order was refunded in full.', [], PayzenEmbedded::DOMAIN_NAME),
+            RefundOutcome::PartiallyRefunded => $translator->trans('%amount was refunded, the rest can still be refunded.', ['%amount' => $amount], PayzenEmbedded::DOMAIN_NAME),
+            null => $translator->trans('The refund request was sent.', [], PayzenEmbedded::DOMAIN_NAME),
+        };
     }
 
     #[Route('/refresh-transaction/{orderId}', name: 'refresh_transaction', methods: 'POST')]
@@ -178,6 +200,8 @@ class OrderEditController extends BaseAdminController
                     AccessManager::UPDATE,
                     sprintf("Order %d refreshed", $order->getId())
                 );
+
+                $this->addFlash('success', $translator->trans('The transaction history was refreshed.', [], PayzenEmbedded::DOMAIN_NAME));
             }
         } catch (\Exception $ex) {
             // Any other error
@@ -191,6 +215,8 @@ class OrderEditController extends BaseAdminController
                 $getForm,
                 $ex
             );
+
+            $this->addFlash('danger', $errorMsg);
         }
 
         return $this->generateRedirect(URL::getInstance()->absoluteUrl("admin/order/update/$orderId") . '#payzen-embedded');

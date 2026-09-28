@@ -1,6 +1,7 @@
 <?php
 
 return array(
+    '%amount was refunded, the rest can still be refunded.' => '%amount a été remboursé, le reste peut encore l\'être.',
     'Allow 1-click payments' => 'Autoriser les paiements en 1 clic',
     'Allowed IPs in test or restricted production modes' => 'Adresses IP autorisées en mode test ou production restreinte',
     'Amount to refund' => 'Montant à rembourser',
@@ -91,10 +92,15 @@ return array(
     'The amount to refund should be greater than 0.' => 'Le montant à rembourser doit être supérieur à 0.',
     'The card form only accepts credit cards. The SmartForm also offers the wallets activated on your PayZen contract, such as Apple Pay or Google Pay. The SmartForm needs the payment page: it is not displayed in the popup form.' => 'Le SmartForm ajoute les portefeuilles au formulaire carte. Il a besoin de la page de paiement, donc de la pop-in décochée.',
     'The date  the transaction will be captured. Leave empty to use the transaction capture delay (currently %days days)' => 'Date à laquelle le paiement sera remis en banque (actuellement %days jour(s))',
+    'The order was refunded in full.' => 'La commande a été intégralement remboursée.',
     'The password used in production. This is the "Production Password" in the PayZen Expert Back Office' => '« Mot de passe de production » du Back Office Expert.',
+    'The refund request was sent.' => 'La demande de remboursement a été envoyée.',
     'The refund was refused: %message (code %code)' => 'Le remboursement a été refusé : %message (code %code)',
     'The test password. This is the "Test Password" in the PayZen Expert Back Office' => '« Mot de passe de test » du Back Office Expert.',
     'The transaction %uuid was neither cancelled nor refunded (status %status).' => 'La transaction %uuid n\'a été ni annulée ni remboursée (statut %status).',
+    'The transaction history was refreshed.' => 'L\'historique de la transaction a été mis à jour.',
+    'The transaction was cancelled before its capture, the order is cancelled.' => 'La transaction a été annulée avant sa remise en banque, la commande est annulée.',
+    'The transaction was updated.' => 'La transaction a été mise à jour.',
     'This amount should be greater or equal to the current transaction amount' => 'Ce montant doit être inférieur ou égal au montant initial de la transaction',
     'This information is passed with the payment request, and will be available in your PayZen back-office' => 'Transmis à PayZen et visible dans son back-office.',
     'This is the URL of the web service. You should change this value if you\'re usin a specific Lyra implementation instead of PayZen' => 'Il s\'agit du "Nom du serveur de l’API REST"  le back-office PayZen -> Paramétrage -> Boutique -> Clés d\'API REST',
