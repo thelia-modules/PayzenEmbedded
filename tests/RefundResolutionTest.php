@@ -19,6 +19,7 @@ use PayzenEmbedded\LyraClient\RefundLedger;
 use PayzenEmbedded\LyraClient\RefundOutcome;
 use PayzenEmbedded\LyraClient\RefundResolution;
 use PayzenEmbedded\LyraClient\TransactionOutcome;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Thelia\Exception\TheliaProcessException;
 
@@ -122,6 +123,33 @@ final class RefundResolutionTest extends TestCase
 
         RefundResolution::fromAnswer(
             ['uuid' => self::DEBIT_UUID, 'status' => 'PAID', 'detailedStatus' => 'CAPTURED', 'amount' => 1000],
+            self::DEBIT_UUID,
+        );
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function unpaidDebitStatuses(): iterable
+    {
+        yield 'expired authorisation' => ['EXPIRED'];
+        yield 'refused by the bank' => ['REFUSED'];
+        yield 'abandoned by the shopper' => ['ABANDONED'];
+        yield 'no detailed status at all' => [''];
+    }
+
+    /**
+     * An order is never cancelled on a guess: the debit back as UNPAID for any other reason than
+     * a cancellation (an authorisation that expired between the ledger check and the call, for
+     * instance) is refused, not read as "cancelled".
+     */
+    #[DataProvider('unpaidDebitStatuses')]
+    public function testTheDebitUnpaidForAnotherReasonThanACancellationIsNotReadAsACancellation(string $detailedStatus): void
+    {
+        $this->expectException(TheliaProcessException::class);
+
+        RefundResolution::fromAnswer(
+            ['uuid' => self::DEBIT_UUID, 'status' => 'UNPAID', 'detailedStatus' => $detailedStatus, 'amount' => 1000],
             self::DEBIT_UUID,
         );
     }
