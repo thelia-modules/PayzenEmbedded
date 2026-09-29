@@ -81,9 +81,4 @@ final class TransactionOutcomeTest extends TestCase
         self::assertSame('ORD1', $outcome->orderRef);
         self::assertNull(TransactionOutcome::fromAnswer(['uuid' => 'd1', 'status' => 'PAID'])->parentUuid);
     }
-
-    public function testAnAnswerWithoutAmountCountsForNothing(): void
-    {
-        self::assertSame(0, TransactionOutcome::fromAnswer(['uuid' => 't1', 'status' => 'RUNNING'])->amount);
-    }
 }

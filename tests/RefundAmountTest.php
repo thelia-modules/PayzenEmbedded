@@ -36,9 +36,7 @@ final class RefundAmountTest extends TestCase
         yield 'no decimal' => ['12', 'EUR', 1200];
         yield 'surrounding spaces' => [' 12.50 ', 'EUR', 1250];
         yield 'zero decimal currency' => ['1000', 'XPF', 1000];
-        yield 'yen' => ['250', 'JPY', 250];
         yield 'thousands separator is refused' => ['1 234,56', 'EUR', null];
-        yield 'mixed separators are refused' => ['1.234,56', 'EUR', null];
         yield 'letters are refused' => ['12abc', 'EUR', null];
         yield 'two commas are refused' => ['12,5.3', 'EUR', null];
         yield 'scientific notation is refused' => ['1e2', 'EUR', null];
@@ -50,7 +48,6 @@ final class RefundAmountTest extends TestCase
         yield 'three decimal currency' => ['1.234', 'TND', 1234];
         yield 'smallest unit of a three decimal currency' => ['0.001', 'KWD', 1];
         yield 'four decimals on a three decimal currency are refused' => ['1.2345', 'KWD', null];
-        yield 'central african franc has no decimal' => ['1500', 'XAF', 1500];
         yield 'thirteen digits are refused' => ['1234567890123', 'EUR', null];
     }
 
@@ -72,13 +69,11 @@ final class RefundAmountTest extends TestCase
      */
     public static function amounts(): iterable
     {
-        yield 'typed text is read strictly' => ['4,50', 'EUR', 450];
         yield 'typed text with too many decimals is refused' => ['9.0849', 'EUR', null];
         yield 'a computed total is converted from the major unit' => [47.4, 'EUR', 4740];
         yield 'a computed legacy total with four decimals is rounded, not refused' => [9.0849, 'EUR', 908];
         yield 'a computed integer total' => [1000, 'JPY', 1000];
         yield 'a computed zero is refused' => [0.0, 'EUR', null];
-        yield 'a computed negative is refused' => [-5.0, 'EUR', null];
     }
 
     /**

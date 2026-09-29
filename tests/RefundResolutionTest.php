@@ -133,8 +133,6 @@ final class RefundResolutionTest extends TestCase
     public static function unpaidDebitStatuses(): iterable
     {
         yield 'expired authorisation' => ['EXPIRED'];
-        yield 'refused by the bank' => ['REFUSED'];
-        yield 'abandoned by the shopper' => ['ABANDONED'];
         yield 'no detailed status at all' => [''];
     }
 

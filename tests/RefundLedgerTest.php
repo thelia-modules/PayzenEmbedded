@@ -29,14 +29,6 @@ final class RefundLedgerTest extends TestCase
 {
     private const ORDER_DEBIT = 't1';
 
-    public function testNothingIsRefundableBeforeThePaymentIsMade(): void
-    {
-        $ledger = $this->ledger([$this->debit(self::ORDER_DEBIT, 'RUNNING', 1000, 'AUTHORISED_TO_VALIDATE')]);
-
-        self::assertSame(0, $ledger->refundableAmount());
-        self::assertFalse($ledger->covers(1));
-    }
-
     public function testACapturedPaymentIsRefundableInFull(): void
     {
         $ledger = $this->ledger([$this->debit(self::ORDER_DEBIT, 'PAID', 1000, 'CAPTURED')]);
@@ -104,6 +96,8 @@ final class RefundLedgerTest extends TestCase
     {
         $ledger = $this->ledger([$this->debit(self::ORDER_DEBIT, 'RUNNING', 1000, 'AUTHORISED_TO_VALIDATE')]);
 
+        self::assertSame(0, $ledger->refundableAmount());
+        self::assertFalse($ledger->covers(1));
         self::assertTrue($ledger->isCancellable());
         self::assertSame(1000, $ledger->maximumAmount());
         self::assertTrue($ledger->allows(1000));

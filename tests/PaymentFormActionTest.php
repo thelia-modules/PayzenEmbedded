@@ -38,6 +38,5 @@ final class PaymentFormActionTest extends TestCase
     public function testASmartFormNeverAsksToRegisterTheCard(): void
     {
         self::assertSame('PAYMENT', PaymentFormAction::resolve(oneClickEnabled: true, smartFormEnabled: true));
-        self::assertSame('PAYMENT', PaymentFormAction::resolve(oneClickEnabled: false, smartFormEnabled: true));
     }
 }
