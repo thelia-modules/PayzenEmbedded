@@ -130,24 +130,37 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
 
             $this->log->addInfo(Translator::getInstance()->trans("PayZen response received for order %ref.", ['%ref' => $orderRef], PayzenEmbedded::DOMAIN_NAME));
 
-            if (null !== $order = $this->getOrderByRef($orderRef)) {
+            // An order paid with another module is never moved on a PayZen notification, whatever
+            // reference it names: a shop switching payment modules keeps its old references.
+            if (null !== ($order = $this->getOrderByRef($orderRef)) && PayzenEmbedded::getModuleId() !== (int) $order->getPaymentModuleId()) {
+                $this->log->addWarning(sprintf('PayZen notification for order %s ignored: the order was not paid with PayZen.', $orderRef));
+                $order = null;
+            }
+
+            if (null !== $order) {
                 // A notification may carry several transactions: the debit of each attempt, and the
                 // credit of a refund. Each one is read. The platform is answered about the transaction
                 // the order stands on once they are all recorded, not about the last one in the list.
                 $lastStatus = self::PAYMENT_STATUS_NOT_PAID;
+
+                // The space is named once, at the top level of the notification; the marker travels
+                // on each transaction. What is not this shop's, for this order, is left out.
+                $provenance = new NotificationProvenance(
+                    strtoupper(trim((string) ($response['orderDetails']['mode'] ?? ''))),
+                    PayzenEmbedded::shopMarker(),
+                    (string) $order->getTransactionRef(),
+                    PayzenEmbedded::platformMode()
+                );
 
                 foreach ($response['transactions'] as $answer) {
                     if (!\is_array($answer)) {
                         continue;
                     }
 
-                    // A notification carrying another shop's marker, or another space, is not this
-                    // order's, whatever reference it names: two shops on one contract share them.
                     $incoming = TransactionOutcome::fromAnswer($answer);
 
-                    if ((null !== $incoming->shopMarker && $incoming->shopMarker !== PayzenEmbedded::shopMarker())
-                        || ('' !== $incoming->mode && $incoming->mode !== PayzenEmbedded::platformMode())) {
-                        $this->log->addWarning(sprintf('PayZen notification for order %s ignored: transaction %s belongs to another shop or space.', $orderRef, $incoming->uuid));
+                    if (!$provenance->accepts($incoming)) {
+                        $this->log->addWarning(sprintf('PayZen notification for order %s ignored: transaction %s belongs to another shop or space, or gives money back on another transaction.', $orderRef, $incoming->uuid));
                         continue;
                     }
 
