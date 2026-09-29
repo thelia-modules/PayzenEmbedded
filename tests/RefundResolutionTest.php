@@ -154,6 +154,32 @@ final class RefundResolutionTest extends TestCase
         );
     }
 
+    /**
+     * The platform answers the transaction it acted on. A debit back as cancelled under another
+     * uuid is not this order's cancellation: read as one, it would cancel an order whose own
+     * payment still stands.
+     */
+    public function testACancellationOfAnotherDebitIsRefused(): void
+    {
+        $this->expectException(TheliaProcessException::class);
+
+        RefundResolution::fromAnswer(
+            ['uuid' => 'other-debit', 'operationType' => 'DEBIT', 'status' => 'UNPAID', 'detailedStatus' => 'CANCELLED', 'amount' => 1000],
+            self::DEBIT_UUID,
+        );
+    }
+
+    /**
+     * An empty uuid is no transaction. Read as one, it would differ from the debit and be taken
+     * for a credit paid in full: the order would move to refunded with nothing given back.
+     */
+    public function testAnAnswerWithAnEmptyUuidIsRefused(): void
+    {
+        $this->expectException(TheliaProcessException::class);
+
+        RefundResolution::fromAnswer(['uuid' => '', 'status' => 'PAID', 'amount' => 1000], self::DEBIT_UUID);
+    }
+
     public function testAnAnswerWithoutTransactionIsRefused(): void
     {
         $this->expectException(TheliaProcessException::class);

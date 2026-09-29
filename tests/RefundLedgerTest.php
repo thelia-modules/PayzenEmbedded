@@ -193,11 +193,40 @@ final class RefundLedgerTest extends TestCase
         self::assertSame(300, $ledger->refundedAmount);
     }
 
-    public function testWithoutAReferenceEveryDebitCounts(): void
+    /**
+     * The rows written by older versions belong to orders without a transaction reference: every
+     * debit counts there, and nothing can be cancelled once one of them is captured.
+     */
+    public function testWithoutAReferenceEveryCapturedDebitCounts(): void
     {
-        $ledger = RefundLedger::fromTransactions([$this->debit('legacy', 'PAID', 800, 'CAPTURED')], '');
+        $ledger = RefundLedger::fromTransactions([
+            $this->debit('legacy-1', 'PAID', 800, 'CAPTURED'),
+            $this->debit('legacy-2', 'PAID', 200, 'CAPTURED'),
+        ], '');
 
-        self::assertSame(800, $ledger->paidAmount);
+        self::assertSame(1000, $ledger->paidAmount);
+        self::assertSame(1000, $ledger->refundableAmount());
+    }
+
+    public function testWithoutAReferenceACapturedDebitAndAnAuthorisationAreNotCancellable(): void
+    {
+        $ledger = RefundLedger::fromTransactions([
+            $this->debit('legacy-1', 'PAID', 1000, 'CAPTURED'),
+            $this->debit('legacy-2', 'PAID', 500, 'AUTHORISED'),
+        ], '');
+
+        self::assertFalse($ledger->isCancellable());
+        self::assertSame(1000, $ledger->maximumAmount());
+    }
+
+    public function testWithoutAReferenceACreditOfTheDebitIsDeducted(): void
+    {
+        $ledger = RefundLedger::fromTransactions([
+            $this->debit('legacy-1', 'PAID', 1000, 'CAPTURED'),
+            new TransactionOutcome('c1', 'PAID', null, TransactionOutcome::OPERATION_CREDIT, 1000, '', 'legacy-1'),
+        ], '');
+
+        self::assertSame(0, $ledger->refundableAmount());
     }
 
     /**

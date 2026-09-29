@@ -52,6 +52,17 @@ final class TransactionProvenanceTest extends TestCase
         self::assertFalse($this->provenance()->accepts($this->transaction(self::DEBIT, shopMarker: self::SHOP, orderRef: '')));
     }
 
+    /**
+     * A transaction the platform lists without a mode is judged on the rest: refusing it would
+     * leave a refund made from the PayZen back-office out of the history, and the same amount
+     * would be offered again.
+     */
+    public function testATransactionWithoutAModeIsJudgedOnTheRest(): void
+    {
+        self::assertTrue($this->provenance()->accepts($this->transaction(self::DEBIT, mode: '')));
+        self::assertFalse($this->provenance()->accepts($this->transaction('foreign-debit', mode: '')));
+    }
+
     public function testATransactionWithoutMarkerIsTrustedOnlyAsTheOrderDebitOrItsCredit(): void
     {
         $provenance = $this->provenance();

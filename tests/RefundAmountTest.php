@@ -92,6 +92,18 @@ final class RefundAmountTest extends TestCase
         self::assertSame($expected, RefundAmount::fromAmount($amount, $currency));
     }
 
+    /**
+     * The per-gram prices of the shop produce totals on a half cent (1.005). PHP 8.3 rounds them
+     * up, since round() pre-rounds the binary value 100.4999…; a runtime that stops pre-rounding
+     * would take one cent less from the shopper on every such order. This pins the amount charged.
+     */
+    public function testAHalfCentOfAComputedTotalRoundsUp(): void
+    {
+        self::assertSame(101, RefundAmount::fromMajor(1.005, 'EUR'));
+        self::assertSame(909, RefundAmount::fromMajor(9.0850, 'EUR'));
+        self::assertSame(101, RefundAmount::fromAmount(1.005, 'EUR'));
+    }
+
     public function testAMajorAmountFromTheShopIsWrittenInMinorUnits(): void
     {
         self::assertSame(1250, RefundAmount::fromMajor(12.5, 'EUR'));
