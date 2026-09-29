@@ -64,6 +64,44 @@ final class TransactionOutcomeTest extends TestCase
         self::assertTrue(TransactionOutcome::fromAnswer(['uuid' => 't', 'status' => 'PAID', 'detailedStatus' => 'legacy text'])->isCaptured());
     }
 
+    public function testATransactionWithoutACreationDateIsReadAsUndated(): void
+    {
+        $outcome = TransactionOutcome::fromAnswer(['uuid' => 't1', 'status' => 'paid']);
+
+        self::assertSame('t1', $outcome->uuid);
+        self::assertSame('PAID', $outcome->status);
+        self::assertNull($outcome->createdAt);
+        self::assertTrue($outcome->isPaid());
+    }
+
+    public function testAnUnparsableCreationDateIsReadAsUndatedRatherThanAsToday(): void
+    {
+        $outcome = TransactionOutcome::fromAnswer(['uuid' => 't1', 'status' => 'PAID', 'creationDate' => 'not a date']);
+
+        self::assertNull($outcome->createdAt);
+    }
+
+    /**
+     * A credit whose parent the platform leaves empty is a credit without a parent: read as a
+     * credit of "" instead, it would no longer be deducted from the order's debit, and the same
+     * amount would be offered again.
+     */
+    public function testAnEmptyParentIsNoParent(): void
+    {
+        $outcome = TransactionOutcome::fromAnswer(['uuid' => 'c1', 'status' => 'PAID', 'operationType' => 'CREDIT', 'transactionDetails' => ['parentTransactionUuid' => '']]);
+
+        self::assertNull($outcome->parentUuid);
+    }
+
+    public function testTheDetailedStatusIsReadWhateverItsCaseAndSpacing(): void
+    {
+        $outcome = TransactionOutcome::fromAnswer(['uuid' => 't', 'status' => 'PAID', 'detailedStatus' => ' captured ']);
+
+        self::assertSame('CAPTURED', $outcome->detailedStatus);
+        self::assertTrue($outcome->isCaptured());
+        self::assertFalse(TransactionOutcome::fromAnswer(['uuid' => 't', 'status' => 'PAID', 'detailedStatus' => ' authorised '])->isCaptured());
+    }
+
     public function testTheProvenanceFieldsAreReadFromTheAnswer(): void
     {
         $outcome = TransactionOutcome::fromAnswer([

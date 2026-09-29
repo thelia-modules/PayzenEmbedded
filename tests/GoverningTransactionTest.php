@@ -56,6 +56,20 @@ final class GoverningTransactionTest extends TestCase
         self::assertSame('t1', $governing?->uuid);
     }
 
+    /**
+     * Two paid attempts and no reference: the first one recorded keeps governing. The arbiter
+     * decides the double payment on the notification; the history does not reshuffle it.
+     */
+    public function testWithoutAReferenceTheFirstPaidAttemptKeepsGoverning(): void
+    {
+        $governing = GoverningTransaction::among([
+            $this->debit('t1', 'PAID', '2026-09-21 10:00:00'),
+            $this->debit('t2', 'PAID', '2026-09-21 11:00:00'),
+        ], '');
+
+        self::assertSame('t1', $governing?->uuid);
+    }
+
     public function testAReferenceUnknownToTheHistoryFallsBackOnTheHeuristic(): void
     {
         self::assertSame('t0', GoverningTransaction::among([$this->debit('t0', 'PAID', null)], 'unknown')?->uuid);

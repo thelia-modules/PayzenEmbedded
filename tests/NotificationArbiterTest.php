@@ -104,21 +104,32 @@ final class NotificationArbiterTest extends TestCase
         self::assertTrue($this->arbiter->accepts($dated, $undated));
     }
 
-    public function testATransactionWithoutACreationDateIsReadAsUndated(): void
+    /**
+     * The shopper paid twice: the second payment, dated after the first, moves the order onto
+     * its own transaction. The shop then owes one of the two back, and refunds it from the page.
+     */
+    public function testASecondPaymentAfterAFirstOneMovesTheOrder(): void
     {
-        $outcome = TransactionOutcome::fromAnswer(['uuid' => 't1', 'status' => 'paid']);
-
-        self::assertSame('t1', $outcome->uuid);
-        self::assertSame('PAID', $outcome->status);
-        self::assertNull($outcome->createdAt);
-        self::assertTrue($outcome->isPaid());
+        self::assertTrue((new NotificationArbiter())->accepts(
+            $this->transaction('t2', 'PAID', '2026-09-21 10:05:00'),
+            $this->transaction('t1', 'PAID', '2026-09-21 10:00:00')
+        ));
     }
 
-    public function testAnUnparsableCreationDateIsReadAsUndatedRatherThanAsToday(): void
+    public function testTwoAttemptsDatedTheSameSecondKeepTheAppliedOne(): void
     {
-        $outcome = TransactionOutcome::fromAnswer(['uuid' => 't1', 'status' => 'PAID', 'creationDate' => 'not a date']);
+        self::assertFalse((new NotificationArbiter())->accepts(
+            $this->transaction('t2', 'PAID', '2026-09-21 10:00:00'),
+            $this->transaction('t1', 'PAID', '2026-09-21 10:00:00')
+        ));
+    }
 
-        self::assertNull($outcome->createdAt);
+    public function testARunningReplayAfterARefusalIsIgnored(): void
+    {
+        self::assertFalse((new NotificationArbiter())->accepts(
+            $this->transaction('t1', 'RUNNING', '2026-09-21 10:00:00'),
+            $this->transaction('t1', 'UNPAID', '2026-09-21 10:00:00')
+        ));
     }
 
     private function transaction(string $uuid, string $status, string $createdAt): TransactionOutcome
