@@ -118,11 +118,15 @@ L'action event `\PayzenEmbedded\Event\TransactionRefundEvent` reçoit :
 - l'ID ($orderId) de la commande concernée,
 - le montant ($amount) à rembourser, dans la plus petite unité de la devise (1250 pour 12,50 EUR),
 - un motif ($comment) facultatif, inscrit sur le remboursement dans le Back Office PayZen,
-- l'ID ($adminId) facultatif de l'administrateur, conservé sur la ligne d'historique.
+- l'ID ($adminId) facultatif de l'administrateur, conservé sur la ligne d'historique,
+- le montant ($expectedRefundedAmount) facultatif déjà remboursé tel que l'appelant l'a vu, dans la plus petite
+  unité : si la plateforme en connaît un autre, la demande est refusée, pour ne jamais redemander un remboursement
+  que l'appelant n'a pas vu.
 
 Une fois dispatché, l'event retourne à travers `getOutcome()` ce que PayZen a fait, une des valeurs de
-`\PayzenEmbedded\LyraClient\RefundOutcome` : `Cancelled`, `Refunded` ou `PartiallyRefunded`. Un montant hors
-limites ou un refus de la plateforme lève une `TheliaProcessException`.
+`\PayzenEmbedded\LyraClient\RefundOutcome` : `Cancelled`, `Refunded`, `PartiallyRefunded` ou `Pending`. Un montant
+hors limites ou un refus de la plateforme lève une `TheliaProcessException` ; une demande restée sans réponse lève une
+`RefundOutcomeUnknownException`, et la tentative suivante commence par relire la plateforme.
 
 ### Verrou et instances multiples
 
@@ -131,9 +135,11 @@ Symfony : avec le magasin par défaut (`LOCK_DSN=semaphore` ou `flock`), il ne v
 servie par plusieurs serveurs doit configurer un magasin partagé (`LOCK_DSN=redis://…` ou `pdo`).
 
 Chaque paiement porte en `metadata` un marqueur de la boutique (empreinte de l'URL du site et de l'identifiant
-PayZen). Ce que la plateforme liste ou notifie sans ce marqueur n'est rattaché à une commande que s'il s'agit de
-sa transaction connue, ou d'un remboursement de celle-ci : deux boutiques sur un même contrat, ou deux
-environnements dans l'espace TEST, produisent les mêmes références de commande.
+PayZen). Ce que la plateforme liste (`Order/Get`) sans ce marqueur n'est rattaché à une commande que s'il s'agit de
+sa transaction connue, ou d'un remboursement de celle-ci ; ce qu'elle notifie sans marqueur est accepté pour un
+paiement (il précède le marqueur) et, pour un remboursement, seulement s'il porte sur la transaction de la
+commande : deux boutiques sur un même contrat, ou deux environnements dans l'espace TEST, produisent les mêmes
+références de commande. Une notification pour une commande payée avec un autre module est ignorée.
 
 ## Installation
 
@@ -270,11 +276,15 @@ The `\PayzenEmbedded\Event\TransactionRefundEvent` action event takes:
 - the ID ($orderId) of the order,
 - the amount ($amount) to refund, in the smallest unit of the currency (1250 for 12.50 EUR),
 - an optional reason ($comment), written on the refund in the PayZen back-office,
-- the optional ID ($adminId) of the administrator, kept on the history row.
+- the optional ID ($adminId) of the administrator, kept on the history row,
+- the optional amount ($expectedRefundedAmount) refunded so far as the caller saw it, in the smallest unit: the
+  refund is refused when the platform knows another figure, so that a refund the caller did not see is never asked
+  for again.
 
 Once dispatched, `getOutcome()` tells what PayZen did, one of `\PayzenEmbedded\LyraClient\RefundOutcome`:
-`Cancelled`, `Refunded` or `PartiallyRefunded`. An amount out of range or a refusal from the platform raises a
-`TheliaProcessException`.
+`Cancelled`, `Refunded`, `PartiallyRefunded` or `Pending`. An amount out of range or a refusal from the platform
+raises a `TheliaProcessException`; a request left unanswered raises a `RefundOutcomeUnknownException`, and the next
+attempt starts by reading the platform again.
 
 ### Lock and multiple instances
 
@@ -283,9 +293,11 @@ default store (`LOCK_DSN=semaphore` or `flock`) it holds one server. A shop serv
 store (`LOCK_DSN=redis://…` or `pdo`).
 
 Every payment carries a shop marker in its `metadata` (a fingerprint of the site URL and of the PayZen shop id).
-What the platform lists or notifies without that marker is tied to an order only when it is its known transaction,
-or a refund of it: two shops on one contract, or two environments in the TEST space, produce the same order
-references.
+What the platform lists (`Order/Get`) without that marker is tied to an order only when it is its known transaction,
+or a refund of it; what it notifies without one is accepted for a payment (it precedes the marker) and, for a
+refund, only when it gives money back on the order's own transaction: two shops on one contract, or two
+environments in the TEST space, produce the same order references. A notification for an order paid with another
+module is ignored.
 
 ## Installation
 

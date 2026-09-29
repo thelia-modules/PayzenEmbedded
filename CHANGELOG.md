@@ -8,14 +8,17 @@
 
 - Every payment carries a shop marker in its metadata, and what the platform lists (`Order/Get`) or notifies is checked against it: two shops on one contract, or two environments in the TEST space, produce the same order references. A transaction without a marker is tied to an order only when it is the debit the order stands on, or a credit of that debit; a credit is deducted from the debit it gives money back on (`parentUuid`).
 - The transaction the order stands on is the one its reference names; the paid or latest attempt only speaks when the history does not know that reference.
-- A pending refund settles the order once the platform confirms it. A refund the platform answered but whose result could not be recorded is reported as such, never as "not sent".
+- A pending refund settles the order once the platform confirms it. A refund the platform answered but whose result could not be recorded is reported as such, never as "not sent". A request the platform did not answer is reported the same way, since it may have processed it.
+- The refund form carries what the page showed as refunded so far, and `TransactionRefundEvent` takes it as an option: a refund the administrator did not see (an answer lost, or a refund made from the PayZen back-office) is refused until the page is reloaded. Asking again would have refunded twice.
 - The order page shows the transaction forms to the administrators allowed to use them, reads the transaction the order stands on, and keeps the update form until the payment is captured.
-- The amount typed in the update form is read strictly too: "4,50" was sent as 4.00.
+- The amount typed in the update form is read strictly too: "4,50" was sent as 4.00. A total the shop computes, such as the capture after picking, is converted whatever its decimals: a legacy order total keeps four of them.
 - A refund the platform is still processing counts as money already given back, and is reported as pending rather than refused: asking again would have refunded twice.
 - The balance is read on the transaction the order stands on: the attempts the shopper gave up on, now listed by the platform, no longer add up. A payment authorised but not captured yet, whatever its validation mode, can only be cancelled in full.
 - The lock on a refund goes through the framework's lock factory, shared by every node of the shop, and is named per shop. The transactions the platform lists for another order, currency or shop are left out of the history.
 - Amounts are converted with the decimals of the currency (none for JPY or XPF, three for KWD or TND) when a payment is created, updated, refunded or displayed.
 - The platform is answered about the transaction the order stands on, whatever the order of the transactions in its notification.
+- A notification for an order paid with another module is ignored. A refund notified without the shop marker is tied to the order only when it gives money back on the order's own transaction; a payment without one is still accepted, since a payment precedes the marker. The space (TEST or PRODUCTION) is read where the notification names it, at its top level.
+- The back-office reports a refund nothing handled (a listener that stopped the event) as a failure, not as "sent".
 - A refund recorded whose order status could not be updated is reported as such, never as "not sent". The update and refresh actions get the same permissions, messages and log as the refund.
 - Before a refund, the platform's own list of the order's transactions is recorded (`Order/Get`): a refund whose answer was lost to a timeout, or one made from the PayZen back-office, is counted before the balance is checked.
 - One refund at a time per order, under a lock: two requests reading the same balance would both have reached the platform. The form button is disabled once the refund is confirmed.
