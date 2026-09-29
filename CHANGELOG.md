@@ -19,6 +19,7 @@
 - The platform is answered about the transaction the order stands on, whatever the order of the transactions in its notification.
 - A notification for an order paid with another module is ignored. A refund notified without the shop marker is tied to the order only when it gives money back on the order's own transaction; a payment without one is still accepted, since a payment precedes the marker. The space (TEST or PRODUCTION) is read where the notification names it, at its top level.
 - The back-office reports a refund nothing handled (a listener that stopped the event) as a failure, not as "sent".
+- The amount rule of the update form is declared the way the current form component expects: every submission of the form failed on a constraint error in the Twig back-office, whatever the amount.
 - A refund recorded whose order status could not be updated is reported as such, never as "not sent". The update and refresh actions get the same permissions, messages and log as the refund.
 - Before a refund, the platform's own list of the order's transactions is recorded (`Order/Get`): a refund whose answer was lost to a timeout, or one made from the PayZen back-office, is counted before the balance is checked.
 - One refund at a time per order, under a lock: two requests reading the same balance would both have reached the platform. The form button is disabled once the refund is confirmed.

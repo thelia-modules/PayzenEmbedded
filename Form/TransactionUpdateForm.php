@@ -63,11 +63,7 @@ class TransactionUpdateForm extends BaseForm
                 [
                     'constraints' => [
                         new NotBlank(),
-                        new Callback([
-                            "methods" => [
-                                [ $this, "checkOrderAmount" ],
-                            ],
-                        ])
+                        new Callback([$this, 'checkOrderAmount']),
                     ],
                     'required' => true,
                     'label' => $this->trans('New order total amount'),
