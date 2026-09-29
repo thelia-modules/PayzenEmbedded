@@ -120,6 +120,35 @@ final class RefundLedgerTest extends TestCase
         self::assertFalse($ledger->allows(500));
     }
 
+    public function testAnAuthorisationWithACreditAlreadyRecordedCannotBeCancelled(): void
+    {
+        $ledger = $this->ledger([
+            $this->debit(self::ORDER_DEBIT, 'PAID', 1000, 'AUTHORISED'),
+            $this->credit('r1', 'PAID', 300),
+        ]);
+
+        self::assertFalse($ledger->isCancellable());
+        self::assertFalse($ledger->allows(1000));
+        self::assertSame(0, $ledger->maximumAmount());
+    }
+
+    /**
+     * The administrator decides on a page that shows what was refunded so far. The ledger tells
+     * whether it still holds exactly that, so that a refund the page did not show (an answer lost
+     * to a timeout, a refund made from the PayZen back-office) is seen before more is given back.
+     */
+    public function testTheLedgerTellsWhetherItHoldsTheRefundsTheAdministratorSaw(): void
+    {
+        $ledger = $this->ledger([
+            $this->debit(self::ORDER_DEBIT, 'PAID', 1000, 'CAPTURED'),
+            $this->credit('r1', 'PAID', 300),
+        ]);
+
+        self::assertTrue($ledger->hasRefunded(300));
+        self::assertFalse($ledger->hasRefunded(0));
+        self::assertFalse($ledger->hasRefunded(600));
+    }
+
     public function testOnlyTheTransactionTheOrderStandsOnCounts(): void
     {
         $ledger = $this->ledger([

@@ -30,12 +30,15 @@ class TransactionRefundEvent extends ActionEvent
      * @param int         $amount  in the smallest unit of the order currency, e.g. 1250 for 12.50 EUR
      * @param string|null $comment written on the refund in the PayZen back-office
      * @param int|null    $adminId the administrator asking for the refund, kept on the history row
+     * @param int|null    $expectedRefundedAmount what the caller saw as refunded so far, in the smallest unit:
+     *                                            the refund is refused when the platform knows another figure
      */
     public function __construct(
         protected int $orderId,
         protected int $amount,
         protected ?string $comment = null,
         protected ?int $adminId = null,
+        protected ?int $expectedRefundedAmount = null,
     ) {
     }
 
@@ -57,6 +60,11 @@ class TransactionRefundEvent extends ActionEvent
     public function getAdminId(): ?int
     {
         return $this->adminId;
+    }
+
+    public function getExpectedRefundedAmount(): ?int
+    {
+        return $this->expectedRefundedAmount;
     }
 
     public function getOutcome(): ?RefundOutcome

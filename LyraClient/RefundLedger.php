@@ -96,6 +96,16 @@ final readonly class RefundLedger
         return $this->covers($amount) || ($this->isCancellable() && $amount === $this->authorisedAmount);
     }
 
+    /**
+     * Whether the money already given back is exactly what the caller saw: a refund the caller did
+     * not see (an answer lost to a timeout, a refund made from the PayZen back-office) has to be
+     * seen before anything more is given back, or the same refund is asked for twice.
+     */
+    public function hasRefunded(int $amount): bool
+    {
+        return $this->refundedAmount === $amount;
+    }
+
     /** What the administrator may ask for: the refundable amount, or the authorisation to cancel. */
     public function maximumAmount(): int
     {

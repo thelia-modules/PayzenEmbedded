@@ -156,11 +156,17 @@ class OrderEditController extends BaseAdminController
 
             $admin = $this->getSecurityContext()->getAdminUser();
 
+            // What the page showed as refunded so far: a refund it did not show is refused, see the wrapper.
+            $expectedRefundedAmount = isset($data['refunded_amount']) && '' !== (string) $data['refunded_amount']
+                ? (int) $data['refunded_amount']
+                : null;
+
             $event = new TransactionRefundEvent(
                 (int) $order->getId(),
                 $amount,
                 $data['comment'] ?? null,
-                $admin?->getId()
+                $admin?->getId(),
+                $expectedRefundedAmount
             );
 
             try {
@@ -236,7 +242,9 @@ class OrderEditController extends BaseAdminController
             RefundOutcome::Refunded => $translator->trans('The order was refunded in full.', [], PayzenEmbedded::DOMAIN_NAME),
             RefundOutcome::PartiallyRefunded => $translator->trans('%amount was refunded, the rest can still be refunded.', ['%amount' => $formattedAmount], PayzenEmbedded::DOMAIN_NAME),
             RefundOutcome::Pending => $translator->trans('The refund of %amount was accepted by PayZen and is being processed; the order is left as it is.', ['%amount' => $formattedAmount], PayzenEmbedded::DOMAIN_NAME),
-            null => $translator->trans('The refund request was sent.', [], PayzenEmbedded::DOMAIN_NAME),
+            // Nothing handled the event, for instance a listener of a higher priority stopped it:
+            // no call was made, and saying "sent" would send the administrator away.
+            null => throw new TheliaProcessException($translator->trans('No refund was made: nothing handled the request.', [], PayzenEmbedded::DOMAIN_NAME)),
         };
     }
 

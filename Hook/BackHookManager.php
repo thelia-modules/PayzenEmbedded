@@ -155,6 +155,7 @@ class BackHookManager extends BaseHook
                 'last_transaction_amount' => $lastTransactionAmount,
                 'paid_amount' => RefundAmount::format($ledger->paidAmount, $currencyCode),
                 'refunded_amount' => RefundAmount::format($ledger->refundedAmount, $currencyCode),
+                'refunded_amount_minor' => $ledger->refundedAmount,
                 'refundable_amount' => RefundAmount::format($ledger->refundableAmount(), $currencyCode),
                 'is_cancellable' => $ledger->isCancellable(),
                 'maximum_amount' => RefundAmount::format($ledger->maximumAmount(), $currencyCode),

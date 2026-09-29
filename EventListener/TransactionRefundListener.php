@@ -48,7 +48,7 @@ final readonly class TransactionRefundListener implements EventSubscriberInterfa
         $admin = null !== $event->getAdminId() ? AdminQuery::create()->findPk($event->getAdminId()) : null;
 
         $event->setOutcome(
-            $this->refundWrapper->refundTransaction($order, $event->getAmount(), $event->getComment(), $admin)
+            $this->refundWrapper->refundTransaction($order, $event->getAmount(), $event->getComment(), $admin, $event->getExpectedRefundedAmount())
         );
     }
 }

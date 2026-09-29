@@ -98,6 +98,9 @@
                         {{ form_errors(refund_form) }}
                         <input type="hidden" name="{{ refund_form.order_id.vars.full_name }}" value="{{ order_id }}">
                         {% do refund_form.order_id.setRendered %}
+                        {# What this page shows as refunded so far: a refund it did not show is refused until the page is reloaded. #}
+                        <input type="hidden" name="{{ refund_form.refunded_amount.vars.full_name }}" value="{{ refunded_amount_minor }}">
+                        {% do refund_form.refunded_amount.setRendered %}
 
                         <div class="row">
                             <div class="col-md-4">

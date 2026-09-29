@@ -63,13 +63,17 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
      * One refund at a time per order: two requests reading the same ledger would both pass its
      * check and both reach the platform.
      *
-     * @param int $amount in the smallest unit of the order currency
+     * @param int      $amount                 in the smallest unit of the order currency
+     * @param int|null $expectedRefundedAmount what the caller saw as refunded so far, in the same unit: the
+     *                                         refund is refused when the platform knows another figure, so
+     *                                         that a refund the caller did not see is never asked for again
      *
-     * @throws LyraException
-     * @throws TheliaProcessException when the amount cannot be refunded, or the platform refused
+     * @throws LyraException                   when the platform cannot list the order's transactions
+     * @throws TheliaProcessException          when the amount cannot be refunded, or the platform refused
+     * @throws RefundOutcomeUnknownException   when the platform did not answer, or its answer could not be recorded
      * @throws OrderStatusNotUpdatedException when the money moved but the order could not follow
      */
-    public function refundTransaction(Order $order, int $amount, ?string $comment = null, ?Admin $admin = null): RefundOutcome
+    public function refundTransaction(Order $order, int $amount, ?string $comment = null, ?Admin $admin = null, ?int $expectedRefundedAmount = null): RefundOutcome
     {
         if (PayzenEmbedded::getModuleId() !== (int) $order->getPaymentModuleId()) {
             throw new TheliaProcessException(
@@ -101,6 +105,23 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
             $ledger = (new TransactionHistoryReader())->ledgerOf($order);
             $currencyCode = strtoupper($order->getCurrency()->getCode());
 
+            // The caller decided on a page that showed what was refunded so far. A refund that page
+            // did not show (an answer lost to a timeout, a refund made from the PayZen back-office)
+            // has to be seen before more is given back: the same refund would otherwise go twice.
+            if (null !== $expectedRefundedAmount && !$ledger->hasRefunded($expectedRefundedAmount)) {
+                throw new TheliaProcessException(
+                    Translator::getInstance()->trans(
+                        'The refunds of this order changed since the page was displayed: %refunded %currency refunded so far, %refundable %currency left to refund. Check the history before asking again.',
+                        [
+                            '%refunded' => RefundAmount::format($ledger->refundedAmount, $currencyCode),
+                            '%refundable' => RefundAmount::format($ledger->refundableAmount(), $currencyCode),
+                            '%currency' => $currencyCode,
+                        ],
+                        PayzenEmbedded::DOMAIN_NAME
+                    )
+                );
+            }
+
             if (!$ledger->allows($amount)) {
                 throw new TheliaProcessException(
                     Translator::getInstance()->trans(
@@ -113,7 +134,19 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
                 );
             }
 
-            $response = $this->sendCancelOrRefundRequest($order, $amount, $comment);
+            try {
+                $response = $this->sendCancelOrRefundRequest($order, $amount, $comment);
+            } catch (LyraException $exception) {
+                // No answer is not a refusal: the platform may have processed the request before
+                // the connection dropped. The next attempt starts by reading the platform's list,
+                // and refuses to go on until the page shows what that list holds.
+                $this->log->addError(sprintf('Order %s: PayZen did not answer the refund request: %s', $order->getRef(), $exception->getMessage()));
+
+                throw new RefundOutcomeUnknownException(
+                    Translator::getInstance()->trans('PayZen did not answer the refund request: refresh the order before trying again.', [], PayzenEmbedded::DOMAIN_NAME),
+                    $exception
+                );
+            }
 
             try {
                 return $this->processCancelOrRefundResponse($order, $response, $admin);
@@ -142,7 +175,7 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
      * @throws LyraException
      * @throws TheliaProcessException when the platform cannot list the order's transactions
      */
-    public function syncTransactions(Order $order): void
+    private function syncTransactions(Order $order): void
     {
         $response = $this->post('V4/Order/Get', ['orderId' => $order->getRef()]);
 
@@ -209,7 +242,7 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
      *
      * @throws LyraException
      */
-    public function sendCancelOrRefundRequest(Order $order, int $amount, ?string $comment = null): array
+    private function sendCancelOrRefundRequest(Order $order, int $amount, ?string $comment = null): array
     {
         $parameters = [
             'uuid' => $order->getTransactionRef(),
@@ -234,7 +267,7 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
      * @throws TheliaProcessException when the platform refused, or answered something unexpected
      * @throws OrderStatusNotUpdatedException when the refund is recorded but the order could not follow
      */
-    public function processCancelOrRefundResponse(Order $order, array $response, ?Admin $admin = null): RefundOutcome
+    private function processCancelOrRefundResponse(Order $order, array $response, ?Admin $admin = null): RefundOutcome
     {
         $answer = \is_array($response['answer'] ?? null) ? $response['answer'] : [];
 

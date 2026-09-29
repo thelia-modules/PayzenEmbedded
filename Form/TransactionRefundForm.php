@@ -22,6 +22,7 @@ use Symfony\Component\Validator\Constraints\Callback;
 use Symfony\Component\Validator\Constraints\GreaterThan;
 use Symfony\Component\Validator\Constraints\Length;
 use Symfony\Component\Validator\Constraints\NotBlank;
+use Symfony\Component\Validator\Constraints\Regex;
 use Symfony\Component\Validator\Context\ExecutionContextInterface;
 use Thelia\Form\BaseForm;
 use Thelia\Model\OrderQuery;
@@ -73,6 +74,20 @@ class TransactionRefundForm extends BaseForm
                     'label_attr' => [
                         'help' => $this->trans('Written on the refund in the PayZen back-office.'),
                     ],
+                ]
+            )
+            // What the page showed as refunded so far, in the smallest unit of the currency. The
+            // refund service refuses the refund when the platform knows another figure, so that a
+            // refund the administrator did not see is never asked for again.
+            ->add(
+                'refunded_amount',
+                TextType::class,
+                [
+                    'constraints' => [
+                        new Regex(['pattern' => '/^\\d{1,15}$/']),
+                    ],
+                    'required' => false,
+                    'label' => $this->trans('Refunded so far'),
                 ]
             );
     }
