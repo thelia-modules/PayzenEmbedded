@@ -57,6 +57,26 @@ final class RefundAmountTest extends TestCase
         self::assertSame($expected, RefundAmount::fromInput($input, $currency));
     }
 
+    /**
+     * The whole table of the currencies counted without a fractional unit, or with three (ISO
+     * 4217): an entry dropped by mistake would make the platform read 250 yen as 25000, or a
+     * dinar amount a thousand times too small.
+     */
+    public function testTheMinorUnitTableMatchesIso4217(): void
+    {
+        foreach (['BIF', 'CLP', 'DJF', 'GNF', 'ISK', 'JPY', 'KMF', 'KRW', 'PYG', 'RWF', 'UGX', 'UYI', 'VND', 'VUV', 'XAF', 'XOF', 'XPF'] as $currency) {
+            self::assertSame(0, RefundAmount::decimals($currency), $currency);
+        }
+
+        foreach (['BHD', 'IQD', 'JOD', 'KWD', 'LYD', 'OMR', 'TND'] as $currency) {
+            self::assertSame(3, RefundAmount::decimals($currency), $currency);
+        }
+
+        self::assertSame(2, RefundAmount::decimals('EUR'));
+        self::assertSame(2, RefundAmount::decimals('ZZZ'));
+        self::assertSame(0, RefundAmount::decimals('jpy'));
+    }
+
     public function testMinorUnitsAreWrittenBackInTheCurrency(): void
     {
         self::assertSame('12.50', RefundAmount::format(1250, 'EUR'));
