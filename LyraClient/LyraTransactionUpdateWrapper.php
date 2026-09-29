@@ -29,7 +29,7 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
      * Process the Transaction/Update request, and update the order if required.
      *
      * @param Order $order the order to process
-     * @param float $amount the amount of the transaction should be <= to the current amount.
+     * @param int|float|string $amount the new amount in the major unit, <= to the current one: text typed by an administrator, or a number the shop computed
      * @param \DateTime|null $captureDate the expected cature date, or null to use the default one.
      * @param boolean|null $manualValidation If false, it will be automatically validated, if null, the default configured in the PayZen back-offcie will be used.
      *
@@ -49,7 +49,7 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
      * Build the Transaction/Update parameters, and call te service.
      *
      * @param Order $order the order to process
-     * @param float $amount the amount of the transaction should be <= to the current amount.
+     * @param int|float|string $amount the new amount in the major unit, <= to the current one: text typed by an administrator, or a number the shop computed
      * @param \DateTime|null $captureDate the expected cature date, or null to use the default one.
      * @param boolean|null $manualValidation If false, it will be automatically validated, if null, the default configured in the PayZen back-offcie will be used.
      *
@@ -74,13 +74,30 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
             $captureDateParam = null;
         }
 
+        $currencyCode = strtoupper($order->getCurrency()->getCode());
+
+        // Text typed by an administrator is read strictly ("4,50" is 4.50, not 4.00); a total the
+        // shop computed, such as the capture after picking, is converted whatever its decimals: a
+        // legacy order total keeps four of them, and a capture refused on that account would leave
+        // the authorisation to expire unpaid.
+        $minorAmount = \is_int($amount) || \is_float($amount) || \is_string($amount)
+            ? RefundAmount::fromAmount($amount, $currencyCode)
+            : null;
+
+        if (null === $minorAmount) {
+            throw new TheliaProcessException(Translator::getInstance()->trans(
+                'The amount should be a positive number with at most %decimals decimals, such as %example.',
+                ['%decimals' => RefundAmount::decimals($currencyCode), '%example' => RefundAmount::format(1250, $currencyCode)],
+                PayzenEmbedded::DOMAIN_NAME
+            ));
+        }
+
         // Request parameters (see https://payzen.io/fr-FR/rest/V4.0/api/playground.html?ws=Transaction/Update)
         $parameters = [
             'uuid' => $order->getTransactionRef(),
             'cardUpdate' => [
-                'amount' => RefundAmount::fromInput((string) $amount, $order->getCurrency()->getCode())
-                    ?? throw new TheliaProcessException(Translator::getInstance()->trans('The amount to refund should be a positive number with at most %decimals decimals, such as %example.', ['%decimals' => RefundAmount::decimals($order->getCurrency()->getCode()), '%example' => RefundAmount::format(1250, $order->getCurrency()->getCode())], PayzenEmbedded::DOMAIN_NAME)),
-                'currency' => strtoupper($order->getCurrency()->getCode()),
+                'amount' => $minorAmount,
+                'currency' => $currencyCode,
                 'expectedCaptureDate' => $captureDateParam,
                 'manualValidation' => $manualValidationParam
             ],

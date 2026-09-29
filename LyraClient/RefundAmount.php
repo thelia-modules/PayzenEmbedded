@@ -64,6 +64,22 @@ final readonly class RefundAmount
         return (int) round((float) $amount * 10 ** self::decimals($currencyCode));
     }
 
+    /**
+     * An amount as an event or a form carries it: text typed by an administrator is read strictly,
+     * a number the shop computed (an order total, whatever its decimals) is converted from the
+     * major unit. Null when nothing positive can be made of it.
+     */
+    public static function fromAmount(int|float|string $amount, string $currencyCode): ?int
+    {
+        if (\is_string($amount)) {
+            return self::fromInput($amount, $currencyCode);
+        }
+
+        $minorUnits = self::fromMajor($amount, $currencyCode);
+
+        return $minorUnits > 0 ? $minorUnits : null;
+    }
+
     public static function format(int $amount, string $currencyCode): string
     {
         $decimals = self::decimals($currencyCode);

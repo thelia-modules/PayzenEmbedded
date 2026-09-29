@@ -67,6 +67,31 @@ final class RefundAmountTest extends TestCase
         self::assertSame('1.250', RefundAmount::format(1250, 'KWD'));
     }
 
+    /**
+     * @return iterable<string, array{int|float|string, string, ?int}>
+     */
+    public static function amounts(): iterable
+    {
+        yield 'typed text is read strictly' => ['4,50', 'EUR', 450];
+        yield 'typed text with too many decimals is refused' => ['9.0849', 'EUR', null];
+        yield 'a computed total is converted from the major unit' => [47.4, 'EUR', 4740];
+        yield 'a computed legacy total with four decimals is rounded, not refused' => [9.0849, 'EUR', 908];
+        yield 'a computed integer total' => [1000, 'JPY', 1000];
+        yield 'a computed zero is refused' => [0.0, 'EUR', null];
+        yield 'a computed negative is refused' => [-5.0, 'EUR', null];
+    }
+
+    /**
+     * What an event carries: text typed by an administrator, or a total the shop computed, such
+     * as the capture after picking. A legacy order total keeps its four decimals, and a capture
+     * refused on that account would leave the authorisation to expire unpaid.
+     */
+    #[DataProvider('amounts')]
+    public function testAnAmountTypedOrComputedReadsAsMinorUnitsOrIsRefused(int|float|string $amount, string $currency, ?int $expected): void
+    {
+        self::assertSame($expected, RefundAmount::fromAmount($amount, $currency));
+    }
+
     public function testAMajorAmountFromTheShopIsWrittenInMinorUnits(): void
     {
         self::assertSame(1250, RefundAmount::fromMajor(12.5, 'EUR'));
