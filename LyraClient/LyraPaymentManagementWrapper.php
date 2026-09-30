@@ -333,6 +333,10 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
                 }
             }
 
+            if (null !== $known && $known->isPaid() && TransactionOutcome::STATUS_UNPAID === $incoming->status) {
+                $this->log->addWarning(sprintf('Order %s: refund transaction %s, given back, is now refused by the platform: the order status is left to the shop, check it.', $order->getRef(), $incoming->uuid));
+            }
+
             if (!(new NotificationArbiter())->acceptsCredit($incoming, $known)) {
                 $this->log->addInfo(sprintf('Order %s: refund transaction %s is already %s, the notification of it as %s is left out.', $order->getRef(), $incoming->uuid, $known?->status, $incoming->status));
 
