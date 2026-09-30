@@ -74,6 +74,23 @@ final class RefundLedgerTest extends TestCase
         self::assertSame(700, $ledger->refundableAmount());
     }
 
+    /**
+     * A refund the platform answered in a state the module does not know may still give the money
+     * back: it is promised until the platform refuses it, so it is never offered a second time.
+     */
+    public function testARefundInAnUnknownStateIsMoneyAlreadyPromised(): void
+    {
+        $ledger = $this->ledger([
+            $this->debit(self::ORDER_DEBIT, 'PAID', 1000, 'CAPTURED'),
+            $this->credit('r1', 'PARTIALLY_PAID', 300),
+            $this->credit('r2', 'UNPAID', 200),
+        ]);
+
+        self::assertSame(300, $ledger->refundedAmount);
+        self::assertSame(0, $ledger->settledRefundedAmount);
+        self::assertSame(700, $ledger->refundableAmount());
+    }
+
     public function testARefundStillRunningDoesNotSettleTheOrderEvenInFull(): void
     {
         $ledger = $this->ledger([

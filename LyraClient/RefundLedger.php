@@ -59,10 +59,11 @@ final readonly class RefundLedger
                     || null === $transaction->parentUuid
                     || $transaction->parentUuid === $orderTransactionRef;
 
-                // A refund on its way is money already promised: it is never offered twice. Only a
-                // refund the platform confirmed is money given back: the one on its way may still
-                // be refused, and nothing would bring back an order settled on it.
-                if ($ofThisDebit && ($transaction->isPaid() || $transaction->isRunning())) {
+                // A refund on its way, or in a state the module does not know, is money already
+                // promised: it is never offered twice, only a refusal frees it. Only a refund the
+                // platform confirmed is money given back: the one on its way may still be refused,
+                // and nothing would bring back an order settled on it.
+                if ($ofThisDebit && TransactionOutcome::STATUS_UNPAID !== $transaction->status) {
                     $refundedAmount += $transaction->amount;
                 }
 
