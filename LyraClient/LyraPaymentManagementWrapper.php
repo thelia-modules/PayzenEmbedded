@@ -265,21 +265,23 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
                 // the order stands on once they are all recorded, not about the last one in the list.
                 $lastStatus = self::PAYMENT_STATUS_NOT_PAID;
 
-                // The space is named once, at the top level of the notification; the marker travels
-                // on each transaction. What is not this shop's, for this order, is left out.
-                $provenance = new NotificationProvenance(
-                    strtoupper(trim((string) ($response['orderDetails']['mode'] ?? ''))),
-                    PayzenEmbedded::shopMarker(),
-                    (string) $order->getTransactionRef(),
-                    PayzenEmbedded::platformMode()
-                );
+                // The debits first: a credit is judged against the debit the order stands on, which
+                // a debit of the same notification may just have set.
+                $answers = array_values(array_filter((array) $response['transactions'], '\is_array'));
+                usort($answers, static fn (array $a, array $b): int => (int) TransactionOutcome::fromAnswer($a)->isCredit() <=> (int) TransactionOutcome::fromAnswer($b)->isCredit());
 
-                foreach ($response['transactions'] as $answer) {
-                    if (!\is_array($answer)) {
-                        continue;
-                    }
-
+                foreach ($answers as $answer) {
                     $incoming = TransactionOutcome::fromAnswer($answer);
+
+                    // The space is named once, at the top level of the notification; the marker
+                    // travels on each transaction. What is not this shop's, for this order, is left
+                    // out, judged on the order as the previous transaction of the list left it.
+                    $provenance = new NotificationProvenance(
+                        strtoupper(trim((string) ($response['orderDetails']['mode'] ?? ''))),
+                        PayzenEmbedded::shopMarker(),
+                        (string) $order->getTransactionRef(),
+                        PayzenEmbedded::platformMode()
+                    );
 
                     if (!$provenance->accepts($incoming)) {
                         $this->log->addWarning(sprintf('PayZen notification for order %s ignored: transaction %s belongs to another shop or space, or gives money back on another transaction.', $orderRef, $incoming->uuid));
