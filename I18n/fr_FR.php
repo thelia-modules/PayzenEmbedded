@@ -2,6 +2,7 @@
 
 return array(
     '%amount was refunded, the rest can still be refunded.' => '%amount a été remboursé, le reste peut encore l\'être.',
+    'A previous refund of this order got no answer from PayZen and the platform does not list it yet: check the PayZen back-office, or try again in %minutes minutes.' => 'Un remboursement précédent de cette commande n\'a pas reçu de réponse de PayZen et la plateforme ne le liste pas encore : vérifier le Back Office Marchand PayZen, ou réessayer dans %minutes minutes.',
     'A refund of this order is already running.' => 'Un remboursement de cette commande est déjà en cours.',
     'Allow 1-click payments' => 'Autoriser les paiements en 1 clic',
     'Allowed IPs in test or restricted production modes' => 'Adresses IP autorisées en mode test ou production restreinte',
