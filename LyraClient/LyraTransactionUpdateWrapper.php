@@ -99,7 +99,14 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
         // authorisation taken before 3.4.0 truncated a legacy total to the cent below, where the
         // total is now rounded, and a capture one cent above the authorisation would be refused.
         if (null !== $minorAmount && !\is_string($amount)) {
-            $minorAmount = RefundAmount::cappedTo($minorAmount, (new TransactionHistoryReader())->heldAmountOf($order));
+            $capped = RefundAmount::cappedTo($minorAmount, (new TransactionHistoryReader())->heldAmountOf($order));
+
+            // The cent of the older rounding is expected; more is money the shop will not take, said out loud.
+            if ($minorAmount - $capped > 1) {
+                $this->log->addError(sprintf('Order %s: capture of %d capped to the %d the platform holds.', $order->getRef(), $minorAmount, $capped));
+            }
+
+            $minorAmount = $capped;
         }
 
         if (null === $minorAmount) {
