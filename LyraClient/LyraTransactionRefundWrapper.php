@@ -86,7 +86,7 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
 
                 throw new TheliaProcessException(
                     Translator::getInstance()->trans(
-                        'PayZen holds the payment of this order as %status, which its history does not show yet: refresh the history, then try again.',
+                        'PayZen holds the payment of this order as %status, which its history does not show yet: refresh the history, then try again. If the refresh cannot bring the order along, refund it from the PayZen back-office.',
                         ['%status' => '' !== $platform->detailedStatus ? $platform->detailedStatus : $platform->status],
                         PayzenEmbedded::DOMAIN_NAME
                     )
