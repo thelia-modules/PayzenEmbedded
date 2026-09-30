@@ -103,11 +103,11 @@ class FrontController extends BasePaymentModuleController
         } catch (\Throwable $ex) {
             $this->getLog()->addError(sprintf('PayZen notification failed: %s: %s at %s:%d', $ex::class, $ex->getMessage(), $ex->getFile(), $ex->getLine()));
 
-            // A signed notification the module failed on (a bug, not a refusal) is answered with a
-            // server error: the platform replays a failed call and warns the merchant, where a KO
-            // would close it. Anything before the signature is checked stays a KO: an unsigned
-            // request never gets to make the shop answer an error.
-            if ($signed && !$ex instanceof \Exception) {
+            // A signed notification the module failed on (a database or lock failure, a bug) is
+            // answered with a server error: the platform replays a failed call and warns the
+            // merchant, where a KO would close it. Anything before the signature is checked stays
+            // a KO: an unsigned request never gets to make the shop answer an error.
+            if ($signed) {
                 return new Response('ERROR', Response::HTTP_INTERNAL_SERVER_ERROR);
             }
         }
