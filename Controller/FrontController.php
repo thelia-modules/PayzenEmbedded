@@ -63,6 +63,7 @@ class FrontController extends BasePaymentModuleController
         $gatewayResponseCode = 'KO';
 
         $lyraClient = new LyraPaymentManagementWrapper($dispatcher);
+        $signed = false;
 
         try {
             /* Retrieve the IPN content */
@@ -76,7 +77,7 @@ class FrontController extends BasePaymentModuleController
             $signedByThePlatform = 'password' === $this->getRequest()->request->get('kr-hash-key') && '' !== $password;
 
             // The key is the server's own, never chosen again from the request.
-            if (!$signedByThePlatform || !$lyraClient->checkHash($password)) {
+            if (!$signedByThePlatform || !($signed = $lyraClient->checkHash($password))) {
                 $this->getLog()->addError($translator->trans("Invalid signature received, aborting.", [], PayzenEmbedded::DOMAIN_NAME));
                 throw new \Exception($translator->trans("Invalid signature received, aborting.", [], PayzenEmbedded::DOMAIN_NAME));
             }
@@ -100,8 +101,15 @@ class FrontController extends BasePaymentModuleController
                     $gatewayResponseCode = 'UNKNOWN';
             }
         } catch (\Throwable $ex) {
-            // Anything the notification makes fail, a malformed answer included, is answered KO.
-            $this->getLog()->addError(sprintf('PayZen notification failed, answered KO: %s: %s at %s:%d', $ex::class, $ex->getMessage(), $ex->getFile(), $ex->getLine()));
+            $this->getLog()->addError(sprintf('PayZen notification failed: %s: %s at %s:%d', $ex::class, $ex->getMessage(), $ex->getFile(), $ex->getLine()));
+
+            // A signed notification the module failed on (a bug, not a refusal) is answered with a
+            // server error: the platform replays a failed call and warns the merchant, where a KO
+            // would close it. Anything before the signature is checked stays a KO: an unsigned
+            // request never gets to make the shop answer an error.
+            if ($signed && !$ex instanceof \Exception) {
+                return new Response('ERROR', Response::HTTP_INTERNAL_SERVER_ERROR);
+            }
         }
 
         return new Response($gatewayResponseCode);
