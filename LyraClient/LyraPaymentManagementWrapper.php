@@ -424,8 +424,9 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         } catch (\Throwable $failure) {
             try {
                 $this->undoUnappliedNotification($order, $incoming, (string) $transactionUuid, $rowBefore, $rowWritten, $refBefore, $versionAfterRef, $failure);
-            } catch (\Throwable) {
-                // Logged by the undo itself: the failure to report is the one that stopped the order.
+            } catch (\Throwable $undoFailure) {
+                // The failure to report is the one that stopped the order; the undo's own is logged.
+                $this->log->addError(sprintf('Order %s: the undo of transaction %s failed (%s).', $order->getRef(), $incoming->uuid, $undoFailure::class));
             }
 
             throw $failure;
@@ -526,10 +527,12 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         int $versionUnmoved,
         \Throwable $failure,
     ): void {
-        $connection = Propel::getWriteConnection(OrderTableMap::DATABASE_NAME);
-        $connection->beginTransaction();
+        $connection = null;
 
         try {
+            $connection = Propel::getWriteConnection(OrderTableMap::DATABASE_NAME);
+            $connection->beginTransaction();
+
             // select() of several columns hands back an array of them, not an order.
             /** @var array<string, mixed>|null $stored */
             $stored = OrderQuery::create()
@@ -579,8 +582,6 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
                 $failure::class
             ));
         } catch (\Throwable $undoFailure) {
-            $connection->rollBack();
-
             $this->log->addError(sprintf(
                 'Order %s: transaction %s could not be applied (%s) nor its record undone (%s): check the order against the PayZen back-office.',
                 $order->getRef(),
@@ -588,6 +589,12 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
                 $failure::class,
                 $undoFailure::class
             ));
+
+            try {
+                $connection?->rollBack();
+            } catch (\Throwable) {
+                // The connection is gone: the database drops what it did not commit.
+            }
         }
     }
 
