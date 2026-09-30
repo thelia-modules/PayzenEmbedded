@@ -325,6 +325,20 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         // A refund is a transaction of its own that gives money back: it is recorded, and it never
         // moves the order. The refund service settles the order when the shop asks for the refund.
         if ($incoming->isCredit()) {
+            $known = null;
+
+            foreach ((new TransactionHistoryReader())->outcomesOf($order) as $row) {
+                if ($row->uuid === $incoming->uuid) {
+                    $known = $row;
+                }
+            }
+
+            if (!(new NotificationArbiter())->acceptsCredit($incoming, $known)) {
+                $this->log->addInfo(sprintf('Order %s: refund transaction %s is already %s, the notification of it as %s is left out.', $order->getRef(), $incoming->uuid, $known?->status, $incoming->status));
+
+                return $this->paymentStatusOf($known ?? $incoming);
+            }
+
             $this->updateTransactionHistory($answer, $order);
 
             $this->log->addInfo(

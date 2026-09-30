@@ -48,6 +48,16 @@ final readonly class NotificationArbiter
             && $incoming->status === $applied->status;
     }
 
+    /**
+     * Whether the notification of a credit may be written over the row the history holds for it:
+     * a credit the platform finished (given back, or refused) is never put back as running by a
+     * notification that arrives late or is replayed. The platform's own listing still writes it.
+     */
+    public function acceptsCredit(TransactionOutcome $incoming, ?TransactionOutcome $known): bool
+    {
+        return null === $known || !$known->isFinished() || $incoming->isFinished();
+    }
+
     public function accepts(TransactionOutcome $incoming, ?TransactionOutcome $applied): bool
     {
         if (null === $applied) {

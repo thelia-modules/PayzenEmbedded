@@ -169,4 +169,18 @@ final class NotificationArbiterTest extends TestCase
         self::assertFalse($this->arbiter->isUnchanged($this->transaction('t1', 'RUNNING', '2026-09-21 10:00:00'), $applied, ''), 'an order never moved');
         self::assertFalse($this->arbiter->isUnchanged($this->transaction('t1', 'RUNNING', '2026-09-21 10:00:00'), null, 't1'), 'nothing applied');
     }
+
+    public function testAFinishedCreditIsNeverPutBackAsRunning(): void
+    {
+        $paid = new TransactionOutcome('c1', 'PAID', null, TransactionOutcome::OPERATION_CREDIT, 300);
+        $running = new TransactionOutcome('c1', 'RUNNING', null, TransactionOutcome::OPERATION_CREDIT, 300);
+        $refused = new TransactionOutcome('c1', 'UNPAID', null, TransactionOutcome::OPERATION_CREDIT, 300);
+
+        self::assertFalse($this->arbiter->acceptsCredit($running, $paid), 'a late RUNNING after PAID');
+        self::assertFalse($this->arbiter->acceptsCredit($running, $refused), 'a late RUNNING after UNPAID');
+        self::assertTrue($this->arbiter->acceptsCredit($paid, $running), 'the credit confirmed');
+        self::assertTrue($this->arbiter->acceptsCredit($refused, $running), 'the credit refused');
+        self::assertTrue($this->arbiter->acceptsCredit($running, $running), 'the same state again');
+        self::assertTrue($this->arbiter->acceptsCredit($running, null), 'a credit the history does not hold');
+    }
 }
