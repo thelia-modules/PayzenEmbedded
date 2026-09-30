@@ -135,6 +135,10 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
             $this->log->addInfo(Translator::getInstance()->trans("PayZen response received for transaction %ref.", ['%ref' => $orderTransaction], PayzenEmbedded::DOMAIN_NAME));
 
             if (null !== $order = $this->getOrderByTransaction($orderTransaction)) {
+                // The answer to the shop's own call is the platform's word on the transaction, as
+                // its listing is: the history takes it even where the arbiter leaves the order alone
+                // (an amount lowered on a payment waiting for its capture).
+                $this->updateTransactionHistory($response['answer'], $order);
                 $paymentStatus = $this->processOrderStatus($order, $response['answer']);
 
                 $this->log->info(Translator::getInstance()->trans("PayZen response for order %ref processing teminated.", ['%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
