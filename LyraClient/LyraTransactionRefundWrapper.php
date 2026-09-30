@@ -75,10 +75,10 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
             $ledger = (new TransactionHistoryReader())->ledgerOf($order);
             $currencyCode = strtoupper($order->getCurrency()->getCode());
 
-            // The caller decided on a page that showed what was refunded so far. A refund that page
-            // did not show (an answer lost to a timeout, a refund made from the PayZen back-office)
-            // has to be seen before more is given back: the same refund would otherwise go twice.
-            if (null !== $expectedRefundedAmount && !$ledger->hasRefunded($expectedRefundedAmount)) {
+            // The decision is the guard's, see RefundGuard: here it is only put into words.
+            $verdict = RefundGuard::verdict($ledger, $amount, $expectedRefundedAmount);
+
+            if (RefundVerdict::StaleView === $verdict) {
                 throw new TheliaProcessException(
                     Translator::getInstance()->trans(
                         'The refunds of this order changed since the page was displayed: %refunded %currency refunded so far, %refundable %currency left to refund. Check the history before asking again.',
@@ -92,7 +92,7 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
                 );
             }
 
-            if (!$ledger->allows($amount)) {
+            if (RefundVerdict::OutOfBounds === $verdict) {
                 throw new TheliaProcessException(
                     Translator::getInstance()->trans(
                         $ledger->isCancellable()
@@ -174,7 +174,6 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
     {
         $answer = \is_array($response['answer'] ?? null) ? $response['answer'] : [];
 
-        // The shape of this answer was taken from the documentation: keep what the platform really sends.
         // A refusal is an ERROR status with an error answer: read as the Order/Get answer is, before
         // anything in the answer is taken for a transaction.
         if (($response['status'] ?? null) !== 'SUCCESS') {
@@ -184,6 +183,7 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
             ], PayzenEmbedded::DOMAIN_NAME));
         }
 
+        // The shape of this answer was taken from the documentation: keep what the platform really sends.
         $this->log->addInfo(sprintf(
             'PayZen CancelOrRefund answer for order %s: %s',
             $order->getRef(),
