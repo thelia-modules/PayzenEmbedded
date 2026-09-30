@@ -606,16 +606,21 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
 
     /**
      * Record every transaction the platform holds for the order, credits included, through the
-     * Order/Get service. The history catches up whatever the notification arbiter would say, since
-     * the platform's list is the truth about its own transactions; only the transaction the order
-     * stands on moves the order, as its notification would, before it is written. A transaction the
+     * Order/Get service. Nothing here moves the order: the history catches up, whatever the
+     * notification arbiter would say, since the platform's list is the truth about its own
+     * transactions. The one transaction left out is the one the order stands on when the platform
+     * holds it in another state than the history: only the notification path (the notification, or
+     * the Transaction/Get of the refresh) writes it, and moves the order with it. A transaction the
      * platform lists under this reference for another shop, another space or another order is left
-     * out, see TransactionProvenance.
+     * out too, see TransactionProvenance.
+     *
+     * @return array<string, mixed>|null the transaction the order stands on, as the platform answered
+     *                                   it, when that is not the state the history holds (nor wrote)
      *
      * @throws LyraException
      * @throws TheliaProcessException when the platform cannot list the order's transactions
      */
-    protected function syncTransactions(Order $order): void
+    protected function syncTransactions(Order $order): ?array
     {
         $response = $this->post('V4/Order/Get', ['orderId' => $order->getRef()]);
 
@@ -650,6 +655,16 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             (new TransactionHistoryReader())->uuidsOf($order)
         );
 
+        $governingRef = (string) $order->getTransactionRef();
+        $governingKnown = null;
+        $diverging = null;
+
+        foreach ((new TransactionHistoryReader())->outcomesOf($order) as $row) {
+            if ('' !== $governingRef && $row->uuid === $governingRef) {
+                $governingKnown = $row;
+            }
+        }
+
         foreach ($transactions as $answer) {
             if (!\is_array($answer) || !\is_string($answer['uuid'] ?? null) || 1 !== preg_match('/^[0-9a-f]{32}$/i', $answer['uuid'])) {
                 continue;
@@ -670,15 +685,21 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
                 continue;
             }
 
-            // The transaction the order stands on moves the order as its notification would (the
-            // platform cancelled it, or captured it): written silently, it would be taken for
-            // applied, and the order would never follow. The history then takes the platform's word.
-            if (!$outcome->isCredit() && '' !== (string) $order->getTransactionRef() && $outcome->uuid === (string) $order->getTransactionRef()) {
-                $this->processOrderStatus($order, $answer);
+            // The transaction the order stands on, in a state the history does not hold (the platform
+            // cancelled it, or captured it), is left to the notification path that moves the order:
+            // written here, it would be taken for applied, and the order would never follow. Its
+            // details (a capture date, a detailed status) are written, the status is the same.
+            if (!$outcome->isCredit() && '' !== $governingRef && $outcome->uuid === $governingRef
+                && (null === $governingKnown || $governingKnown->status !== $outcome->status)) {
+                $diverging = $answer;
+
+                continue;
             }
 
             $this->updateTransactionHistory($answer, $order);
         }
+
+        return $diverging;
     }
 
     /**

@@ -27,15 +27,15 @@ use Thelia\Model\OrderStatusQuery;
 class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
 {
     /**
-     * Bring the order up to date with the platform: the transaction the order stands on is read
-     * first and may move the order, as a notification would; then every transaction the platform
-     * lists for the order (a refund made from the PayZen back-office, a cancellation, an attempt
-     * the notification never reached the shop for) is recorded as the platform holds it, which
-     * the arbiter alone would refuse once the transaction is finished. A refund that leaves
-     * nothing to refund settles the order, as its notification would. A cancellation made from
-     * the PayZen back-office cancels the order while the history holds the authorisation as
-     * running, as its notification would; one of a payment the history already holds as paid
-     * only shows in the history, and leaves the order status to the shop.
+     * Bring the order up to date with the platform: every transaction the platform lists for the
+     * order (a refund made from the PayZen back-office, a cancellation, an attempt the notification
+     * never reached the shop for) is recorded first, as the platform holds it, which the arbiter
+     * alone would refuse once the transaction is finished. Then the transaction the order stands on
+     * is read and may move the order, as a notification would, with the refunds already counted: a
+     * refund that leaves nothing to refund settles the order. A cancellation made from the PayZen
+     * back-office cancels the order while the history holds the authorisation as running; one of a
+     * payment the history already holds as paid only shows in the history, and leaves the order
+     * status to the shop.
      *
      * An order without a transaction yet (its notification never came) has only the platform's
      * list to learn from. The order is held while it is read, so that a refund and a refresh
@@ -63,11 +63,24 @@ class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
             // while the operation waited. Inside the try: the lock is released whatever happens.
             $order->reload();
 
+            // The platform's list first: the refunds it holds are in the history before the transaction
+            // the order stands on moves it, so that an order refunded on the platform goes to refunded,
+            // not through paid (and the host's pickup notice). The list leaves that transaction to the
+            // notification path when it changed, see syncTransactions().
+            $diverging = $this->syncTransactions($order);
+            $this->refreshOrderLock($lock, $order);
+
             if ('' !== (string) $order->getTransactionRef()) {
                 $this->processTransactionGetResponse($this->sendTransactionGetRequest($order));
+                // The response was applied to an order of its own: this one is read again.
+                $order->reload();
             }
 
-            $this->syncTransactions($order);
+            // Once the order had its chance to move on it, the transaction the list held back is
+            // written as the platform holds it, even where the arbiter left it (a finished one).
+            if (null !== $diverging) {
+                $this->updateTransactionHistory($diverging, $order);
+            }
 
             $ledger = (new TransactionHistoryReader())->ledgerOf($order);
 

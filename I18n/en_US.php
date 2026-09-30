@@ -64,6 +64,7 @@ return array(
     'Payment methods offered to your customers' => 'Payment methods offered to your customers',
     'PayPal' => 'PayPal',
     'PayZen answered the refund, but its result could not be recorded: refresh the order before trying again.' => 'PayZen answered the refund, but its result could not be recorded: refresh the order before trying again.',
+    'PayZen holds the payment of this order as %status, which its history does not show yet: refresh the history, then try again.' => 'PayZen holds the payment of this order as %status, which its history does not show yet: refresh the history, then try again.',
     'PayZen did not answer the refund request: refresh the order before trying again.' => 'PayZen did not answer the refund request: refresh the order before trying again.',
     'PayZen accepted the refund with an answer the module cannot read: refresh the order before trying again.' => 'PayZen accepted the refund with an answer the module cannot read: refresh the order before trying again.',
     'PayZen payment response for order %ref processing teminated.' => 'PayZen payment response for order %ref processing teminated.',

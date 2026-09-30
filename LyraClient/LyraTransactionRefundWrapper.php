@@ -75,8 +75,23 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
             // The history may be behind the platform: a refund whose answer was lost to a timeout,
             // or one made from the PayZen back-office. The platform's own list of the order's
             // transactions is recorded first, so the ledger counts what was really given back.
-            $this->syncTransactions($order);
+            // The transaction the order stands on, in another state on the platform (cancelled, or
+            // captured), moves the order: that is the refresh's to do, with the order's page in sight,
+            // not a side effect of a refund.
+            $diverging = $this->syncTransactions($order);
             $this->refreshOrderLock($lock, $order);
+
+            if (null !== $diverging) {
+                $platform = TransactionOutcome::fromAnswer($diverging);
+
+                throw new TheliaProcessException(
+                    Translator::getInstance()->trans(
+                        'PayZen holds the payment of this order as %status, which its history does not show yet: refresh the history, then try again.',
+                        ['%status' => '' !== $platform->detailedStatus ? $platform->detailedStatus : $platform->status],
+                        PayzenEmbedded::DOMAIN_NAME
+                    )
+                );
+            }
 
             $ledger = (new TransactionHistoryReader())->ledgerOf($order);
             $currencyCode = strtoupper($order->getCurrency()->getCode());
