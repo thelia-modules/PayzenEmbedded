@@ -33,7 +33,6 @@ use PayzenEmbedded\LyraClient\LyraClientWrapper;
 use PayzenEmbedded\LyraClient\LyraTransactionGetWrapper;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
-use Symfony\Component\Lock\LockFactory;
 use Thelia\Controller\Admin\BaseAdminController;
 use Thelia\Core\Security\AccessManager;
 use Thelia\Core\Security\Resource\AdminResources;
@@ -300,7 +299,7 @@ class OrderEditController extends BaseAdminController
     }
 
     #[Route('/refresh-transaction/{orderId}', name: 'refresh_transaction', requirements: ['orderId' => '\d+'], methods: 'POST')]
-    public function refreshTransaction(EventDispatcherInterface $dispatcher, Translator $translator, int $orderId, ?LockFactory $lockFactory = null)
+    public function refreshTransaction(Translator $translator, LyraTransactionGetWrapper $lyraClient, int $orderId)
     {
         if (null !== $response = $this->checkAuth([AdminResources::MODULE, AdminResources::ORDER], 'PayzenEmbedded', AccessManager::UPDATE)) {
             return $response;
@@ -316,8 +315,7 @@ class OrderEditController extends BaseAdminController
             $this->validateForm($getForm, "POST");
 
             if (null !== $order = OrderQuery::create()->findPk($orderId)) {
-                // The same lock as the refund: the two never write the history at the same time.
-                $lyraClient = new LyraTransactionGetWrapper($dispatcher, $lockFactory);
+                // The wrapper comes from the container, with the lock factory of the framework the refund uses.
                 $outranking = $lyraClient->getTransaction($order);
 
                 $this->addFlash('success', $translator->trans('The transaction history was refreshed.', [], PayzenEmbedded::DOMAIN_NAME));

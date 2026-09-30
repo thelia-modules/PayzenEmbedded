@@ -41,7 +41,7 @@ class TransactionRefundForm extends BaseForm
                 [
                     'constraints' => [
                         new NotBlank(),
-                        new GreaterThan(['value' => 0]),
+                        new GreaterThan(value: 0),
                     ],
                     'required' => true,
                     'label' => $this->trans('Order ID'),
@@ -67,7 +67,7 @@ class TransactionRefundForm extends BaseForm
                 TextType::class,
                 [
                     'constraints' => [
-                        new Length(['max' => 255]),
+                        new Length(max: 255),
                     ],
                     'required' => false,
                     'label' => $this->trans('Reason'),
@@ -85,7 +85,7 @@ class TransactionRefundForm extends BaseForm
                 [
                     'constraints' => [
                         new NotBlank(),
-                        new Regex(['pattern' => '/^\\d{1,15}$/']),
+                        new Regex(pattern: '/^\\d{1,15}$/'),
                     ],
                     'label' => $this->trans('Refunded so far'),
                 ]
