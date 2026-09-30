@@ -62,7 +62,7 @@ class FrontController extends BasePaymentModuleController
         // The response code to the server
         $gatewayResponseCode = 'KO';
 
-        $lyraClient = new LyraPaymentManagementWrapper($dispatcher, $this->getLog());
+        $lyraClient = new LyraPaymentManagementWrapper($dispatcher);
 
         try {
             /* Retrieve the IPN content */

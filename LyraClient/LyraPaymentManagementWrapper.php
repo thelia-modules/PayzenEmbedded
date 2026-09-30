@@ -15,6 +15,9 @@ use PayzenEmbedded\Model\PayzenEmbeddedCustomerToken;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\LockInterface;
+use Symfony\Component\Lock\Store\FlockStore;
 use Thelia\Core\Event\Order\OrderEvent;
 use Thelia\Core\Event\TheliaEvents;
 use Thelia\Core\Translation\Translator;
@@ -39,6 +42,11 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
     /** The platform answers at most this many transactions for an order (PSP_015 beyond). */
     protected const ORDER_GET_LIMIT = 30;
 
+    /** Two platform calls of up to 45 seconds each fit in this time. */
+    protected const ORDER_LOCK_TTL = 120.0;
+
+    protected LockFactory $lockFactory;
+
     /**
      * @var boolean
      */
@@ -52,7 +60,13 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
      */
     protected $dispatcher;
 
-    public function __construct(EventDispatcherInterface $dispatcher)
+    /**
+     * @param LockFactory|null $lockFactory the framework's lock factory. It spans every node of the
+     *                                      shop only when LOCK_DSN names a network store (redis,
+     *                                      pdo); the default semaphore or flock store holds one
+     *                                      host. Without it, a lock on this node's file system.
+     */
+    public function __construct(EventDispatcherInterface $dispatcher, ?LockFactory $lockFactory = null)
     {
         parent::__construct();
 
@@ -60,6 +74,30 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
 
         $this->log = Tlog::getInstance();
         $this->dispatcher = $dispatcher;
+        $this->lockFactory = $lockFactory ?? new LockFactory(new FlockStore());
+    }
+
+    /**
+     * One operation at a time on the money of an order: a refund and a refresh reading the same
+     * ledger would both pass its checks. One lock per order and per shop, since the nodes of one
+     * host may serve several shops. The caller releases it.
+     *
+     * @throws TheliaProcessException when another operation holds the order
+     */
+    protected function acquireOrderLock(Order $order): LockInterface
+    {
+        $lock = $this->lockFactory->createLock(
+            'payzen-embedded-refund-' . PayzenEmbedded::shopMarker() . '-' . $order->getId(),
+            self::ORDER_LOCK_TTL
+        );
+
+        if (!$lock->acquire()) {
+            throw new TheliaProcessException(
+                Translator::getInstance()->trans('A refund of this order is already running.', [], PayzenEmbedded::DOMAIN_NAME)
+            );
+        }
+
+        return $lock;
     }
 
     /**

@@ -133,13 +133,17 @@
                     {{ form_end(refund_form) }}
                 {% endif %}
             {% else %}
+                <div class="alert alert-info mb-0">{{ 'There is no history for this transaction.'|trans({}, _d) }}</div>
+            {% endif %}
+
+            {% if can_act|default(true) %}
                 {{ form_start(get_form, {'action': path('payzen_embedded_order_edit_refresh_transaction', {'orderId': order_id}), 'method': 'post'}) }}
                     {{ form_errors(get_form) }}
-                    <div class="alert alert-info">
-                        <input type="hidden" name="{{ get_form.order_id.vars.full_name }}" value="{{ order_id }}">
-                        {% do get_form.order_id.setRendered %}
-                        <p>{{ 'There is no history for this transaction.'|trans({}, _d) }}</p>
-                        <button type="submit" class="btn btn-info">{{ 'Refresh history'|trans({}, _d) }}</button>
+                    <input type="hidden" name="{{ get_form.order_id.vars.full_name }}" value="{{ order_id }}">
+                    {% do get_form.order_id.setRendered %}
+                    <div class="d-flex align-items-center justify-content-between gap-3 mt-3">
+                        <p class="mb-0 text-muted small">{{ 'Reads the transactions of this order from PayZen, refunds and cancellations made from its back-office included.'|trans({}, _d) }}</p>
+                        <button type="submit" class="btn btn-outline-info text-nowrap">{{ 'Refresh history'|trans({}, _d) }}</button>
                     </div>
                 {{ form_end(get_form) }}
             {% endif %}

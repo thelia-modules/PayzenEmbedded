@@ -29,6 +29,7 @@ return array(
     'PayZen transaction history' => 'Historique de la transaction PayZen',
     'Payment configuration' => 'Configuration du paiement',
     'Production parameters' => 'Paramètres de PRODUCTION',
+    'Reads the transactions of this order from PayZen, refunds and cancellations made from its back-office included.' => 'Relit les transactions de cette commande auprès de PayZen, remboursements et annulations faits depuis son Back Office compris.',
     'Refresh history' => 'Mettre l\'historique à jour',
     'Refund' => 'Rembourser',
     'Return URL in the back-office' => 'URL de notification instantanée',

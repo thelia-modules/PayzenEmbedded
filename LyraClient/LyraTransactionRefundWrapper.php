@@ -17,13 +17,9 @@ namespace PayzenEmbedded\LyraClient;
 
 use Lyra\Exceptions\LyraException;
 use PayzenEmbedded\PayzenEmbedded;
-use Symfony\Component\EventDispatcher\EventDispatcherInterface;
-use Symfony\Component\Lock\LockFactory;
-use Symfony\Component\Lock\Store\FlockStore;
 use Thelia\Core\Translation\Translator;
 use Thelia\Exception\TheliaProcessException;
 use Thelia\Model\Admin;
-use Thelia\Model\ConfigQuery;
 use Thelia\Model\Order;
 use Thelia\Model\OrderStatusQuery;
 
@@ -32,24 +28,6 @@ use Thelia\Model\OrderStatusQuery;
  */
 class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
 {
-    /** Two platform calls of up to 45 seconds each fit in this time. */
-    private const LOCK_TTL = 120.0;
-
-    private LockFactory $lockFactory;
-
-    /**
-     * @param LockFactory|null $lockFactory the framework's lock factory. It spans every node of the
-     *                                      shop only when LOCK_DSN names a network store (redis,
-     *                                      pdo); the default semaphore or flock store holds one
-     *                                      host. Without it, a lock on this node's file system.
-     */
-    public function __construct(EventDispatcherInterface $dispatcher, ?LockFactory $lockFactory = null)
-    {
-        parent::__construct($dispatcher);
-
-        $this->lockFactory = $lockFactory ?? new LockFactory(new FlockStore());
-    }
-
     /**
      * Give money back to the shopper of an order, in full or in part.
      *
@@ -84,13 +62,7 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
             );
         }
 
-        $lock = $this->lockFactory->createLock($this->lockName($order), self::LOCK_TTL);
-
-        if (!$lock->acquire()) {
-            throw new TheliaProcessException(
-                Translator::getInstance()->trans('A refund of this order is already running.', [], PayzenEmbedded::DOMAIN_NAME)
-            );
-        }
+        $lock = $this->acquireOrderLock($order);
 
         try {
             // The history may be behind the platform: a refund whose answer was lost to a timeout,
@@ -261,11 +233,5 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
         }
 
         return $outcome;
-    }
-
-    /** One lock per order and per shop, since the nodes of one host may serve several shops. */
-    private function lockName(Order $order): string
-    {
-        return 'payzen-embedded-refund-' . md5((string) ConfigQuery::read('url_site', '') . '#' . PayzenEmbedded::getConfigValue('site_id', '')) . '-' . $order->getId();
     }
 }

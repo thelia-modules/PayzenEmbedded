@@ -35,22 +35,39 @@ class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
      * nothing to refund settles the order, as its notification would; a cancellation made from
      * the PayZen back-office shows in the history and leaves the order status to the shop.
      *
-     * @param Order $order
+     * An order without a transaction yet (its notification never came) has only the platform's
+     * list to learn from. The order is held while it is read, so that a refund and a refresh
+     * never write its history at the same time.
+     *
      * @throws LyraException
+     * @throws TheliaProcessException when the order was not paid with PayZen, is held by another
+     *                                operation, or the platform refused
      * @throws \Exception
      */
-    public function getTransaction(Order $order)
+    public function getTransaction(Order $order): void
     {
-        $response = $this->sendTransactionGetRequest($order);
+        if (PayzenEmbedded::getModuleId() !== (int) $order->getPaymentModuleId()) {
+            throw new TheliaProcessException(
+                Translator::getInstance()->trans('This order was not paid with PayZen.', [], PayzenEmbedded::DOMAIN_NAME)
+            );
+        }
 
-        $this->processTransactionGetResponse($response);
+        $lock = $this->acquireOrderLock($order);
 
-        $this->syncTransactions($order);
+        try {
+            if ('' !== (string) $order->getTransactionRef()) {
+                $this->processTransactionGetResponse($this->sendTransactionGetRequest($order));
+            }
 
-        $ledger = (new TransactionHistoryReader())->ledgerOf($order);
+            $this->syncTransactions($order);
 
-        if ($ledger->paidAmount > 0 && 0 === $ledger->refundableAmount()) {
-            $this->setOrderStatus($order, OrderStatusQuery::getRefundedStatus());
+            $ledger = (new TransactionHistoryReader())->ledgerOf($order);
+
+            if ($ledger->paidAmount > 0 && 0 === $ledger->refundableAmount()) {
+                $this->setOrderStatus($order, OrderStatusQuery::getRefundedStatus());
+            }
+        } finally {
+            $lock->release();
         }
     }
 
