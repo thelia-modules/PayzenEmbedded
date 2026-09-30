@@ -14,6 +14,7 @@
 
 ## Transaction history and notifications
 - A credit the module asks for is tied to the debit it asks it on when the platform's answer does not name it, and a transaction the history already holds for the order is recognised as the shop's when the platform lists or notifies it again: a refund still running is seen settled once confirmed. An answer that does not repeat a credit's parent no longer erases it, and a credit is counted positive whatever the sign it is written with.
+- An answer that does not say a transaction's type no longer turns a credit the history holds into a debit, and a transaction marked by another shop stays out even when the history knows it. The trace of a refund answer keeps its shape (parent, shop marker) without the card data the transaction details carry.
 - The same transaction notified or read again in the same state (a refresh of an authorisation still running) no longer moves back an order that left the unpaid state: an order being prepared stayed prepared, where it went back to paid and the confirmation was sent again.
 - The creation dates of the history are read back as the UTC the platform gave them: the column keeps no time zone and a shop outside UTC read its own history hours off the notifications it weighed, which could let the late refusal of an earlier attempt cancel an order standing on a later one. The transactions of one notification are judged debits first, each on the order the previous one left: a credit sent with its debit is no longer set aside. The refresh names, in a warning, an attempt the platform lists that outranks the one the order stands on, since only its notification moves the order.
 - The notification endpoint accepts only an answer signed with the REST password, as the platform signs its notifications. The answer the shopper's browser receives, signed with the public HMAC key, was accepted there too and could be replayed by the shopper.
@@ -33,6 +34,8 @@
 - The amount sent to create a payment is rounded to the smallest unit of the currency, where it was truncated: a total with more decimals than the currency (a legacy order total keeps four) is sent to the nearest cent instead of the cent below.
 
 ## Front-office
+- The SmartForm keeps the card form collapsed when the option says so: the setting was ignored.
+- The notification endpoint answers KO to any failure, a malformed answer included, and logs its class and place, where some failures answered an HTTP 500.
 - The SmartForm no longer asks to register the card when the one click payments are allowed: the platform left Apple Pay and Google Pay out of such a form. A customer who already registered a card keeps paying with it. The card form is unchanged.
 - The payment error page no longer links to a `contact` route: Flexy has none, and the missing route turned a refused payment form into a 500.
 
