@@ -11,6 +11,7 @@
 namespace PayzenEmbedded\LyraClient;
 
 use Lyra\Exceptions\LyraException;
+use Propel\Runtime\ActiveQuery\Criteria;
 use Propel\Runtime\Propel;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerToken;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
@@ -322,7 +323,7 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
     {
         $status = self::PAYMENT_STATUS_NOT_PAID;
 
-        $orderStatus = $answer['status'];
+        $orderStatus = $answer['status'] ?? '';
         $transactionUuid = $answer['uuid'];
 
         // An order can carry one transaction per payment attempt, and the platform notifies each of
@@ -421,7 +422,11 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         try {
             $status = $this->applyTransaction($order, $orderStatus, $transactionUuid, $versionAfterRef);
         } catch (\Throwable $failure) {
-            $this->undoUnappliedNotification($order, $incoming, (string) $transactionUuid, $rowBefore, $rowWritten, $refBefore, $versionAfterRef, $failure);
+            try {
+                $this->undoUnappliedNotification($order, $incoming, (string) $transactionUuid, $rowBefore, $rowWritten, $refBefore, $versionAfterRef, $failure);
+            } catch (\Throwable) {
+                // Logged by the undo itself: the failure to report is the one that stopped the order.
+            }
 
             throw $failure;
         }
@@ -461,7 +466,9 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         // Every save of the order from here on is a move, whatever status it ends on: a host module
         // may bring it back to the status it had (the capture after picking sets it paid, then back
         // to its own status), and a failure after that is no failure to move it.
-        $versionAfterRef = $this->storedOrderVersion($order);
+        // Read in memory, not in the database: another notification may save the order meanwhile,
+        // and its save would be taken for this one's. The object is the one the reference was saved on.
+        $versionAfterRef = max((int) $order->getVersion(), $versionAfterRef);
 
         if ($orderStatus === 'PAID') {
             $this->log->addInfo(Translator::getInstance()->trans("Order %ref payment was successful.", ['%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
@@ -542,6 +549,8 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
                 ->filterByOrderId($order->getId())
                 ->filterByUuid(mb_substr((string) $incoming->uuid, 0, 128))
                 ->filterByStatus($rowWritten['Status'])
+                ->filterByDetailedstatus($rowWritten['Detailedstatus'], null === $rowWritten['Detailedstatus'] ? Criteria::ISNULL : Criteria::EQUAL)
+                ->filterByAmount($rowWritten['Amount'], null === $rowWritten['Amount'] ? Criteria::ISNULL : Criteria::EQUAL)
                 ->filterByUpdatedAt($rowWritten['UpdatedAt'])
                 ->lockForUpdate()
                 ->findOne($connection);
