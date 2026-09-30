@@ -64,6 +64,9 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
         }
 
         $lock = $this->acquireOrderLock($order);
+        // What the order stands on is read again under the lock: a notification may have moved it
+        // while the operation waited.
+        $order->reload();
 
         try {
             // The history may be behind the platform: a refund whose answer was lost to a timeout,
