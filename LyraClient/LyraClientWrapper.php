@@ -132,23 +132,36 @@ class LyraClientWrapper extends Client
             ->setOrderId($order->getId())
             ->setCustomerId($order->getCustomerId())
             ->setUuid($outcome->uuid)
-            ->setDetailedstatus('' !== $outcome->detailedStatus ? $outcome->detailedStatus : null)
-            ->setStatus($outcome->status)
-            ->setOperationtype($outcome->operationType)
-            ->setParentuuid($outcome->parentUuid)
+            ->setDetailedstatus(self::bounded($outcome->detailedStatus, 64))
+            ->setStatus(self::bounded($outcome->status, 32))
+            ->setOperationtype(self::bounded($outcome->operationType, 16))
+            ->setParentuuid(self::bounded($outcome->parentUuid, 128))
             ->setAmount($outcome->amount)
             ->setCurrencyId($currencyId)
             ->setCreationdate($outcome->createdAt !== null ? \DateTime::createFromImmutable($outcome->createdAt) : null)
-            ->setErrorcode($answer['errorCode'] ?? null)
-            ->setErrormessage($answer['errorMessage'] ?? null)
-            ->setDetailederrorcode($answer['detailedErrorCode'] ?? null)
-            ->setDetailederrormessage($answer['detailedErrorMessage'] ?? null)
+            ->setErrorcode(self::bounded($answer['errorCode'] ?? null, 10))
+            ->setErrormessage(self::bounded($answer['errorMessage'] ?? null, 255))
+            ->setDetailederrorcode(self::bounded($answer['detailedErrorCode'] ?? null, 10))
+            ->setDetailederrormessage(self::bounded($answer['detailedErrorMessage'] ?? null, 255))
             ->setFinished($outcome->isFinished());
 
         // The author of a refund is kept; a notification, which has none, never erases it.
         if (null !== $admin) {
             $transaction->setAdmin($admin);
         }
+    }
+
+    /**
+     * What the platform says, cut to the column that keeps it: every transaction the platform lists
+     * is recorded, and a value too long is refused with the row on a strict server, the refund with it.
+     */
+    private static function bounded(mixed $value, int $length): ?string
+    {
+        if (!\is_scalar($value) || '' === (string) $value) {
+            return null;
+        }
+
+        return mb_substr((string) $value, 0, $length);
     }
 
     /**
