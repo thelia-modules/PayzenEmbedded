@@ -30,3 +30,12 @@ SET @statement := IF(@widen_status, 'ALTER TABLE `payzen_embedded_transaction_hi
 PREPARE widen_status_statement FROM @statement;
 EXECUTE widen_status_statement;
 DEALLOCATE PREPARE widen_status_statement;
+
+-- The transaction statuses of the platform are longer than 10 characters (PARTIALLY_PAID): the
+-- column is widened like the detailed status, and only when it is still too short.
+SET @widen_state := (SELECT COUNT(*) = 1 FROM `information_schema`.`COLUMNS` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = 'payzen_embedded_transaction_history' AND `COLUMN_NAME` = 'status' AND `CHARACTER_MAXIMUM_LENGTH` < 32);
+SET @statement := IF(@widen_state, 'ALTER TABLE `payzen_embedded_transaction_history` MODIFY `status` VARCHAR(32)', 'DO 0');
+PREPARE widen_state_statement FROM @statement;
+EXECUTE widen_state_statement;
+DEALLOCATE PREPARE widen_state_statement;
+

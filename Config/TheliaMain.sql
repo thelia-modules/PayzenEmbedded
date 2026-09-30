@@ -36,7 +36,7 @@ CREATE TABLE `payzen_embedded_transaction_history`
     `order_id` INTEGER,
     `admin_id` INTEGER,
     `uuid` VARCHAR(128),
-    `status` VARCHAR(10),
+    `status` VARCHAR(32),
     `detailedStatus` VARCHAR(64),
     `operationType` VARCHAR(16) DEFAULT 'DEBIT',
     `parentUuid` VARCHAR(128),

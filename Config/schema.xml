@@ -19,7 +19,7 @@
         <column name="admin_id" type="INTEGER" required="false" />
 
         <column name="uuid" type="VARCHAR" size="128" />
-        <column name="status" type="VARCHAR" size="10" />
+        <column name="status" type="VARCHAR" size="32" />
         <column name="detailedStatus" type="VARCHAR" size="64" />
         <!-- DEBIT for a payment, CREDIT for the refund transaction the platform creates. -->
         <column name="operationType" type="VARCHAR" size="16" defaultValue="DEBIT" />
