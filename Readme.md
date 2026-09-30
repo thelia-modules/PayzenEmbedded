@@ -105,7 +105,7 @@ Le module s'en remet à PayZen pour choisir l'opération :
 - une transaction remise en banque fait l'objet d'un remboursement, total ou partiel. Plusieurs remboursements partiels
   sont possibles, jusqu'au montant payé.
 
-La commande passe au statut « remboursée » quand il ne reste rien à rembourser, au statut « annulée » quand la
+La commande passe au statut « remboursée » quand PayZen a confirmé chaque remboursement et qu'il ne reste rien à rembourser, au statut « annulée » quand la
 transaction a été annulée, et reste inchangée après un remboursement partiel. Chaque remboursement apparaît dans
 l'historique des transactions, avec un montant négatif.
 
@@ -142,10 +142,11 @@ commande : deux boutiques sur un même contrat, ou deux environnements dans l'es
 références de commande. Une notification pour une commande payée avec un autre module est ignorée.
 
 Le marqueur change avec l'URL du site : ne pas modifier l'URL de la boutique tant que des paiements sont en cours, leurs
-notifications seraient ignorées. Le bouton « Mettre l'historique à jour » de la fiche commande relit la liste des
-transactions de la commande chez PayZen (`Order/Get`) et enregistre ce qu'elle contient, remboursements et annulations
-faits depuis le Back Office PayZen compris. La commande passe « remboursée » quand il ne reste rien à rembourser ; une
-annulation faite depuis le Back Office PayZen apparaît dans l'historique et laisse le statut de la commande à la boutique.
+notifications seraient ignorées. Le bouton « Mettre l'historique à jour » de la fiche commande, proposé avec ou sans
+historique, relit la liste des transactions de la commande chez PayZen (`Order/Get`) et enregistre ce qu'elle contient,
+remboursements et annulations faits depuis le Back Office PayZen compris. La commande passe « remboursée » quand chaque
+remboursement est confirmé et qu'il ne reste rien à rembourser ; une annulation faite depuis le Back Office PayZen
+apparaît dans l'historique et laisse le statut de la commande à la boutique.
 
 ## Installation
 
@@ -269,8 +270,8 @@ lets PayZen choose the operation:
 - a captured transaction gets a refund, in full or in part. Several partial refunds are possible, up to the amount
   paid.
 
-The order moves to the refunded status once nothing is left to refund, to the cancelled status when the transaction was
-cancelled, and stays as it is after a partial refund. Each refund shows in the transaction history, with a negative
+The order moves to the refunded status once the platform confirmed every refund and nothing is left to refund, to the
+cancelled status when the transaction was cancelled, and stays as it is after a partial or a pending refund. Each refund shows in the transaction history, with a negative
 amount.
 
 ### Transaction refund event
@@ -306,10 +307,11 @@ environments in the TEST space, produce the same order references. A notificatio
 module is ignored.
 
 The marker changes with the site URL: do not change the shop URL while payments are in progress, their notifications
-would be ignored. The "Refresh history" button of the order page reads the platform's list of the order's transactions
-(`Order/Get`) and records what it holds, refunds and cancellations made from the PayZen back-office included. The order
-moves to the refunded status once nothing is left to refund; a cancellation made from the PayZen back-office shows in
-the history and leaves the order status to the shop.
+would be ignored. The "Refresh history" button of the order page, offered with or without a history, reads the
+platform's list of the order's transactions (`Order/Get`) and records what it holds, refunds and cancellations made from
+the PayZen back-office included. The order moves to the refunded status once every refund is confirmed and nothing is
+left to refund; a cancellation made from the PayZen back-office shows in the history and leaves the order status to the
+shop.
 
 ## Installation
 
