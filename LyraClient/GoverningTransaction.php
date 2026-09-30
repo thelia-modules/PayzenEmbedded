@@ -25,11 +25,11 @@ final readonly class GoverningTransaction
     /**
      * The transaction a notification is weighed against: what the order was moved on before it.
      *
-     * An order without a transaction reference was never moved: the history may still hold its
-     * transactions, since the refresh records every transaction the platform lists, but the row of
-     * the notified transaction is then the platform's word, not a move, and a notification of that
-     * very transaction must be applied. The other rows stay: a refused attempt notified after a
-     * listed payment still meets that payment.
+     * Every move sets the order's transaction reference, so an order without one was never moved.
+     * Its history may still hold transactions, since the refresh records every transaction the
+     * platform lists, but none of them was applied. Such an order takes any payment, whatever the
+     * attempts listed after it. A refusal is weighed against a payment the platform lists, so that
+     * it never undoes it; a listed refusal or attempt still running weighs nothing.
      *
      * @param iterable<TransactionOutcome> $transactions every transaction of the order
      */
@@ -39,15 +39,20 @@ final readonly class GoverningTransaction
             return self::among($transactions, $orderTransactionRef);
         }
 
-        $others = [];
+        if ($incoming->isPaid()) {
+            return null;
+        }
+
+        $listedPayments = [];
 
         foreach ($transactions as $outcome) {
-            if ($outcome->uuid !== $incoming->uuid) {
-                $others[] = $outcome;
+            // A paid credit is set aside by among(): it gives money back, it is no payment.
+            if ($outcome->uuid !== $incoming->uuid && $outcome->isPaid()) {
+                $listedPayments[] = $outcome;
             }
         }
 
-        return self::among($others, '');
+        return self::among($listedPayments, '');
     }
 
     /**
