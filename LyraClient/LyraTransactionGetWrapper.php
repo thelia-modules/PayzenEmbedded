@@ -32,8 +32,10 @@ class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
      * lists for the order (a refund made from the PayZen back-office, a cancellation, an attempt
      * the notification never reached the shop for) is recorded as the platform holds it, which
      * the arbiter alone would refuse once the transaction is finished. A refund that leaves
-     * nothing to refund settles the order, as its notification would; a cancellation made from
-     * the PayZen back-office shows in the history and leaves the order status to the shop.
+     * nothing to refund settles the order, as its notification would. A cancellation made from
+     * the PayZen back-office cancels the order while the history holds the authorisation as
+     * running, as its notification would; one of a payment the history already holds as paid
+     * only shows in the history, and leaves the order status to the shop.
      *
      * An order without a transaction yet (its notification never came) has only the platform's
      * list to learn from. The order is held while it is read, so that a refund and a refresh

@@ -325,8 +325,9 @@ The marker changes with the site URL: do not change the shop URL while payments 
 would be ignored. The "Refresh history" button of the order page, offered with or without a history, reads the
 platform's list of the order's transactions (`Order/Get`) and records what it holds, refunds and cancellations made from
 the PayZen back-office included. The order moves to the refunded status once every refund is confirmed and nothing is
-left to refund; a cancellation made from the PayZen back-office shows in the history and leaves the order status to the
-shop.
+left to refund. A cancellation made from the PayZen back-office cancels the order while the history holds the
+authorisation as running, as its notification does; one of a payment the history already holds as paid only shows in
+the history, and leaves the order status to the shop.
 
 ## Installation
 
