@@ -112,6 +112,7 @@ return array(
     'The test password. This is the "Test Password" in the PayZen Expert Back Office' => 'The test password. This is the "Test Password" in the PayZen Expert Back Office',
     'The transaction %uuid was neither cancelled nor refunded (status %status).' => 'The transaction %uuid was neither cancelled nor refunded (status %status).',
     'The transaction could not be read from PayZen, see the logs.' => 'The transaction could not be read from PayZen, see the logs.',
+    'The order still carries no PayZen transaction: the history was recorded, but the order was not moved. Replay the notification of its payment from the PayZen back-office.' => 'The order still carries no PayZen transaction: the history was recorded, but the order was not moved. Replay the notification of its payment from the PayZen back-office.',
     'The transaction history was refreshed.' => 'The transaction history was refreshed.',
     'The transaction update could not be sent to PayZen, see the logs.' => 'The transaction update could not be sent to PayZen, see the logs.',
     'The transaction was cancelled before its capture, the order is cancelled.' => 'The transaction was cancelled before its capture, the order is cancelled.',

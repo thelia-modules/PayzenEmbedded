@@ -311,6 +311,13 @@ class OrderEditController extends BaseAdminController
 
                 $this->addFlash('success', $translator->trans('The transaction history was refreshed.', [], PayzenEmbedded::DOMAIN_NAME));
 
+                // The platform's list fills the history, but only a notification ties the order to
+                // its transaction: said as such, or the administrator reads a success on an order
+                // that is still unpaid and cannot be refunded.
+                if ('' === (string) $order->getTransactionRef()) {
+                    $this->addFlash('warning', $translator->trans('The order still carries no PayZen transaction: the history was recorded, but the order was not moved. Replay the notification of its payment from the PayZen back-office.', [], PayzenEmbedded::DOMAIN_NAME));
+                }
+
                 try {
                     $this->adminLogAppend("payzen-embedded.order-update", AccessManager::UPDATE, sprintf("Order %d refreshed", $order->getId()), (int) $order->getId());
                 } catch (\Throwable $logFailure) {
