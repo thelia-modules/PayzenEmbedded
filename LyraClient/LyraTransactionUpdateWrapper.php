@@ -37,12 +37,21 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
      *
      * @throws LyraException
      * @throws \Exception
+     * @throws TheliaProcessException when the amount cannot be read, or the platform refused
      */
     public function updateTransaction(Order $order, int|float|string|null $amount, $captureDate, $manualValidation)
     {
-        $response = $this->sendTransactionUpdateRequest($order, $amount, $captureDate, $manualValidation);
+        // The same lock as the refund, waited for rather than refused: the capture after picking
+        // is the shop's own doing, and a refusal would be read as a failed payment.
+        $lock = $this->acquireOrderLock($order, true);
 
-        return $this->processTransactionUpdateResponse($response);
+        try {
+            $response = $this->sendTransactionUpdateRequest($order, $amount, $captureDate, $manualValidation);
+
+            return $this->processTransactionUpdateResponse($response);
+        } finally {
+            $lock->release();
+        }
     }
 
     /**

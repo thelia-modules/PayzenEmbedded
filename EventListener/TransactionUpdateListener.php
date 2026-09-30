@@ -21,13 +21,21 @@ namespace PayzenEmbedded\EventListener;
 use PayzenEmbedded\Event\TransactionUpdateEvent;
 use PayzenEmbedded\LyraClient\LyraTransactionUpdateWrapper;
 use PayzenEmbedded\PayzenEmbedded;
-use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Thelia\Exception\TheliaProcessException;
 use Thelia\Model\OrderQuery;
 
-class TransactionUpdateListener implements EventSubscriberInterface
+final readonly class TransactionUpdateListener implements EventSubscriberInterface
 {
+    /**
+     * The wrapper comes from the container, with the framework's lock factory: built by hand,
+     * it would lock on this server's file system while the refund locks on the framework's store,
+     * and the two would never exclude each other.
+     */
+    public function __construct(private LyraTransactionUpdateWrapper $updateWrapper)
+    {
+    }
+
     public static function getSubscribedEvents(): array
     {
         return [
@@ -38,19 +46,13 @@ class TransactionUpdateListener implements EventSubscriberInterface
     /**
      * Perform transaction update
      *
-     * @param TransactionUpdateEvent $event
-     * @param $eventName
-     * @param EventDispatcherInterface $dispatcher
-     *
      * @throws \Lyra\Exceptions\LyraException
      */
-    public function transactionUpdate(TransactionUpdateEvent $event, $eventName, EventDispatcherInterface $dispatcher)
+    public function transactionUpdate(TransactionUpdateEvent $event): void
     {
         if (null !== $order = OrderQuery::create()->findPk($event->getOrderId())) {
             // Call the update service
-            $lyraClient = new LyraTransactionUpdateWrapper($dispatcher);
-
-            $paymentStatus = $lyraClient->updateTransaction(
+            $paymentStatus = $this->updateWrapper->updateTransaction(
                 $order,
                 $event->getAmount(),
                 $event->getExpectedCaptureDate(),

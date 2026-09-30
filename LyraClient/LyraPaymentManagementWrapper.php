@@ -45,7 +45,7 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
     /** Two platform calls of up to 45 seconds each fit in this time. */
     protected const ORDER_LOCK_TTL = 120.0;
 
-    protected LockFactory $lockFactory;
+    protected ?LockFactory $lockFactory;
 
     /**
      * @var boolean
@@ -64,7 +64,9 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
      * @param LockFactory|null $lockFactory the framework's lock factory. It spans every node of the
      *                                      shop only when LOCK_DSN names a network store (redis,
      *                                      pdo); the default semaphore or flock store holds one
-     *                                      host. Without it, a lock on this node's file system.
+     *                                      host. Without it, a lock on this node's file system,
+     *                                      built the first time an operation asks for it: the
+     *                                      notification and the payment never do.
      */
     public function __construct(EventDispatcherInterface $dispatcher, ?LockFactory $lockFactory = null)
     {
@@ -74,24 +76,37 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
 
         $this->log = Tlog::getInstance();
         $this->dispatcher = $dispatcher;
-        $this->lockFactory = $lockFactory ?? new LockFactory(new FlockStore());
+        $this->lockFactory = $lockFactory;
     }
 
     /**
      * One operation at a time on the money of an order: a refund and a refresh reading the same
-     * ledger would both pass its checks. One lock per order and per shop, since the nodes of one
-     * host may serve several shops. The caller releases it.
+     * ledger would both pass its checks, and a capture would cross a cancellation. One lock per
+     * order and per shop, since the nodes of one host may serve several shops. The caller releases it.
+     *
+     * A wrapper built without the framework's factory (the notification, the payment) locks on
+     * this node's file system: said in the log, since such a lock holds one server only.
+     *
+     * @param bool $blocking wait for the order instead of refusing it: for an operation the shop
+     *                       runs on its own, such as the capture after picking, whose refusal
+     *                       would be read as a failed payment
      *
      * @throws TheliaProcessException when another operation holds the order
      */
-    protected function acquireOrderLock(Order $order): LockInterface
+    protected function acquireOrderLock(Order $order, bool $blocking = false): LockInterface
     {
+        if (null === $this->lockFactory) {
+            $this->log->addWarning('PayZen order lock: no lock factory given, locking on this server\'s file system only.');
+
+            $this->lockFactory = new LockFactory(new FlockStore());
+        }
+
         $lock = $this->lockFactory->createLock(
             'payzen-embedded-refund-' . PayzenEmbedded::shopMarker() . '-' . $order->getId(),
             self::ORDER_LOCK_TTL
         );
 
-        if (!$lock->acquire()) {
+        if (!$lock->acquire($blocking)) {
             throw new TheliaProcessException(
                 Translator::getInstance()->trans('A refund of this order is already running.', [], PayzenEmbedded::DOMAIN_NAME)
             );
