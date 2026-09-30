@@ -97,12 +97,17 @@ class OrderEditController extends BaseAdminController
         }
 
         if ($errorMsg) {
-            $this->adminLogAppend(
-                "payzen-embedded.order-update",
-                AccessManager::UPDATE,
-                sprintf("Order %d: transaction update failed: %s", $orderId, mb_substr($errorMsg, 0, 500)),
-                $orderId
-            );
+            // The administrator is told the refusal whatever happens to the trace.
+            try {
+                $this->adminLogAppend(
+                    "payzen-embedded.order-update",
+                    AccessManager::UPDATE,
+                    sprintf("Order %d: transaction update failed: %s", $orderId, mb_substr($errorMsg, 0, 500)),
+                    $orderId
+                );
+            } catch (\Throwable $logFailure) {
+                Tlog::getInstance()->addError(sprintf('PayZen transaction update of order %d refused, admin log failed: %s', $orderId, $logFailure->getMessage()));
+            }
 
             $this->setupFormErrorContext(
                 $translator->trans("PayzenEmbedded update transaction", [], PayzenEmbedded::DOMAIN_NAME),
@@ -190,7 +195,7 @@ class OrderEditController extends BaseAdminController
                     sprintf(
                         "Order %d: %s of %s %s",
                         $order->getId(),
-                        $event->getOutcome()?->value ?? 'no outcome',
+                        $event->getOutcome()->value ?? 'no outcome',
                         RefundAmount::format($amount, $currencyCode),
                         $currencyCode
                     ),
@@ -211,13 +216,18 @@ class OrderEditController extends BaseAdminController
         }
 
         if ($errorMsg) {
-            // A failed attempt at giving money back is worth a trace too.
-            $this->adminLogAppend(
-                "payzen-embedded.order-refund",
-                AccessManager::UPDATE,
-                sprintf("Order %d: refund of %s failed: %s", $orderId, $this->typedAmount($data), mb_substr($errorMsg, 0, 500)),
-                $orderId
-            );
+            // A failed attempt at giving money back is worth a trace too, and the administrator is
+            // told the refusal whatever happens to that trace.
+            try {
+                $this->adminLogAppend(
+                    "payzen-embedded.order-refund",
+                    AccessManager::UPDATE,
+                    sprintf("Order %d: refund of %s failed: %s", $orderId, $this->typedAmount($data), mb_substr($errorMsg, 0, 500)),
+                    $orderId
+                );
+            } catch (\Throwable $logFailure) {
+                Tlog::getInstance()->addError(sprintf('PayZen refund of order %d refused, admin log failed: %s', $orderId, $logFailure->getMessage()));
+            }
 
             // The Smarty back-office reads the parser context, the Twig one reads the flashes.
             $this->setupFormErrorContext(
@@ -308,12 +318,16 @@ class OrderEditController extends BaseAdminController
         }
 
         if ($errorMsg) {
-            $this->adminLogAppend(
-                "payzen-embedded.order-update",
-                AccessManager::UPDATE,
-                sprintf("Order %d: transaction refresh failed: %s", $orderId, mb_substr($errorMsg, 0, 500)),
-                $orderId
-            );
+            try {
+                $this->adminLogAppend(
+                    "payzen-embedded.order-update",
+                    AccessManager::UPDATE,
+                    sprintf("Order %d: transaction refresh failed: %s", $orderId, mb_substr($errorMsg, 0, 500)),
+                    $orderId
+                );
+            } catch (\Throwable $logFailure) {
+                Tlog::getInstance()->addError(sprintf('PayZen transaction refresh of order %d refused, admin log failed: %s', $orderId, $logFailure->getMessage()));
+            }
 
             $this->setupFormErrorContext(
                 $translator->trans("PayzenEmbedded refresh transaction", [], PayzenEmbedded::DOMAIN_NAME),
