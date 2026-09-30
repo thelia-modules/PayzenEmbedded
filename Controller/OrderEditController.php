@@ -318,13 +318,19 @@ class OrderEditController extends BaseAdminController
             if (null !== $order = OrderQuery::create()->findPk($orderId)) {
                 // The same lock as the refund: the two never write the history at the same time.
                 $lyraClient = new LyraTransactionGetWrapper($dispatcher, $lockFactory);
-                $lyraClient->getTransaction($order);
+                $outranking = $lyraClient->getTransaction($order);
 
                 $this->addFlash('success', $translator->trans('The transaction history was refreshed.', [], PayzenEmbedded::DOMAIN_NAME));
 
                 // The platform's list fills the history, but only a notification ties the order to
                 // its transaction: said as such, or the administrator reads a success on an order
                 // that is still unpaid and cannot be refunded.
+                // The platform lists an attempt a notification would move the order onto: the refresh
+                // records it, only its notification moves the order.
+                foreach ($outranking as $attempt) {
+                    $this->addFlash('warning', $translator->trans('PayZen lists another attempt for this order, %uuid (%status), that outranks the one the order stands on: replay its notification from the PayZen back-office.', ['%uuid' => $attempt->uuid, '%status' => $attempt->status], PayzenEmbedded::DOMAIN_NAME));
+                }
+
                 if ('' === (string) $order->getTransactionRef()) {
                     $this->addFlash('warning', $translator->trans('The order still carries no PayZen transaction: the history was recorded, but the order was not moved. Replay the notification of its payment from the PayZen back-office.', [], PayzenEmbedded::DOMAIN_NAME));
                 }

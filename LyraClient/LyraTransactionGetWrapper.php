@@ -42,9 +42,12 @@ class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
      * @throws LyraException
      * @throws TheliaProcessException when the order was not paid with PayZen, is held by another
      *                                operation, or the platform refused
+     * @return list<TransactionOutcome> the attempts the platform lists that outrank the one the order
+     *                                   stands on: only their notification moves the order onto them
+     *
      * @throws \Exception
      */
-    public function getTransaction(Order $order): void
+    public function getTransaction(Order $order): array
     {
         if (PayzenEmbedded::getModuleId() !== (int) $order->getPaymentModuleId()) {
             throw new TheliaProcessException(
@@ -68,6 +71,11 @@ class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
             if ('' !== (string) $order->getTransactionRef() && $ledger->isFullyRefunded()) {
                 $this->setOrderStatus($order, OrderStatusQuery::getRefundedStatus());
             }
+
+            return GoverningTransaction::outrankingAttempts(
+                (new TransactionHistoryReader())->outcomesOf($order),
+                (string) $order->getTransactionRef()
+            );
         } finally {
             $this->releaseOrderLock($lock, $order);
         }

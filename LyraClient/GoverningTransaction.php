@@ -56,6 +56,35 @@ final readonly class GoverningTransaction
     }
 
     /**
+     * The attempts the history lists that a notification of theirs would move the order onto: the
+     * refresh records them without moving the order, and only their notification can. An order
+     * without a reference is left out: it takes any payment, and is warned about on its own.
+     *
+     * @param iterable<TransactionOutcome> $transactions every transaction of the order
+     *
+     * @return list<TransactionOutcome>
+     */
+    public static function outrankingAttempts(iterable $transactions, string $orderTransactionRef): array
+    {
+        if ('' === $orderTransactionRef) {
+            return [];
+        }
+
+        $rows = \is_array($transactions) ? array_values($transactions) : iterator_to_array($transactions, false);
+        $applied = self::among($rows, $orderTransactionRef);
+        $arbiter = new NotificationArbiter();
+        $outranking = [];
+
+        foreach ($rows as $row) {
+            if (!$row->isCredit() && $row->uuid !== $applied?->uuid && $arbiter->accepts($row, $applied)) {
+                $outranking[] = $row;
+            }
+        }
+
+        return $outranking;
+    }
+
+    /**
      * @param iterable<TransactionOutcome> $transactions every transaction of the order
      * @param string                       $orderTransactionRef the debit the order stands on, or '' when unknown
      */
