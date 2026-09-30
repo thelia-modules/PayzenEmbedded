@@ -67,4 +67,19 @@ final readonly class TransactionHistoryReader
             $this->outcomesOf($order)
         ), static fn (string $uuid): bool => '' !== $uuid));
     }
+
+    /**
+     * What the platform holds for the debit the order stands on, in the smallest unit: null when
+     * the history does not know it.
+     */
+    public function heldAmountOf(Order $order): ?int
+    {
+        foreach ($this->outcomesOf($order) as $outcome) {
+            if (!$outcome->isCredit() && '' !== $outcome->uuid && $outcome->uuid === (string) $order->getTransactionRef()) {
+                return $outcome->amount;
+            }
+        }
+
+        return null;
+    }
 }

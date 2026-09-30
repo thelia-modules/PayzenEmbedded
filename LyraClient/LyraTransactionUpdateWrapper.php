@@ -95,6 +95,13 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
         // the authorisation to expire unpaid.
         $minorAmount = null !== $amount ? RefundAmount::fromAmount($amount, $currencyCode) : null;
 
+        // A total the shop computed never goes above what the platform holds for the order: an
+        // authorisation taken before 3.4.0 truncated a legacy total to the cent below, where the
+        // total is now rounded, and a capture one cent above the authorisation would be refused.
+        if (null !== $minorAmount && !\is_string($amount)) {
+            $minorAmount = RefundAmount::cappedTo($minorAmount, (new TransactionHistoryReader())->heldAmountOf($order));
+        }
+
         if (null === $minorAmount) {
             throw new TheliaProcessException(Translator::getInstance()->trans(
                 'The amount should be a positive number with at most %decimals decimals, such as %example.',

@@ -150,4 +150,12 @@ final class RefundAmountTest extends TestCase
     {
         self::assertSame($fits, RefundAmount::fitsUnder($typed, $total, $currency));
     }
+
+    public function testAComputedAmountNeverGoesAboveWhatThePlatformHolds(): void
+    {
+        self::assertSame(1234, RefundAmount::cappedTo(1235, 1234), 'a legacy total truncated at authorisation, rounded at capture');
+        self::assertSame(1000, RefundAmount::cappedTo(1000, 1234), 'a total lowered after picking');
+        self::assertSame(1235, RefundAmount::cappedTo(1235, null), 'the history does not know the transaction');
+        self::assertSame(1235, RefundAmount::cappedTo(1235, 0));
+    }
 }

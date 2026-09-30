@@ -92,6 +92,15 @@ final readonly class RefundAmount
         return null !== $amount && $amount <= self::fromMajor($total, $currencyCode);
     }
 
+    /**
+     * An amount the shop computed, kept under what the platform holds for the transaction when the
+     * history knows it (null or 0 when it does not).
+     */
+    public static function cappedTo(int $amount, ?int $held): int
+    {
+        return null !== $held && $held > 0 ? min($amount, $held) : $amount;
+    }
+
     public static function format(int $amount, string $currencyCode): string
     {
         $decimals = self::decimals($currencyCode);
