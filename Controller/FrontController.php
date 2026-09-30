@@ -72,10 +72,11 @@ class FrontController extends BasePaymentModuleController
             // The answer the shopper's browser receives is signed with the public HMAC key: it is
             // the shopper's to hold, and must not be taken here for the platform's word. An empty
             // password would sign with an empty key, which anyone can do.
-            $signedByThePlatform = 'password' === $this->getRequest()->request->get('kr-hash-key')
-                && '' !== (string) $lyraClient->getPassword();
+            $password = (string) $lyraClient->getPassword();
+            $signedByThePlatform = 'password' === $this->getRequest()->request->get('kr-hash-key') && '' !== $password;
 
-            if (!$signedByThePlatform || !$lyraClient->checkHash()) {
+            // The key is the server's own, never chosen again from the request.
+            if (!$signedByThePlatform || !$lyraClient->checkHash($password)) {
                 $this->getLog()->addError($translator->trans("Invalid signature received, aborting.", [], PayzenEmbedded::DOMAIN_NAME));
                 throw new \Exception($translator->trans("Invalid signature received, aborting.", [], PayzenEmbedded::DOMAIN_NAME));
             }
@@ -98,7 +99,8 @@ class FrontController extends BasePaymentModuleController
                 default:
                     $gatewayResponseCode = 'UNKNOWN';
             }
-        } catch (\Exception $ex) {
+        } catch (\Throwable $ex) {
+            // Anything the notification makes fail, a malformed answer included, is answered KO.
             $this->getLog()->addError($translator->trans("Failed to process request, aborting. Error is " .$ex->getMessage(), [], PayzenEmbedded::DOMAIN_NAME));
         }
 
