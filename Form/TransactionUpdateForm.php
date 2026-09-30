@@ -69,7 +69,7 @@ class TransactionUpdateForm extends BaseForm
                     'required' => true,
                     'label' => $this->trans('New order total amount'),
                     'label_attr' => [
-                        'help' => $this->trans('This amount should be greater or equal to the current transaction amount')
+                        'help' => $this->trans('This amount can only be lowered: it should be less or equal to the current transaction amount')
                     ]
                 ]
             )
@@ -115,7 +115,14 @@ class TransactionUpdateForm extends BaseForm
             // In the smallest unit, as the platform counts: the field is filled with the amount the
             // platform holds, the order total rounded to the cent, which a legacy total with four
             // decimals would refuse compared as floats.
-            if (!RefundAmount::fitsUnder((string) $value, (string) $order->getTotalAmount(), strtoupper($order->getCurrency()->getCode()))) {
+            $currencyCode = strtoupper($order->getCurrency()->getCode());
+
+            if (null === RefundAmount::fromInput((string) $value, $currencyCode)) {
+                $context->addViolation($this->trans('The amount should be a positive number with at most %decimals decimals, such as %example.', [
+                    '%decimals' => RefundAmount::decimals($currencyCode),
+                    '%example' => RefundAmount::format(1250, $currencyCode),
+                ]));
+            } elseif (!RefundAmount::fitsUnder((string) $value, (string) $order->getTotalAmount(), $currencyCode)) {
                 $context->addViolation(
                     $this->trans("The amount should be less or equal to the order current amount.")
                 );

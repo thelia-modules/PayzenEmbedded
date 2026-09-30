@@ -32,7 +32,7 @@
                     <hr>
                     <h3 class="h6">{{ 'Update PayZen transaction'|trans({}, _d) }}</h3>
                     <div class="alert alert-info">
-                        {{ 'You can update here the PayZen transaction related to this order. You can change the transaction amount (it should be greater or eaqual to the current amount), define the capture date (the date at which the payment is done), and the validation mode, to change manual validation to automatic validation of the transaction'|trans({}, _d) }}
+                        {{ 'You can update here the PayZen transaction related to this order. You can change the transaction amount (it can only be lowered), define the capture date (the date at which the payment is done), and the validation mode, to change manual validation to automatic validation of the transaction'|trans({}, _d) }}
                     </div>
 
                     {{ form_start(update_form, {'action': path('payzen_embedded_order_edit_update_transaction', {'orderId': order_id}), 'method': 'post'}) }}

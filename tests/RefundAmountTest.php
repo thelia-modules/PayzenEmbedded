@@ -128,7 +128,7 @@ final class RefundAmountTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{string, float|string, bool}>
+     * @return iterable<string, array{0: string, 1: float|string, 2: bool, 3?: string}>
      */
     public static function ceilings(): iterable
     {
@@ -139,11 +139,15 @@ final class RefundAmountTest extends TestCase
         yield 'the exact total' => ['12.30', '12.30', true];
         yield 'not an amount' => ['12abc', 12.3456, false];
         yield 'nothing' => ['0', 12.3456, false];
+        yield 'a currency without decimals, its total rounded' => ['1000', 1000.4, true, 'JPY'];
+        yield 'a currency without decimals refuses a decimal point' => ['999.5', 1000.4, false, 'JPY'];
+        yield 'a currency with three decimals' => ['12.346', 12.3456, true, 'KWD'];
+        yield 'a currency with three decimals, one unit above' => ['12.347', 12.3456, false, 'KWD'];
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('ceilings')]
-    public function testATypedAmountFitsUnderTheTotalInTheSmallestUnit(string $typed, float|string $total, bool $fits): void
+    public function testATypedAmountFitsUnderTheTotalInTheSmallestUnit(string $typed, float|string $total, bool $fits, string $currency = 'EUR'): void
     {
-        self::assertSame($fits, RefundAmount::fitsUnder($typed, $total, 'EUR'));
+        self::assertSame($fits, RefundAmount::fitsUnder($typed, $total, $currency));
     }
 }
