@@ -57,6 +57,12 @@ DEALLOCATE PREPARE add_admin_statement;
 -- The replacement above is two statements: a run stopped between them leaves no constraint on
 -- the administrator, which the guard above cannot see. It is created here whenever none exists.
 SET @admin_missing := (SELECT COUNT(*) = 0 FROM `information_schema`.`KEY_COLUMN_USAGE` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = 'payzen_embedded_transaction_history' AND `COLUMN_NAME` = 'admin_id' AND `REFERENCED_TABLE_NAME` = 'admin');
+-- An administrator deleted while no constraint held leaves a row the constraint would refuse: the
+-- row keeps the refund without its author, as the constraint itself would have done.
+SET @statement := IF(@admin_missing, 'UPDATE `payzen_embedded_transaction_history` SET `admin_id` = NULL WHERE `admin_id` IS NOT NULL AND `admin_id` NOT IN (SELECT `id` FROM `admin`)', 'DO 0');
+PREPARE orphan_admin_statement FROM @statement;
+EXECUTE orphan_admin_statement;
+DEALLOCATE PREPARE orphan_admin_statement;
 SET @statement := IF(@admin_missing, 'ALTER TABLE `payzen_embedded_transaction_history` ADD CONSTRAINT `payzen_embedded_transaction_history_fk_admin` FOREIGN KEY (`admin_id`) REFERENCES `admin` (`id`) ON UPDATE RESTRICT ON DELETE SET NULL', 'DO 0');
 PREPARE restore_admin_statement FROM @statement;
 EXECUTE restore_admin_statement;
