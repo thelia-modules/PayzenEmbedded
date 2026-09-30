@@ -39,25 +39,16 @@ final readonly class TransactionHistoryReader
         return $outcomes;
     }
 
-    /**
-     * One history row, read the way the platform describes a transaction: rows written before
-     * 3.4.0 carry no operation type and are debits.
-     */
     public function outcomeOf(PayzenEmbeddedTransactionHistory $transaction): TransactionOutcome
     {
-        $operationType = strtoupper(trim((string) $transaction->getOperationtype()));
-        $parentUuid = trim((string) $transaction->getParentuuid());
-
-        return new TransactionOutcome(
-            (string) $transaction->getUuid(),
-            strtoupper((string) $transaction->getStatus()),
-            $transaction->getCreationdate() !== null
-                ? \DateTimeImmutable::createFromInterface($transaction->getCreationdate())
-                : null,
-            '' === $operationType ? TransactionOutcome::OPERATION_DEBIT : $operationType,
-            (int) $transaction->getAmount(),
-            strtoupper(trim((string) $transaction->getDetailedstatus())),
-            '' !== $parentUuid ? $parentUuid : null
+        return TransactionOutcome::fromHistoryRow(
+            $transaction->getUuid(),
+            $transaction->getStatus(),
+            $transaction->getCreationdate(),
+            $transaction->getOperationtype(),
+            $transaction->getAmount(),
+            $transaction->getDetailedstatus(),
+            $transaction->getParentuuid()
         );
     }
 

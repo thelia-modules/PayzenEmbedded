@@ -41,6 +41,45 @@ final class TransactionOutcomeTest extends TestCase
         self::assertTrue($outcome->isPaid());
     }
 
+    public function testAHistoryRowWrittenBeforeTheOperationTypeExistedIsADebitWithoutAParent(): void
+    {
+        foreach ([null, '', '  '] as $legacyOperationType) {
+            $outcome = TransactionOutcome::fromHistoryRow('t1', 'paid', null, $legacyOperationType, '1250', ' captured ', $legacyOperationType);
+
+            self::assertSame(TransactionOutcome::OPERATION_DEBIT, $outcome->operationType);
+            self::assertFalse($outcome->isCredit());
+            self::assertNull($outcome->parentUuid);
+            self::assertSame('PAID', $outcome->status);
+            self::assertSame('CAPTURED', $outcome->detailedStatus);
+            self::assertSame(1250, $outcome->amount);
+            self::assertTrue($outcome->isCaptured());
+        }
+    }
+
+    public function testAHistoryRowOfARefundIsACreditOfItsDebit(): void
+    {
+        $recordedAt = new \DateTime('2026-09-30 10:00:00');
+        $outcome = TransactionOutcome::fromHistoryRow('r1', 'RUNNING', $recordedAt, 'credit', 300, '', 't1');
+
+        self::assertTrue($outcome->isCredit());
+        self::assertTrue($outcome->isRunning());
+        self::assertSame('t1', $outcome->parentUuid);
+        self::assertSame(300, $outcome->amount);
+        self::assertInstanceOf(\DateTimeImmutable::class, $outcome->createdAt);
+        self::assertSame('2026-09-30 10:00:00', $outcome->createdAt->format('Y-m-d H:i:s'));
+    }
+
+    public function testAHistoryRowWithNothingRecordedIsAnEmptyDebit(): void
+    {
+        $outcome = TransactionOutcome::fromHistoryRow(null, null, null, null, null, null, null);
+
+        self::assertSame('', $outcome->uuid);
+        self::assertSame('', $outcome->status);
+        self::assertNull($outcome->createdAt);
+        self::assertSame(0, $outcome->amount);
+        self::assertFalse($outcome->isFinished());
+    }
+
     public function testTheOperationTypeIsReadWhateverItsCase(): void
     {
         self::assertTrue(TransactionOutcome::fromAnswer(['uuid' => 'r1', 'status' => 'PAID', 'operationType' => 'credit'])->isCredit());
