@@ -28,7 +28,7 @@
                     </table>
                 </div>
 
-                {% if not finished and can_act|default(true) %}
+                {% if not finished and can_act %}
                     <hr>
                     <h3 class="h6">{{ 'Update PayZen transaction'|trans({}, _d) }}</h3>
                     <div class="alert alert-info">
@@ -79,7 +79,7 @@
                     {{ form_end(update_form) }}
                 {% endif %}
 
-                {% if can_give_back and can_act|default(true) %}
+                {% if can_give_back and can_act %}
                     <hr>
                     <h3 class="h6">{{ 'Cancel or refund the payment'|trans({}, _d) }}</h3>
                     <div class="alert alert-info">
@@ -136,7 +136,7 @@
                 <div class="alert alert-info mb-0">{{ 'There is no history for this transaction.'|trans({}, _d) }}</div>
             {% endif %}
 
-            {% if can_act|default(true) %}
+            {% if can_act %}
                 {{ form_start(get_form, {'action': path('payzen_embedded_order_edit_refresh_transaction', {'orderId': order_id}), 'method': 'post'}) }}
                     {{ form_errors(get_form) }}
                     <input type="hidden" name="{{ get_form.order_id.vars.full_name }}" value="{{ order_id }}">
