@@ -121,7 +121,7 @@ return array(
     'The transaction was cancelled before its capture, the order is cancelled.' => 'The transaction was cancelled before its capture, the order is cancelled.',
     'The transaction was not updated: nothing handled the request, or PayZen answered an unexpected status.' => 'The transaction was not updated: nothing handled the request, or PayZen answered an unexpected status.',
     'The transaction was updated.' => 'The transaction was updated.',
-    'This amount should be greater or equal to the current transaction amount' => 'This amount should be greater or equal to the current transaction amount',
+    'This amount should be greater or equal to the current transaction amount' => 'This amount should be less or equal to the current transaction amount',
     'This information is passed with the payment request, and will be available in your PayZen back-office' => 'This information is passed with the payment request, and will be available in your PayZen back-office',
     'This is the URL of the web service. You should change this value if you\'re usin a specific Lyra implementation instead of PayZen' => 'This is the URL of the web service. You should change this value if you\'re usin a specific Lyra implementation instead of PayZen',
     'This is your shop identifier. You received this information when you subscribed to PayZen' => 'This is your shop identifier. You received this information when you subscribed to PayZen',

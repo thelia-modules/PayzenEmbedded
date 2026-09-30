@@ -12,6 +12,7 @@
 
 namespace PayzenEmbedded\Form;
 
+use PayzenEmbedded\LyraClient\RefundAmount;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
@@ -111,7 +112,10 @@ class TransactionUpdateForm extends BaseForm
         $orderId = \intval($context->getRoot()->getData()['order_id']);
 
         if (null !== $order = OrderQuery::create()->findPk($orderId)) {
-            if ((float) str_replace(',', '.', (string) $value) > $order->getTotalAmount()) {
+            // In the smallest unit, as the platform counts: the field is filled with the amount the
+            // platform holds, the order total rounded to the cent, which a legacy total with four
+            // decimals would refuse compared as floats.
+            if (!RefundAmount::fitsUnder((string) $value, (string) $order->getTotalAmount(), strtoupper($order->getCurrency()->getCode()))) {
                 $context->addViolation(
                     $this->trans("The amount should be less or equal to the order current amount.")
                 );

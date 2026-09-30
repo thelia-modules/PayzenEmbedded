@@ -126,4 +126,24 @@ final class RefundAmountTest extends TestCase
         self::assertSame(1000, RefundAmount::fromMajor(1000.0, 'JPY'));
         self::assertSame(1235, RefundAmount::fromMajor(12.345, 'EUR'));
     }
+
+    /**
+     * @return iterable<string, array{string, float|string, bool}>
+     */
+    public static function ceilings(): iterable
+    {
+        yield 'the amount the platform holds for a legacy total' => ['12.35', 12.3456, true];
+        yield 'the same, typed with a comma' => ['12,35', '12.3456', true];
+        yield 'one cent above it' => ['12.36', 12.3456, false];
+        yield 'below the total' => ['5', 12.3456, true];
+        yield 'the exact total' => ['12.30', '12.30', true];
+        yield 'not an amount' => ['12abc', 12.3456, false];
+        yield 'nothing' => ['0', 12.3456, false];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('ceilings')]
+    public function testATypedAmountFitsUnderTheTotalInTheSmallestUnit(string $typed, float|string $total, bool $fits): void
+    {
+        self::assertSame($fits, RefundAmount::fitsUnder($typed, $total, 'EUR'));
+    }
 }

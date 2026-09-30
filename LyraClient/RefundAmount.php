@@ -80,6 +80,18 @@ final readonly class RefundAmount
         return $minorUnits > 0 ? $minorUnits : null;
     }
 
+    /**
+     * Whether an amount typed by an administrator stays under a total the shop computed, both in
+     * the smallest unit: the total is rounded to it as it is sent to the platform, so a legacy total
+     * with four decimals accepts the amount the platform holds for it.
+     */
+    public static function fitsUnder(string $typed, float|string $total, string $currencyCode): bool
+    {
+        $amount = self::fromInput($typed, $currencyCode);
+
+        return null !== $amount && $amount <= self::fromMajor($total, $currencyCode);
+    }
+
     public static function format(int $amount, string $currencyCode): string
     {
         $decimals = self::decimals($currencyCode);
