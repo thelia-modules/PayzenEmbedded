@@ -41,7 +41,8 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
      * @param int      $amount                 in the smallest unit of the order currency
      * @param int|null $expectedRefundedAmount what the caller saw as refunded so far, in the same unit: the
      *                                         refund is refused when the platform knows another figure, so
-     *                                         that a refund the caller did not see is never asked for again
+     *                                         that a refund the caller did not see is never asked for again.
+     *                                         Null skips that check, the lock and the balance alone remain.
      *
      * @throws LyraException                   when the platform cannot list the order's transactions
      * @throws TheliaProcessException          when the amount cannot be refunded, or the platform refused

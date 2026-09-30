@@ -31,7 +31,10 @@ class TransactionRefundEvent extends ActionEvent
      * @param string|null $comment written on the refund in the PayZen back-office
      * @param int|null    $adminId the administrator asking for the refund, kept on the history row
      * @param int|null    $expectedRefundedAmount what the caller saw as refunded so far, in the smallest unit:
-     *                                            the refund is refused when the platform knows another figure
+     *                                            the refund is refused when the platform knows another figure.
+     *                                            Null skips that check: the caller then relies on the lock
+     *                                            and on the balance alone, and a refund it did not see may
+     *                                            be asked for again. Give it whenever a figure was shown.
      */
     public function __construct(
         protected int $orderId,

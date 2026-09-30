@@ -84,9 +84,9 @@ class TransactionRefundForm extends BaseForm
                 TextType::class,
                 [
                     'constraints' => [
+                        new NotBlank(),
                         new Regex(['pattern' => '/^\\d{1,15}$/']),
                     ],
-                    'required' => false,
                     'label' => $this->trans('Refunded so far'),
                 ]
             );
