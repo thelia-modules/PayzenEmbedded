@@ -87,6 +87,27 @@ final class NotificationArbiterTest extends TestCase
         self::assertFalse($this->arbiter->accepts($later, $paid));
     }
 
+    public function testAPaymentOutranksALaterRefusalAppliedFirst(): void
+    {
+        $laterRefusal = $this->transaction('t2', 'UNPAID', '2026-09-21 10:05:00');
+        $earlierPayment = $this->transaction('t1', 'PAID', '2026-09-21 10:00:00');
+
+        self::assertTrue($this->arbiter->accepts($earlierPayment, $laterRefusal));
+    }
+
+    public function testAPaymentOutranksALaterAttemptStillRunning(): void
+    {
+        $laterRunning = $this->transaction('t2', 'RUNNING', '2026-09-21 10:05:00');
+        $earlierPayment = $this->transaction('t1', 'PAID', '2026-09-21 10:00:00');
+
+        self::assertTrue($this->arbiter->accepts($earlierPayment, $laterRunning));
+    }
+
+    public function testAnUndatedPaymentOutranksADatedRefusal(): void
+    {
+        self::assertTrue($this->arbiter->accepts(new TransactionOutcome('t1', 'PAID', null), $this->transaction('t2', 'UNPAID', '2026-09-21 10:05:00')));
+    }
+
     public function testAnOlderAttemptNeverOverridesANewerOne(): void
     {
         $newer = $this->transaction('t2', 'RUNNING', '2026-09-21 10:05:00');

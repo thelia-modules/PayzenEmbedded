@@ -53,6 +53,13 @@ final readonly class NotificationArbiter
             return false;
         }
 
+        // Money the platform took outranks an order that holds none, whatever the order the
+        // attempts came in: a refusal notified first must not leave the payment of an earlier
+        // attempt on a cancelled order.
+        if ($incoming->isPaid() && !$applied->isPaid()) {
+            return true;
+        }
+
         // Two attempts, and the platform dates both: the later attempt speaks for the order. An
         // undated transaction never outranks a dated one, in either direction, because nothing
         // places it in the sequence.
