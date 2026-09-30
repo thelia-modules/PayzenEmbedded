@@ -87,11 +87,12 @@ class TransactionHistoryLoop extends BaseLoop implements PropelSearchLoopInterfa
                 case "transaction_ref_reverse":
                     $search->orderByUuid(Criteria::DESC);
                     break;
+                // The refresh records several transactions in the same second: the id keeps their order.
                 case "created":
-                    $search->addAscendingOrderByColumn('created_at');
+                    $search->addAscendingOrderByColumn('created_at')->orderById(Criteria::ASC);
                     break;
                 case "created_reverse":
-                    $search->addDescendingOrderByColumn('created_at');
+                    $search->addDescendingOrderByColumn('created_at')->orderById(Criteria::DESC);
                     break;
                 case "updated":
                     $search->addAscendingOrderByColumn('updated_at');

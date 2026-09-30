@@ -202,7 +202,7 @@ class BackHookManager extends BaseHook
         $search
             ->orderByOrderId(Criteria::ASC)
             ->addAscendingOrderByColumn('created_at')
-            ->orderByUuid(Criteria::ASC);
+            ->orderById(Criteria::ASC);
 
         $rows = [];
         $orderRefs = [];
