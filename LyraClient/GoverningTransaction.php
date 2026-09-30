@@ -23,6 +23,34 @@ namespace PayzenEmbedded\LyraClient;
 final readonly class GoverningTransaction
 {
     /**
+     * The transaction a notification is weighed against: what the order was moved on before it.
+     *
+     * An order without a transaction reference was never moved: the history may still hold its
+     * transactions, since the refresh records every transaction the platform lists, but the row of
+     * the notified transaction is then the platform's word, not a move, and a notification of that
+     * very transaction must be applied. The other rows stay: a refused attempt notified after a
+     * listed payment still meets that payment.
+     *
+     * @param iterable<TransactionOutcome> $transactions every transaction of the order
+     */
+    public static function appliedBefore(iterable $transactions, string $orderTransactionRef, TransactionOutcome $incoming): ?TransactionOutcome
+    {
+        if ('' !== $orderTransactionRef) {
+            return self::among($transactions, $orderTransactionRef);
+        }
+
+        $others = [];
+
+        foreach ($transactions as $outcome) {
+            if ($outcome->uuid !== $incoming->uuid) {
+                $others[] = $outcome;
+            }
+        }
+
+        return self::among($others, '');
+    }
+
+    /**
      * @param iterable<TransactionOutcome> $transactions every transaction of the order
      * @param string                       $orderTransactionRef the debit the order stands on, or '' when unknown
      */

@@ -320,7 +320,13 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             return $this->paymentStatusOf($incoming);
         }
 
-        if (!(new NotificationArbiter())->accepts($incoming, $this->governingTransaction($order))) {
+        $applied = GoverningTransaction::appliedBefore(
+            (new TransactionHistoryReader())->outcomesOf($order),
+            (string) $order->getTransactionRef(),
+            $incoming
+        );
+
+        if (!(new NotificationArbiter())->accepts($incoming, $applied)) {
             $this->log->addInfo(
                 Translator::getInstance()->trans(
                     "Order %ref: transaction %uuid (%status) is not the one the order stands on, the order is left as it is.",
