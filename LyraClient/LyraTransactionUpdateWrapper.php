@@ -45,11 +45,11 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
         // at once: the capture after picking is the shop's own doing, and a refusal would be read as a
         // failed payment.
         $lock = $this->acquireOrderLock($order, true);
-        // What the order stands on is read again under the lock: a notification may have moved it
-        // while the operation waited.
-        $order->reload();
-
         try {
+            // What the order stands on is read again under the lock: a notification may have moved it
+            // while the operation waited. Inside the try: the lock is released whatever happens.
+            $order->reload();
+
             $response = $this->sendTransactionUpdateRequest($order, $amount, $captureDate, $manualValidation);
 
             return $this->processTransactionUpdateResponse($response);

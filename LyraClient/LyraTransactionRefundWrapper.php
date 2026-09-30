@@ -67,11 +67,11 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
         }
 
         $lock = $this->acquireOrderLock($order);
-        // What the order stands on is read again under the lock: a notification may have moved it
-        // while the operation waited.
-        $order->reload();
-
         try {
+            // What the order stands on is read again under the lock: a notification may have moved it
+            // while the operation waited. Inside the try: the lock is released whatever happens.
+            $order->reload();
+
             // The history may be behind the platform: a refund whose answer was lost to a timeout,
             // or one made from the PayZen back-office. The platform's own list of the order's
             // transactions is recorded first, so the ledger counts what was really given back.

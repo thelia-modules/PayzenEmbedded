@@ -11,6 +11,7 @@
 namespace PayzenEmbedded\LyraClient;
 
 use Lyra\Exceptions\LyraException;
+use Propel\Runtime\Propel;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerToken;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
 use PayzenEmbedded\Model\Map\PayzenEmbeddedTransactionHistoryTableMap;
@@ -28,6 +29,7 @@ use Thelia\Exception\TheliaProcessException;
 use Thelia\Log\Tlog;
 use Thelia\Model\ConfigQuery;
 use Thelia\Model\Order;
+use Thelia\Model\Map\OrderTableMap;
 use Thelia\Model\OrderQuery;
 use Thelia\Model\OrderStatus;
 use Thelia\Model\OrderStatusQuery;
@@ -405,21 +407,21 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         // A notification is applied in full or not at all: a history that says the transaction is
         // applied while the order did not move (a status change refused for want of stock, say)
         // would have the notification replayed left out, see undoUnappliedNotification().
-        $rowBefore = PayzenEmbeddedTransactionHistoryQuery::create()
-            ->filterByOrderId($order->getId())
-            ->filterByUuid(mb_substr((string) $incoming->uuid, 0, 128))
-            ->findOne()
-            ?->toArray();
+        $rowBefore = $this->storedHistoryRow($order, $incoming);
         $refBefore = (string) $order->getTransactionRef();
-        $statusBefore = (int) $order->getStatusId();
+        $versionBefore = $this->storedOrderVersion($order);
 
         // Update transaction history
         $this->updateTransactionHistory($answer, $order);
 
+        $rowWritten = $this->storedHistoryRow($order, $incoming);
+        // Until the reference is set, the order is as it was before the notification.
+        $versionAfterRef = $versionBefore;
+
         try {
-            $status = $this->applyTransaction($order, $orderStatus, $transactionUuid);
+            $status = $this->applyTransaction($order, $orderStatus, $transactionUuid, $versionAfterRef);
         } catch (\Throwable $failure) {
-            $this->undoUnappliedNotification($order, $incoming, $rowBefore, $refBefore, $statusBefore, $failure);
+            $this->undoUnappliedNotification($order, $incoming, (string) $transactionUuid, $rowBefore, $rowWritten, $refBefore, $versionAfterRef, $failure);
 
             throw $failure;
         }
@@ -443,9 +445,11 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
     /**
      * Point the order at the transaction and move it as the transaction says.
      *
+     * @param-out int $versionAfterRef the version of the order once its reference is set
+     *
      * @return int one of the PAYMENT_STATUS_* constants
      */
-    private function applyTransaction(Order $order, mixed $orderStatus, mixed $transactionUuid): int
+    private function applyTransaction(Order $order, mixed $orderStatus, mixed $transactionUuid, int &$versionAfterRef): int
     {
         $status = self::PAYMENT_STATUS_NOT_PAID;
 
@@ -453,6 +457,11 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         $event = new OrderEvent($order);
         $event->setTransactionRef($transactionUuid);
         $this->dispatcher->dispatch($event, TheliaEvents::ORDER_UPDATE_TRANSACTION_REF);
+
+        // Every save of the order from here on is a move, whatever status it ends on: a host module
+        // may bring it back to the status it had (the capture after picking sets it paid, then back
+        // to its own status), and a failure after that is no failure to move it.
+        $versionAfterRef = $this->storedOrderVersion($order);
 
         if ($orderStatus === 'PAID') {
             $this->log->addInfo(Translator::getInstance()->trans("Order %ref payment was successful.", ['%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
@@ -492,37 +501,66 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
     /**
      * Put the history and the order reference back as they were when the order did not move: the
      * notification replayed, or the history refresh, then applies the transaction again instead of
-     * finding it applied. An order that moved keeps everything, the failure came after its move.
+     * finding it applied. The order is read under a row lock, and nothing is undone when it was saved
+     * since the reference was set (it moved, whatever status it ends on), when it stands on another
+     * transaction, or when the history row is no longer the one this notification wrote (another
+     * notification, or a refresh, wrote it meanwhile): what they wrote stands.
      *
-     * @param array<string, mixed>|null $rowBefore the history row of the transaction before the notification, null if there was none
+     * @param array<string, mixed>|null $rowBefore  the history row of the transaction before the notification, null if there was none
+     * @param array<string, mixed>|null $rowWritten the row as the notification wrote it
      */
-    private function undoUnappliedNotification(Order $order, TransactionOutcome $incoming, ?array $rowBefore, string $refBefore, int $statusBefore, \Throwable $failure): void
-    {
-        try {
-            $storedStatus = OrderQuery::create()->filterById($order->getId())->select('StatusId')->findOne();
+    private function undoUnappliedNotification(
+        Order $order,
+        TransactionOutcome $incoming,
+        string $transactionRef,
+        ?array $rowBefore,
+        ?array $rowWritten,
+        string $refBefore,
+        int $versionUnmoved,
+        \Throwable $failure,
+    ): void {
+        $connection = Propel::getWriteConnection(OrderTableMap::DATABASE_NAME);
+        $connection->beginTransaction();
 
-            if ((int) $storedStatus !== $statusBefore) {
+        try {
+            // select() of several columns hands back an array of them, not an order.
+            /** @var array<string, mixed>|null $stored */
+            $stored = OrderQuery::create()
+                ->filterById($order->getId())
+                ->select(['Version', 'TransactionRef'])
+                ->lockForUpdate()
+                ->findOne($connection);
+
+            if (!\is_array($stored) || (int) $stored['Version'] !== $versionUnmoved || (string) $stored['TransactionRef'] !== $transactionRef) {
+                $connection->commit();
+
                 return;
             }
 
-            $row = PayzenEmbeddedTransactionHistoryQuery::create()
+            PayzenEmbeddedTransactionHistoryTableMap::clearInstancePool();
+            $row = null === $rowWritten ? null : PayzenEmbeddedTransactionHistoryQuery::create()
                 ->filterByOrderId($order->getId())
                 ->filterByUuid(mb_substr((string) $incoming->uuid, 0, 128))
-                ->findOne();
+                ->filterByStatus($rowWritten['Status'])
+                ->filterByUpdatedAt($rowWritten['UpdatedAt'])
+                ->lockForUpdate()
+                ->findOne($connection);
 
             if (null !== $row && null === $rowBefore) {
-                $row->delete();
+                $row->delete($connection);
             } elseif (null !== $row) {
                 $row->fromArray($rowBefore);
-                $row->keepUpdateDateUnchanged()->save();
+                $row->keepUpdateDateUnchanged()->save($connection);
             }
 
-            // What the failed move left in memory is not the order: it is read again before the reference is put back.
+            if ($transactionRef !== $refBefore) {
+                OrderQuery::create()->filterById($order->getId())->update(['TransactionRef' => '' === $refBefore ? null : $refBefore], $connection);
+            }
+
+            $connection->commit();
+
+            // What the failed move left in memory is not the order.
             $order->reload();
-
-            if ((string) $order->getTransactionRef() !== $refBefore) {
-                $order->setTransactionRef('' === $refBefore ? null : $refBefore)->save();
-            }
 
             $this->log->addError(sprintf(
                 'Order %s: transaction %s (%s) could not be applied (%s), its record is undone so that a replayed notification or a history refresh applies it again.',
@@ -532,6 +570,8 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
                 $failure::class
             ));
         } catch (\Throwable $undoFailure) {
+            $connection->rollBack();
+
             $this->log->addError(sprintf(
                 'Order %s: transaction %s could not be applied (%s) nor its record undone (%s): check the order against the PayZen back-office.',
                 $order->getRef(),
@@ -540,6 +580,28 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
                 $undoFailure::class
             ));
         }
+    }
+
+    /**
+     * The history row of a transaction as the database holds it, not as the ORM remembers it.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function storedHistoryRow(Order $order, TransactionOutcome $transaction): ?array
+    {
+        PayzenEmbeddedTransactionHistoryTableMap::clearInstancePool();
+
+        return PayzenEmbeddedTransactionHistoryQuery::create()
+            ->filterByOrderId($order->getId())
+            ->filterByUuid(mb_substr((string) $transaction->uuid, 0, 128))
+            ->findOne()
+            ?->toArray();
+    }
+
+    /** The version of the order as the database holds it: every save of the order adds one. */
+    private function storedOrderVersion(Order $order): int
+    {
+        return (int) OrderQuery::create()->filterById($order->getId())->select('Version')->findOne();
     }
 
     /**

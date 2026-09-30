@@ -11,6 +11,7 @@
 namespace PayzenEmbedded\LyraClient;
 
 use Lyra\Client;
+use PayzenEmbedded\Model\Map\PayzenEmbeddedTransactionHistoryTableMap;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistory;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistoryQuery;
 use Propel\Runtime\Exception\PropelException;
@@ -58,6 +59,24 @@ class LyraClientWrapper extends Client
         $this->setSHA256Key(PayzenEmbedded::getConfigValue('signature_' . $varMode . '_key'));
     }
 
+    /**
+     * Call the platform. The history rows read before the call are kept in memory by the ORM and
+     * handed back as they were by any later query: a notification may have written them while the
+     * platform answered, so they are read again from the database afterwards.
+     *
+     * @param string       $target
+     * @param array<mixed> $array
+     *
+     * @return array<mixed>
+     */
+    public function post($target, $array)
+    {
+        try {
+            return parent::post($target, $array);
+        } finally {
+            PayzenEmbeddedTransactionHistoryTableMap::clearInstancePool();
+        }
+    }
 
     /**
      * Record a transaction, or bring the record of a transaction already known up to date.

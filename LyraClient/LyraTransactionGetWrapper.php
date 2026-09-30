@@ -58,11 +58,11 @@ class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
         }
 
         $lock = $this->acquireOrderLock($order);
-        // What the order stands on is read again under the lock: a notification may have moved it
-        // while the operation waited.
-        $order->reload();
-
         try {
+            // What the order stands on is read again under the lock: a notification may have moved it
+            // while the operation waited. Inside the try: the lock is released whatever happens.
+            $order->reload();
+
             if ('' !== (string) $order->getTransactionRef()) {
                 $this->processTransactionGetResponse($this->sendTransactionGetRequest($order));
             }
