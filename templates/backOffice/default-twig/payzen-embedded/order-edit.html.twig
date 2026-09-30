@@ -106,7 +106,14 @@
                             <div class="col-md-4">
                                 {{ form_label(refund_form.amount) }}
                                 <div class="input-group">
-                                    {{ form_widget(refund_form.amount, {'value': maximum_amount, 'attr': {'class': 'form-control' ~ (refund_form.amount.vars.errors|length ? ' is-invalid' : ''), 'readonly': is_cancellable ? 'readonly' : false}}) }}
+                                    {# A cancellation is total, so the amount is fixed. A refund is typed in: prefilled with the maximum, a hasty click would have refunded everything. #}
+                                    {% set refund_amount_attr = {'class': 'form-control' ~ (refund_form.amount.vars.errors|length ? ' is-invalid' : '')} %}
+                                    {% if is_cancellable %}
+                                        {% set refund_amount_attr = refund_amount_attr|merge({'readonly': 'readonly'}) %}
+                                    {% else %}
+                                        {% set refund_amount_attr = refund_amount_attr|merge({'placeholder': maximum_amount}) %}
+                                    {% endif %}
+                                    {{ form_widget(refund_form.amount, {'value': is_cancellable ? maximum_amount : '', 'attr': refund_amount_attr}) }}
                                     <span class="input-group-text">{{ currency_symbol }}</span>
                                 </div>
                                 {% if refund_form.amount.vars.label_attr.help is defined %}<div class="form-text">{{ refund_form.amount.vars.label_attr.help }}</div>{% endif %}

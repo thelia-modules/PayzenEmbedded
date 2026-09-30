@@ -73,7 +73,7 @@ return array(
     'Payment validation' => 'Validation du paiement',
     'PayzenEmbedded configuration' => 'Configuration deu module PayZen',
     'PayzenEmbedded refresh transaction' => 'Mise à jour de la transaction PayZen',
-    'PayzenEmbedded refund transaction' => 'PayzenEmbedded remboursement de transaction',
+    'PayzenEmbedded refund transaction' => 'Remboursement de la transaction PayZen',
     'PayzenEmbedded update transaction' => 'Modification de la transaction PayZen',
     'Processing cancelation of payment for order ref. %ref' => 'Traitement de l\'annulation du paiement pour la commande %ref',
     'Production' => 'Production',

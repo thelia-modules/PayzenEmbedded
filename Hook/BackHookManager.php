@@ -205,9 +205,11 @@ class BackHookManager extends BaseHook
         $orderRefs = [];
         $currencySymbols = [];
         $currencyCodes = [];
+        $reader = new TransactionHistoryReader();
 
         /** @var PayzenEmbeddedTransactionHistory $transaction */
         foreach ($search->find() as $transaction) {
+            $outcome = $reader->outcomeOf($transaction);
             $rowOrderId = $transaction->getOrderId();
 
             if ($rowOrderId && !\array_key_exists($rowOrderId, $orderRefs)) {
@@ -230,9 +232,8 @@ class BackHookManager extends BaseHook
                 'TRANSACTION_REF' => $transaction->getUuid(),
                 'STATUS' => $transaction->getStatus(),
                 'DETAILED_STATUS' => $transaction->getDetailedstatus(),
-                'OPERATION_TYPE' => $transaction->getOperationtype() ?: 'DEBIT',
-                'IS_CAPTURED' => 'PAID' === strtoupper((string) $transaction->getStatus())
-                    && !\in_array(strtoupper(trim((string) $transaction->getDetailedstatus())), ['AUTHORISED', 'AUTHORISED_TO_VALIDATE', 'WAITING_AUTHORISATION', 'WAITING_AUTHORISATION_TO_VALIDATE', 'WAITING_FOR_PAYMENT', 'INITIAL', 'UNDER_VERIFICATION'], true),
+                'OPERATION_TYPE' => $outcome->operationType,
+                'IS_CAPTURED' => $outcome->isCaptured(),
                 'AMOUNT' => $transaction->getAmount(),
                 'AMOUNT_FORMATTED' => RefundAmount::format((int) $transaction->getAmount(), $currencyId ? ($currencyCodes[$currencyId] ?? '') : ''),
                 'CURRENCY_ID' => $currencyId,
