@@ -13,6 +13,8 @@ namespace PayzenEmbedded\LyraClient;
 use Lyra\Exceptions\LyraException;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerToken;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
+use PayzenEmbedded\Model\Map\PayzenEmbeddedTransactionHistoryTableMap;
+use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistoryQuery;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Lock\Exception\ExceptionInterface as LockException;
@@ -140,6 +142,10 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
                 Translator::getInstance()->trans('A refund of this order is already running.', [], PayzenEmbedded::DOMAIN_NAME)
             );
         }
+
+        // The history rows this request already read are kept in memory by the ORM and handed back
+        // as they were by any later query: the rows are read again from the database under the lock.
+        PayzenEmbeddedTransactionHistoryTableMap::clearInstancePool();
 
         return $lock;
     }
@@ -396,8 +402,52 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             return $this->paymentStatusOf($incoming);
         }
 
+        // A notification is applied in full or not at all: a history that says the transaction is
+        // applied while the order did not move (a status change refused for want of stock, say)
+        // would have the notification replayed left out, see undoUnappliedNotification().
+        $rowBefore = PayzenEmbeddedTransactionHistoryQuery::create()
+            ->filterByOrderId($order->getId())
+            ->filterByUuid(mb_substr((string) $incoming->uuid, 0, 128))
+            ->findOne()
+            ?->toArray();
+        $refBefore = (string) $order->getTransactionRef();
+        $statusBefore = (int) $order->getStatusId();
+
         // Update transaction history
         $this->updateTransactionHistory($answer, $order);
+
+        try {
+            $status = $this->applyTransaction($order, $orderStatus, $transactionUuid);
+        } catch (\Throwable $failure) {
+            $this->undoUnappliedNotification($order, $incoming, $rowBefore, $refBefore, $statusBefore, $failure);
+
+            throw $failure;
+        }
+
+        // Check if customer has registered its card for 1-click payment
+        if (isset($answer['paymentMethodToken']) && !empty($answer['paymentMethodToken'])) {
+            if (null === $tokenData = PayzenEmbeddedCustomerTokenQuery::create()->findOneByCustomerId($order->getCustomerId())) {
+                $tokenData = (new PayzenEmbeddedCustomerToken())
+                    ->setCustomerId($order->getCustomerId());
+            }
+
+            // Update customer payment token
+            $tokenData
+                ->setPaymentToken($answer['paymentMethodToken'])
+                ->save();
+        }
+
+        return $status;
+    }
+
+    /**
+     * Point the order at the transaction and move it as the transaction says.
+     *
+     * @return int one of the PAYMENT_STATUS_* constants
+     */
+    private function applyTransaction(Order $order, mixed $orderStatus, mixed $transactionUuid): int
+    {
+        $status = self::PAYMENT_STATUS_NOT_PAID;
 
         // Store the transaction ID
         $event = new OrderEvent($order);
@@ -436,20 +486,60 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             $status = self::PAYMENT_STATUS_ERROR;
         }
 
-        // Check if customer has registered its card for 1-click payment
-        if (isset($answer['paymentMethodToken']) && !empty($answer['paymentMethodToken'])) {
-            if (null === $tokenData = PayzenEmbeddedCustomerTokenQuery::create()->findOneByCustomerId($order->getCustomerId())) {
-                $tokenData = (new PayzenEmbeddedCustomerToken())
-                    ->setCustomerId($order->getCustomerId());
+        return $status;
+    }
+
+    /**
+     * Put the history and the order reference back as they were when the order did not move: the
+     * notification replayed, or the history refresh, then applies the transaction again instead of
+     * finding it applied. An order that moved keeps everything, the failure came after its move.
+     *
+     * @param array<string, mixed>|null $rowBefore the history row of the transaction before the notification, null if there was none
+     */
+    private function undoUnappliedNotification(Order $order, TransactionOutcome $incoming, ?array $rowBefore, string $refBefore, int $statusBefore, \Throwable $failure): void
+    {
+        try {
+            $storedStatus = OrderQuery::create()->filterById($order->getId())->select('StatusId')->findOne();
+
+            if ((int) $storedStatus !== $statusBefore) {
+                return;
             }
 
-            // Update customer payment token
-            $tokenData
-                ->setPaymentToken($answer['paymentMethodToken'])
-                ->save();
-        }
+            $row = PayzenEmbeddedTransactionHistoryQuery::create()
+                ->filterByOrderId($order->getId())
+                ->filterByUuid(mb_substr((string) $incoming->uuid, 0, 128))
+                ->findOne();
 
-        return $status;
+            if (null !== $row && null === $rowBefore) {
+                $row->delete();
+            } elseif (null !== $row) {
+                $row->fromArray($rowBefore);
+                $row->keepUpdateDateUnchanged()->save();
+            }
+
+            // What the failed move left in memory is not the order: it is read again before the reference is put back.
+            $order->reload();
+
+            if ((string) $order->getTransactionRef() !== $refBefore) {
+                $order->setTransactionRef('' === $refBefore ? null : $refBefore)->save();
+            }
+
+            $this->log->addError(sprintf(
+                'Order %s: transaction %s (%s) could not be applied (%s), its record is undone so that a replayed notification or a history refresh applies it again.',
+                $order->getRef(),
+                $incoming->uuid,
+                $incoming->status,
+                $failure::class
+            ));
+        } catch (\Throwable $undoFailure) {
+            $this->log->addError(sprintf(
+                'Order %s: transaction %s could not be applied (%s) nor its record undone (%s): check the order against the PayZen back-office.',
+                $order->getRef(),
+                $incoming->uuid,
+                $failure::class,
+                $undoFailure::class
+            ));
+        }
     }
 
     /**
