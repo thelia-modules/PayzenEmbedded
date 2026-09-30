@@ -57,6 +57,8 @@ final class RefundGuardTest extends TestCase
         yield 'a refund still running is promised, seen as such' => [$refundRunning, 700, 300, RefundVerdict::Allowed];
         yield 'a refund still running is promised, not seen' => [$refundRunning, 700, 0, RefundVerdict::StaleView];
         yield 'a refund still running is promised, above the balance' => [$refundRunning, 701, 300, RefundVerdict::OutOfBounds];
+        yield 'a page that lies is refused before the amount is looked at' => [$refundRunning, 9999, 0, RefundVerdict::StaleView];
+        yield 'a negative amount' => [$captured, -1, null, RefundVerdict::OutOfBounds];
 
         yield 'the whole authorisation to cancel' => [$authorised, 1000, 0, RefundVerdict::Allowed];
         yield 'part of an authorisation' => [$authorised, 999, 0, RefundVerdict::OutOfBounds];
