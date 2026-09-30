@@ -19,6 +19,7 @@ use PayzenEmbedded\LyraClient\RefundLedger;
 use PayzenEmbedded\LyraClient\RefundOutcome;
 use PayzenEmbedded\LyraClient\RefundResolution;
 use PayzenEmbedded\LyraClient\TransactionOutcome;
+use PayzenEmbedded\LyraClient\UnexpectedRefundAnswerException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Thelia\Exception\TheliaProcessException;
@@ -27,7 +28,7 @@ use Thelia\Exception\TheliaProcessException;
  * What the platform's answer to Transaction/CancelOrRefund means for the order. The shape of that
  * answer was taken from the documentation: a refund is a credit transaction of its own, a
  * cancellation brings the debit back as UNPAID / CANCELLED. Anything else is refused, never read
- * as a cancellation.
+ * as a cancellation, and leaves the outcome unknown unless the platform refused the credit.
  */
 final class RefundResolutionTest extends TestCase
 {
@@ -104,19 +105,26 @@ final class RefundResolutionTest extends TestCase
         self::assertSame(RefundOutcome::Pending, $resolution->outcome($this->ledger(paid: 1000, refunded: 300)));
     }
 
-    public function testARefusedCreditIsRefused(): void
+    /**
+     * A credit the platform refused is a refusal: nothing moved, no hold on the order. Every other
+     * answer the module cannot read leaves the outcome unknown, the money may have moved.
+     */
+    public function testARefusedCreditIsAPlainRefusal(): void
     {
-        $this->expectException(TheliaProcessException::class);
-
-        RefundResolution::fromAnswer(
-            ['uuid' => 'credit-1', 'status' => 'UNPAID', 'operationType' => 'CREDIT', 'errorCode' => 'PSP_100', 'errorMessage' => 'refused'],
-            self::DEBIT_UUID,
-        );
+        try {
+            RefundResolution::fromAnswer(
+                ['uuid' => 'credit-1', 'status' => 'UNPAID', 'operationType' => 'CREDIT', 'errorCode' => 'PSP_100', 'errorMessage' => 'refused'],
+                self::DEBIT_UUID,
+            );
+            self::fail('A refused credit is refused.');
+        } catch (TheliaProcessException $refusal) {
+            self::assertNotInstanceOf(UnexpectedRefundAnswerException::class, $refusal);
+        }
     }
 
     public function testACreditInAnUnknownStatusIsRefused(): void
     {
-        $this->expectException(TheliaProcessException::class);
+        $this->expectException(UnexpectedRefundAnswerException::class);
 
         RefundResolution::fromAnswer(
             ['uuid' => 'credit-1', 'status' => 'PARTIALLY_PAID', 'operationType' => 'CREDIT', 'amount' => 300],
@@ -126,7 +134,7 @@ final class RefundResolutionTest extends TestCase
 
     public function testTheDebitStillRunningIsNotReadAsACancellation(): void
     {
-        $this->expectException(TheliaProcessException::class);
+        $this->expectException(UnexpectedRefundAnswerException::class);
 
         RefundResolution::fromAnswer(
             ['uuid' => self::DEBIT_UUID, 'status' => 'RUNNING', 'detailedStatus' => 'AUTHORISED_TO_VALIDATE', 'amount' => 1000],
@@ -136,7 +144,7 @@ final class RefundResolutionTest extends TestCase
 
     public function testTheDebitStillPaidIsNotReadAsACancellation(): void
     {
-        $this->expectException(TheliaProcessException::class);
+        $this->expectException(UnexpectedRefundAnswerException::class);
 
         RefundResolution::fromAnswer(
             ['uuid' => self::DEBIT_UUID, 'status' => 'PAID', 'detailedStatus' => 'CAPTURED', 'amount' => 1000],
@@ -161,7 +169,7 @@ final class RefundResolutionTest extends TestCase
     #[DataProvider('unpaidDebitStatuses')]
     public function testTheDebitUnpaidForAnotherReasonThanACancellationIsNotReadAsACancellation(string $detailedStatus): void
     {
-        $this->expectException(TheliaProcessException::class);
+        $this->expectException(UnexpectedRefundAnswerException::class);
 
         RefundResolution::fromAnswer(
             ['uuid' => self::DEBIT_UUID, 'status' => 'UNPAID', 'detailedStatus' => $detailedStatus, 'amount' => 1000],
@@ -176,7 +184,7 @@ final class RefundResolutionTest extends TestCase
      */
     public function testACancellationOfAnotherDebitIsRefused(): void
     {
-        $this->expectException(TheliaProcessException::class);
+        $this->expectException(UnexpectedRefundAnswerException::class);
 
         RefundResolution::fromAnswer(
             ['uuid' => 'other-debit', 'operationType' => 'DEBIT', 'status' => 'UNPAID', 'detailedStatus' => 'CANCELLED', 'amount' => 1000],
@@ -190,14 +198,14 @@ final class RefundResolutionTest extends TestCase
      */
     public function testAnAnswerWithAnEmptyUuidIsRefused(): void
     {
-        $this->expectException(TheliaProcessException::class);
+        $this->expectException(UnexpectedRefundAnswerException::class);
 
         RefundResolution::fromAnswer(['uuid' => '', 'status' => 'PAID', 'amount' => 1000], self::DEBIT_UUID);
     }
 
     public function testAnAnswerWithoutTransactionIsRefused(): void
     {
-        $this->expectException(TheliaProcessException::class);
+        $this->expectException(UnexpectedRefundAnswerException::class);
 
         RefundResolution::fromAnswer(['errorCode' => 'INT_001', 'errorMessage' => 'bad request'], self::DEBIT_UUID);
     }

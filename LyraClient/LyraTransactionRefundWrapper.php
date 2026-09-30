@@ -145,6 +145,15 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
 
             try {
                 return $this->processCancelOrRefundResponse($order, $response, $admin);
+            } catch (UnexpectedRefundAnswerException $exception) {
+                // Accepted, but in words the module cannot read: the money may have moved all the same.
+                $this->log->addError(sprintf('Order %s: PayZen accepted the refund with an unexpected answer: %s', $order->getRef(), $exception->getMessage()));
+                $this->holdForPendingRefund($order, $ledger, $amount);
+
+                throw new RefundOutcomeUnknownException(
+                    Translator::getInstance()->trans('PayZen accepted the refund with an answer the module cannot read: refresh the order before trying again.', [], PayzenEmbedded::DOMAIN_NAME),
+                    $exception
+                );
             } catch (TheliaProcessException $exception) {
                 throw $exception;
             } catch (\Throwable $exception) {
