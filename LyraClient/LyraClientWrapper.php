@@ -103,7 +103,10 @@ class LyraClientWrapper extends Client
         } catch (PropelException $exception) {
             // The platform notifies the same transaction it just answered: the notification may have
             // inserted the row between the read above and this write. The row is then brought up to date.
-            $duplicate = $exception->getPrevious() instanceof \PDOException && '23000' === (string) $exception->getPrevious()->getCode();
+            // A duplicate key only (MySQL 1062): SQLSTATE 23000 also covers a missing value or a
+            // foreign key, which no second write would cure.
+            $previous = $exception->getPrevious();
+            $duplicate = $previous instanceof \PDOException && 1062 === (int) ($previous->errorInfo[1] ?? 0);
 
             if (!$duplicate || !$transaction->isNew() || null === $existing = PayzenEmbeddedTransactionHistoryQuery::create()->filterByUuid($outcome->uuid)->findOne()) {
                 throw $exception;
