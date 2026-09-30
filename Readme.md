@@ -128,6 +128,10 @@ Une fois dispatché, l'event retourne à travers `getOutcome()` ce que PayZen a 
 hors limites ou un refus de la plateforme lève une `TheliaProcessException` ; une demande restée sans réponse lève une
 `RefundOutcomeUnknownException`, et la tentative suivante commence par relire la plateforme.
 
+### Statut et stock
+
+Le module passe la commande en « Remboursée » quand la plateforme a confirmé des remboursements qui couvrent le paiement, et en « Annulée » quand la transaction a été annulée avant sa remise en banque. Ces statuts ont l'effet que le cœur Thelia leur donne sur le stock : une commande payée qui passe en remboursée remet ses produits en stock, y compris quand ce sont des gestes commerciaux qui atteignent le total. Une commande dont un autre paiement est encore encaissé (paiement en double) n'est pas passée en remboursée.
+
 ### Verrou et instances multiples
 
 Un remboursement, une mise à jour de l'historique ou une modification de la transaction (la remise en banque après
@@ -295,6 +299,10 @@ Once dispatched, `getOutcome()` tells what PayZen did, one of `\PayzenEmbedded\L
 `Cancelled`, `Refunded`, `PartiallyRefunded` or `Pending`. An amount out of range or a refusal from the platform
 raises a `TheliaProcessException`; a request left unanswered raises a `RefundOutcomeUnknownException`, and the next
 attempt starts by reading the platform again.
+
+### Status and stock
+
+The module sets the order refunded once the platform confirmed refunds that cover the payment, and cancelled when the transaction was cancelled before its capture. These statuses have the stock effect the Thelia core gives them: a paid order moving to refunded puts its products back in stock, gestures of goodwill that add up to the total included. An order another payment of which is still held (a double payment) is not set refunded.
 
 ### Lock and multiple instances
 

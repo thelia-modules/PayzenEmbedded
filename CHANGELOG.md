@@ -14,6 +14,7 @@
 
 ## Transaction history and notifications
 - A credit the module asks for is tied to the debit it asks it on when the platform's answer does not name it, and a transaction the history already holds for the order is recognised as the shop's when the platform lists or notifies it again: a refund still running is seen settled once confirmed. An answer that does not repeat a credit's parent no longer erases it, and a credit is counted positive whatever the sign it is written with.
+- An order another payment of which the platform took (a double payment) is not set refunded while that payment is held, and its page says so. The order is read again under the lock before the operation decides, the answer to a transaction update is recorded in the history, a failure of the lock store shows a fixed message, and the history keeps the order of rows written in the same second. A signed notification the module fails on is answered with a server error, so that the platform replays it and warns the merchant.
 - An answer that does not say a transaction's type no longer turns a credit the history holds into a debit, and a transaction marked by another shop stays out even when the history knows it. The trace of a refund answer keeps its shape (parent, shop marker) without the card data the transaction details carry.
 - The same transaction notified or read again in the same state (a refresh of an authorisation still running) no longer moves back an order that left the unpaid state: an order being prepared stayed prepared, where it went back to paid and the confirmation was sent again.
 - The creation dates of the history are read back as the UTC the platform gave them: the column keeps no time zone and a shop outside UTC read its own history hours off the notifications it weighed, which could let the late refusal of an earlier attempt cancel an order standing on a later one. The transactions of one notification are judged debits first, each on the order the previous one left: a credit sent with its debit is no longer set aside. The refresh names, in a warning, an attempt the platform lists that outranks the one the order stands on, since only its notification moves the order.
@@ -40,6 +41,7 @@
 - The payment error page no longer links to a `contact` route: Flexy has none, and the missing route turned a refused payment form into a 500.
 
 ## Upgrading
+- An order set refunded or cancelled by the module gets the stock effect the core gives these statuses: a paid order moving to refunded puts its products back in stock. Refunds that add up to the total, gestures of goodwill included, set the order refunded.
 - `module:refresh` plays `Config/update/3.4.0.sql`: two columns added, two widened, the administrator constraint set to `ON DELETE SET NULL`. It can be played again.
 - Rebuild the Propel models (remove `var/propel/<environment>`) and clear the cache: the models have to know the new columns, and the new services (refund listener, wrappers with the lock factory) have to be compiled.
 - A shop served by several servers configures a shared lock store (`LOCK_DSN`), see the Readme.
