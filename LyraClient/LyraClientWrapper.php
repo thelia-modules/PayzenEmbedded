@@ -86,11 +86,10 @@ class LyraClientWrapper extends Client
      * keeps the one row it already has. Without that, a shop reading its own history could not tell
      * a retry from a duplicate notification.
      *
-     * @throws \Exception
-     */
-    /**
      * @param string|null $debitUuid the debit the order stands on, when the caller knows it: a transaction
      *                               of its own that does not say its operation type is then a credit
+     *
+     * @throws \Exception
      */
     protected function updateTransactionHistory($answer, Order $order, ?Admin $admin = null, ?string $debitUuid = null): void
     {
