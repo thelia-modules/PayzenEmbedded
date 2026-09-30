@@ -70,7 +70,7 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
             // or one made from the PayZen back-office. The platform's own list of the order's
             // transactions is recorded first, so the ledger counts what was really given back.
             $this->syncTransactions($order);
-            $lock->refresh();
+            $this->refreshOrderLock($lock, $order);
 
             $ledger = (new TransactionHistoryReader())->ledgerOf($order);
             $currencyCode = strtoupper($order->getCurrency()->getCode());

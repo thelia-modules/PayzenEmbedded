@@ -145,6 +145,28 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
     }
 
     /**
+     * Keep the order held for another ORDER_LOCK_TTL between two platform calls. A store that
+     * cannot extend it is refused like a store that cannot take it: nothing was sent yet.
+     *
+     * @throws TheliaProcessException when the store fails
+     */
+    protected function refreshOrderLock(LockInterface $lock, Order $order): void
+    {
+        try {
+            $lock->refresh();
+        } catch (LockException $storeFailure) {
+            $this->log->addError(sprintf('PayZen order lock: refresh failed on order %d: %s', $order->getId(), $storeFailure::class));
+
+            throw new TheliaProcessException(
+                Translator::getInstance()->trans('The order could not be locked: %message', ['%message' => $storeFailure->getMessage()], PayzenEmbedded::DOMAIN_NAME),
+                0,
+                null,
+                $storeFailure
+            );
+        }
+    }
+
+    /**
      * Give the order back once the operation is over, whatever the store says: the operation's own
      * result (money refunded, payment captured) is what the caller has to read, and a lock the store
      * cannot release expires on its own after ORDER_LOCK_TTL.
