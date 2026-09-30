@@ -70,7 +70,35 @@ final class RefundLedgerTest extends TestCase
         ]);
 
         self::assertSame(300, $ledger->refundedAmount);
+        self::assertSame(0, $ledger->settledRefundedAmount);
         self::assertSame(700, $ledger->refundableAmount());
+    }
+
+    public function testARefundStillRunningDoesNotSettleTheOrderEvenInFull(): void
+    {
+        $ledger = $this->ledger([
+            $this->debit(self::ORDER_DEBIT, 'PAID', 1000, 'CAPTURED'),
+            $this->credit('r1', 'RUNNING', 1000),
+        ]);
+
+        self::assertSame(0, $ledger->refundableAmount());
+        self::assertFalse($ledger->isFullyRefunded());
+    }
+
+    public function testTheOrderIsSettledOnceEveryRefundIsConfirmed(): void
+    {
+        $debit = $this->debit(self::ORDER_DEBIT, 'PAID', 1000, 'CAPTURED');
+
+        self::assertFalse($this->ledger([$debit, $this->credit('r1', 'PAID', 700), $this->credit('r2', 'RUNNING', 300)])->isFullyRefunded());
+        self::assertTrue($this->ledger([$debit, $this->credit('r1', 'PAID', 700), $this->credit('r2', 'PAID', 300)])->isFullyRefunded());
+        self::assertTrue($this->ledger([$debit, $this->credit('r1', 'PAID', 1000)])->isFullyRefunded());
+    }
+
+    public function testAnOrderThatWasNeverPaidIsNotRefunded(): void
+    {
+        self::assertFalse($this->ledger([])->isFullyRefunded());
+        self::assertFalse($this->ledger([$this->debit(self::ORDER_DEBIT, 'UNPAID', 1000, 'CANCELLED')])->isFullyRefunded());
+        self::assertFalse($this->ledger([$this->debit(self::ORDER_DEBIT, 'PAID', 1000, 'AUTHORISED')])->isFullyRefunded());
     }
 
     public function testARefusedRefundGivesNothingBack(): void

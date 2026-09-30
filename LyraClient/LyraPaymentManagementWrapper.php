@@ -253,10 +253,10 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             );
 
             // A refund that was pending when the shop asked for it settles the order once the
-            // platform confirms it and nothing is left to refund.
+            // platform confirms it and every refund of the order is confirmed too.
             $ledger = (new TransactionHistoryReader())->ledgerOf($order);
 
-            if ($incoming->isPaid() && $ledger->paidAmount > 0 && 0 === $ledger->refundableAmount()) {
+            if ($incoming->isPaid() && $ledger->isFullyRefunded()) {
                 $this->setOrderStatus($order, OrderStatusQuery::getRefundedStatus());
             }
 

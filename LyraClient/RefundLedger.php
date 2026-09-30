@@ -25,7 +25,10 @@ final readonly class RefundLedger
 {
     private function __construct(
         public int $paidAmount,
+        /** The money returned or on its way back: promised, so never offered twice. */
         public int $refundedAmount,
+        /** The money the platform confirmed it gave back: what settles the order. */
+        public int $settledRefundedAmount,
         public int $authorisedAmount,
     ) {
     }
@@ -40,6 +43,7 @@ final readonly class RefundLedger
     {
         $paidAmount = 0;
         $refundedAmount = 0;
+        $settledRefundedAmount = 0;
         $authorisedAmount = 0;
 
         foreach ($transactions as $transaction) {
@@ -51,9 +55,15 @@ final readonly class RefundLedger
                     || null === $transaction->parentUuid
                     || $transaction->parentUuid === $orderTransactionRef;
 
-                // A refund on its way is money already promised: it is never offered twice.
+                // A refund on its way is money already promised: it is never offered twice. Only a
+                // refund the platform confirmed is money given back: the one on its way may still
+                // be refused, and nothing would bring back an order settled on it.
                 if ($ofThisDebit && ($transaction->isPaid() || $transaction->isRunning())) {
                     $refundedAmount += $transaction->amount;
+                }
+
+                if ($ofThisDebit && $transaction->isPaid()) {
+                    $settledRefundedAmount += $transaction->amount;
                 }
 
                 continue;
@@ -70,12 +80,22 @@ final readonly class RefundLedger
             }
         }
 
-        return new self($paidAmount, $refundedAmount, $authorisedAmount);
+        return new self($paidAmount, $refundedAmount, $settledRefundedAmount, $authorisedAmount);
     }
 
     public function refundableAmount(): int
     {
         return max(0, $this->paidAmount - $this->refundedAmount);
+    }
+
+    /**
+     * Whether the customer got back all they paid: the one rule that settles an order as refunded,
+     * for the refund service, the notification of a credit and the history refresh alike. A refund
+     * still running does not count, whatever it promises.
+     */
+    public function isFullyRefunded(): bool
+    {
+        return $this->paidAmount > 0 && $this->settledRefundedAmount >= $this->paidAmount;
     }
 
     /** Whether a refund of this amount can be asked for on a captured payment. */

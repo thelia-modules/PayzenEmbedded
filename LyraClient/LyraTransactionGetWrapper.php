@@ -63,7 +63,7 @@ class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
 
             $ledger = (new TransactionHistoryReader())->ledgerOf($order);
 
-            if ($ledger->paidAmount > 0 && 0 === $ledger->refundableAmount()) {
+            if ($ledger->isFullyRefunded()) {
                 $this->setOrderStatus($order, OrderStatusQuery::getRefundedStatus());
             }
         } finally {

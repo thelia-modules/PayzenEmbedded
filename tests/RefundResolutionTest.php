@@ -76,6 +76,23 @@ final class RefundResolutionTest extends TestCase
         self::assertSame(RefundOutcome::Cancelled, $resolution->outcome($this->ledger(paid: 0, refunded: 0)));
     }
 
+    public function testACreditConfirmedWhileAnEarlierOneStillRunsMeansPartiallyRefunded(): void
+    {
+        $resolution = RefundResolution::fromAnswer(
+            ['uuid' => 'credit-2', 'status' => 'PAID', 'operationType' => 'CREDIT', 'amount' => 700],
+            self::DEBIT_UUID,
+        );
+
+        $ledger = RefundLedger::fromTransactions([
+            new TransactionOutcome(self::DEBIT_UUID, 'PAID', null, TransactionOutcome::OPERATION_DEBIT, 1000, 'CAPTURED'),
+            new TransactionOutcome('credit-1', 'RUNNING', null, TransactionOutcome::OPERATION_CREDIT, 300),
+            new TransactionOutcome('credit-2', 'PAID', null, TransactionOutcome::OPERATION_CREDIT, 700),
+        ], self::DEBIT_UUID);
+
+        self::assertSame(0, $ledger->refundableAmount());
+        self::assertSame(RefundOutcome::PartiallyRefunded, $resolution->outcome($ledger));
+    }
+
     public function testACreditStillRunningIsPendingAndLeavesTheOrderAlone(): void
     {
         $resolution = RefundResolution::fromAnswer(

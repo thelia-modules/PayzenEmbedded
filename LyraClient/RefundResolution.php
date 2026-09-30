@@ -98,8 +98,8 @@ final readonly class RefundResolution
             return RefundOutcome::Pending;
         }
 
-        return $ledgerAfterRecording->refundableAmount() > 0
-            ? RefundOutcome::PartiallyRefunded
-            : RefundOutcome::Refunded;
+        return $ledgerAfterRecording->isFullyRefunded()
+            ? RefundOutcome::Refunded
+            : RefundOutcome::PartiallyRefunded;
     }
 }
