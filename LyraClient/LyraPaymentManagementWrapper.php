@@ -336,7 +336,8 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             // platform confirms it and every refund of the order is confirmed too.
             $ledger = (new TransactionHistoryReader())->ledgerOf($order);
 
-            if ($incoming->isPaid() && $ledger->isFullyRefunded()) {
+            // Only an order moved on its payment is refunded, as on a refresh.
+            if ($incoming->isPaid() && '' !== (string) $order->getTransactionRef() && $ledger->isFullyRefunded()) {
                 $this->setOrderStatus($order, OrderStatusQuery::getRefundedStatus());
             }
 

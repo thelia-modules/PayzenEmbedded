@@ -63,7 +63,9 @@ class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
 
             $ledger = (new TransactionHistoryReader())->ledgerOf($order);
 
-            if ($ledger->isFullyRefunded()) {
+            // Only an order moved on its payment is refunded: one that carries no transaction yet was
+            // never paid in the shop's eyes, and the notification of its payment would undo the status.
+            if ('' !== (string) $order->getTransactionRef() && $ledger->isFullyRefunded()) {
                 $this->setOrderStatus($order, OrderStatusQuery::getRefundedStatus());
             }
         } finally {
