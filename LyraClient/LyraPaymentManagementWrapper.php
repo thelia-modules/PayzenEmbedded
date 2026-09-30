@@ -128,7 +128,7 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             $this->log->addError(sprintf('PayZen order lock: store failure on order %d: %s caused by %s', $order->getId(), $storeFailure::class, get_debug_type($storeFailure->getPrevious())));
 
             throw new TheliaProcessException(
-                Translator::getInstance()->trans('The order could not be locked: %message', ['%message' => $storeFailure->getMessage()], PayzenEmbedded::DOMAIN_NAME),
+                Translator::getInstance()->trans('The order could not be locked, see the logs.', [], PayzenEmbedded::DOMAIN_NAME),
                 0,
                 null,
                 $storeFailure
@@ -158,7 +158,7 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             $this->log->addError(sprintf('PayZen order lock: refresh failed on order %d: %s', $order->getId(), $storeFailure::class));
 
             throw new TheliaProcessException(
-                Translator::getInstance()->trans('The order could not be locked: %message', ['%message' => $storeFailure->getMessage()], PayzenEmbedded::DOMAIN_NAME),
+                Translator::getInstance()->trans('The order could not be locked, see the logs.', [], PayzenEmbedded::DOMAIN_NAME),
                 0,
                 null,
                 $storeFailure

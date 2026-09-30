@@ -114,7 +114,7 @@ return array(
     'The transaction could not be read from PayZen, see the logs.' => 'The transaction could not be read from PayZen, see the logs.',
     'PayZen lists another attempt for this order, %uuid (%status), that outranks the one the order stands on: replay its notification from the PayZen back-office.' => 'PayZen lists another attempt for this order, %uuid (%status), that outranks the one the order stands on: replay its notification from the PayZen back-office.',
     'PayZen answered, but the payment is not paid: check the order and its history.' => 'PayZen answered, but the payment is not paid: check the order and its history.',
-    'The order could not be locked: %message' => 'The order could not be locked: %message',
+    'The order could not be locked, see the logs.' => 'The order could not be locked, see the logs.',
     'The order still carries no PayZen transaction: the history was recorded, but the order was not moved. Replay the notification of its payment from the PayZen back-office.' => 'The order still carries no PayZen transaction: the history was recorded, but the order was not moved. Replay the notification of its payment from the PayZen back-office.',
     'The transaction history was refreshed.' => 'The transaction history was refreshed.',
     'The transaction update could not be sent to PayZen, see the logs.' => 'The transaction update could not be sent to PayZen, see the logs.',
