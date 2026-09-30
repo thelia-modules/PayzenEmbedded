@@ -25,7 +25,6 @@ return array(
     'Enable or disable strong authentication for the payment method (such as 3D Secure)' => '3D Secure. Par défaut, PayZen décide.',
     'Enabled' => 'Désactivé',
     'Expand the card fields in the SmartForm' => 'Déplier les champs carte dans le SmartForm',
-    'Failed to process request, aborting. Error is ' => 'Erreur lors du traitement de la requête. L\'erreur est ',
     'Google Pay' => 'Google Pay',
     'If checked, a payment confirmation e-mail is sent to the customer.' => 'Un e-mail de confirmation de paiement est envoyé à l\'acheteur.',
     'If checked, the order confirmation message is sent to the customer only when the payment is successful. The order notification is always sent to the shop administrator' => 'La confirmation de commande ne part que si le paiement réussit. Les administrateurs sont notifiés dans tous les cas.',

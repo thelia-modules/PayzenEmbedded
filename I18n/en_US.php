@@ -25,7 +25,6 @@ return array(
     'Enable or disable strong authentication for the payment method (such as 3D Secure)' => 'Enable or disable strong authentication for the payment method (such as 3D Secure)',
     'Enabled' => 'Enabled',
     'Expand the card fields in the SmartForm' => 'Expand the card fields in the SmartForm',
-    'Failed to process request, aborting. Error is ' => 'Failed to process request, aborting. Error is ',
     'Google Pay' => 'Google Pay',
     'If checked, a payment confirmation e-mail is sent to the customer.' => 'If checked, a payment confirmation e-mail is sent to the customer.',
     'If checked, the order confirmation message is sent to the customer only when the payment is successful. The order notification is always sent to the shop administrator' => 'If checked, the order confirmation message is sent to the customer only when the payment is successful. The order notification is always sent to the shop administrator',
