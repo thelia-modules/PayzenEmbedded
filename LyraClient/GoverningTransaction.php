@@ -85,6 +85,22 @@ final readonly class GoverningTransaction
     }
 
     /**
+     * Whether the platform holds the transaction the order stands on in another state than the
+     * history: written by the platform's list, it would be taken for applied and the order would
+     * never follow, so only the notification path writes it. A credit, another attempt, or the same
+     * state with other details (a capture date) is no such change.
+     *
+     * @param TransactionOutcome|null $recorded what the history holds for that transaction, null if nothing
+     */
+    public static function divergesFrom(?TransactionOutcome $recorded, TransactionOutcome $platform, string $orderTransactionRef): bool
+    {
+        return !$platform->isCredit()
+            && '' !== $orderTransactionRef
+            && $platform->uuid === $orderTransactionRef
+            && (null === $recorded || $recorded->status !== $platform->status);
+    }
+
+    /**
      * @param iterable<TransactionOutcome> $transactions every transaction of the order
      * @param string                       $orderTransactionRef the debit the order stands on, or '' when unknown
      */

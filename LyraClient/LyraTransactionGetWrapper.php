@@ -68,17 +68,20 @@ class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
             // not through paid (and the host's pickup notice). The list leaves that transaction to the
             // notification path when it changed, see syncTransactions().
             $diverging = $this->syncTransactions($order);
+            $heldBack = null === $diverging ? null : TransactionOutcome::fromAnswer($diverging);
+            $rowAtList = null === $heldBack ? null : $this->storedHistoryRow($order, $heldBack);
             $this->refreshOrderLock($lock, $order);
 
             if ('' !== (string) $order->getTransactionRef()) {
                 $this->processTransactionGetResponse($this->sendTransactionGetRequest($order));
-                // The response was applied to an order of its own: this one is read again.
+                // What the response did to the order is read back from the database.
                 $order->reload();
             }
 
             // Once the order had its chance to move on it, the transaction the list held back is
-            // written as the platform holds it, even where the arbiter left it (a finished one).
-            if (null !== $diverging) {
+            // written as the platform listed it, where the arbiter left it (a finished one), unless
+            // something wrote it since the list was read: that answer is the later one.
+            if (null !== $heldBack && $this->storedHistoryRow($order, $heldBack) == $rowAtList) {
                 $this->updateTransactionHistory($diverging, $order);
             }
 

@@ -596,7 +596,7 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
      *
      * @return array<string, mixed>|null
      */
-    private function storedHistoryRow(Order $order, TransactionOutcome $transaction): ?array
+    protected function storedHistoryRow(Order $order, TransactionOutcome $transaction): ?array
     {
         PayzenEmbeddedTransactionHistoryTableMap::clearInstancePool();
 
@@ -698,8 +698,7 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             // cancelled it, or captured it), is left to the notification path that moves the order:
             // written here, it would be taken for applied, and the order would never follow. Its
             // details (a capture date, a detailed status) are written, the status is the same.
-            if (!$outcome->isCredit() && '' !== $governingRef && $outcome->uuid === $governingRef
-                && (null === $governingKnown || $governingKnown->status !== $outcome->status)) {
+            if (GoverningTransaction::divergesFrom($governingKnown, $outcome, $governingRef)) {
                 $diverging = $answer;
 
                 continue;

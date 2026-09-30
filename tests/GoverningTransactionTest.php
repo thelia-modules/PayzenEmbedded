@@ -87,4 +87,26 @@ final class GoverningTransactionTest extends TestCase
     {
         return new TransactionOutcome($uuid, $status, null !== $createdAt ? new \DateTimeImmutable($createdAt) : null, TransactionOutcome::OPERATION_DEBIT, 1000);
     }
+
+    /**
+     * The platform's list never writes the transaction the order stands on in another state than
+     * the history: written there, it would be taken for applied and the order would never follow.
+     */
+    public function testTheTransactionTheOrderStandsOnInAnotherStateDiverges(): void
+    {
+        $platform = new TransactionOutcome('d1', 'PAID', null, TransactionOutcome::OPERATION_DEBIT, 1000, 'CAPTURED');
+
+        self::assertTrue(GoverningTransaction::divergesFrom(new TransactionOutcome('d1', 'RUNNING', null, TransactionOutcome::OPERATION_DEBIT, 1000, 'AUTHORISED_TO_VALIDATE'), $platform, 'd1'));
+        self::assertTrue(GoverningTransaction::divergesFrom(null, $platform, 'd1'), 'a transaction the history does not hold is left to the notification path');
+    }
+
+    public function testDetailsCreditsAndOtherAttemptsDoNotDiverge(): void
+    {
+        $platform = new TransactionOutcome('d1', 'PAID', null, TransactionOutcome::OPERATION_DEBIT, 1000, 'CAPTURED');
+
+        self::assertFalse(GoverningTransaction::divergesFrom(new TransactionOutcome('d1', 'PAID', null, TransactionOutcome::OPERATION_DEBIT, 1000, 'AUTHORISED'), $platform, 'd1'), 'the same state with other details is written');
+        self::assertFalse(GoverningTransaction::divergesFrom(null, $platform, 'd2'), 'another attempt is written');
+        self::assertFalse(GoverningTransaction::divergesFrom(null, $platform, ''), 'an order without a reference has nothing to follow');
+        self::assertFalse(GoverningTransaction::divergesFrom(null, new TransactionOutcome('d1', 'PAID', null, TransactionOutcome::OPERATION_CREDIT, 1000), 'd1'), 'a credit is written');
+    }
 }
