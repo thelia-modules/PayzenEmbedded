@@ -606,10 +606,11 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
 
     /**
      * Record every transaction the platform holds for the order, credits included, through the
-     * Order/Get service. Nothing here moves the order: the history only catches up, whatever the
-     * notification arbiter would say, since the platform's list is the truth about its own
-     * transactions. A transaction the platform lists under this reference for another shop, another
-     * space or another order is left out, see TransactionProvenance.
+     * Order/Get service. The history catches up whatever the notification arbiter would say, since
+     * the platform's list is the truth about its own transactions; only the transaction the order
+     * stands on moves the order, as its notification would, before it is written. A transaction the
+     * platform lists under this reference for another shop, another space or another order is left
+     * out, see TransactionProvenance.
      *
      * @throws LyraException
      * @throws TheliaProcessException when the platform cannot list the order's transactions
@@ -667,6 +668,13 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
                 ));
 
                 continue;
+            }
+
+            // The transaction the order stands on moves the order as its notification would (the
+            // platform cancelled it, or captured it): written silently, it would be taken for
+            // applied, and the order would never follow. The history then takes the platform's word.
+            if (!$outcome->isCredit() && '' !== (string) $order->getTransactionRef() && $outcome->uuid === (string) $order->getTransactionRef()) {
+                $this->processOrderStatus($order, $answer);
             }
 
             $this->updateTransactionHistory($answer, $order);
