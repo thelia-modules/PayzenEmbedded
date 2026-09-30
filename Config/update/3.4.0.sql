@@ -39,3 +39,16 @@ PREPARE widen_state_statement FROM @statement;
 EXECUTE widen_state_statement;
 DEALLOCATE PREPARE widen_state_statement;
 
+-- A refund records the administrator who asked for it: an administrator who refunded an order
+-- can still be deleted, the history then keeps the refund without its author (the administrator
+-- log keeps the name). The constraint is found by its column, since its name depends on the
+-- version that created the table, and replaced only while it still restricts the deletion.
+SET @admin_constraint := (SELECT `k`.`CONSTRAINT_NAME` FROM `information_schema`.`KEY_COLUMN_USAGE` `k` JOIN `information_schema`.`REFERENTIAL_CONSTRAINTS` `r` ON `r`.`CONSTRAINT_SCHEMA` = `k`.`CONSTRAINT_SCHEMA` AND `r`.`CONSTRAINT_NAME` = `k`.`CONSTRAINT_NAME` WHERE `k`.`TABLE_SCHEMA` = DATABASE() AND `k`.`TABLE_NAME` = 'payzen_embedded_transaction_history' AND `k`.`COLUMN_NAME` = 'admin_id' AND `k`.`REFERENCED_TABLE_NAME` = 'admin' AND `r`.`DELETE_RULE` <> 'SET NULL' LIMIT 1);
+SET @statement := IF(@admin_constraint IS NULL, 'DO 0', CONCAT('ALTER TABLE `payzen_embedded_transaction_history` DROP FOREIGN KEY `', @admin_constraint, '`'));
+PREPARE drop_admin_statement FROM @statement;
+EXECUTE drop_admin_statement;
+DEALLOCATE PREPARE drop_admin_statement;
+SET @statement := IF(@admin_constraint IS NULL, 'DO 0', CONCAT('ALTER TABLE `payzen_embedded_transaction_history` ADD CONSTRAINT `', @admin_constraint, '` FOREIGN KEY (`admin_id`) REFERENCES `admin` (`id`) ON UPDATE RESTRICT ON DELETE SET NULL'));
+PREPARE add_admin_statement FROM @statement;
+EXECUTE add_admin_statement;
+DEALLOCATE PREPARE add_admin_statement;

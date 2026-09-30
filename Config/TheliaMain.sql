@@ -70,7 +70,7 @@ CREATE TABLE `payzen_embedded_transaction_history`
         FOREIGN KEY (`admin_id`)
         REFERENCES `admin` (`id`)
         ON UPDATE RESTRICT
-        ON DELETE RESTRICT,
+        ON DELETE SET NULL,
     CONSTRAINT `payzen_embedded_transaction_history_fk_16a5a4`
         FOREIGN KEY (`currency_id`)
         REFERENCES `currency` (`id`)
