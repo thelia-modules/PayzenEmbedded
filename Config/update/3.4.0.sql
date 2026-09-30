@@ -22,7 +22,7 @@ PREPARE add_parent_statement FROM @statement;
 EXECUTE add_parent_statement;
 DEALLOCATE PREPARE add_parent_statement;
 
--- The platform's detailed statuses go up to 33 characters (WAITING_AUTHORISATION_TO_VALIDATE), and
+-- The detailed statuses of the platform go up to 33 characters (WAITING_AUTHORISATION_TO_VALIDATE), and
 -- every transaction the platform lists for an order is recorded now: a column too short refuses
 -- the row, and the refund with it. Widened only when it is still too short.
 SET @widen_status := (SELECT COUNT(*) = 1 FROM `information_schema`.`COLUMNS` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = 'payzen_embedded_transaction_history' AND `COLUMN_NAME` = 'detailedStatus' AND `CHARACTER_MAXIMUM_LENGTH` < 64);
