@@ -115,6 +115,7 @@ return array(
     'The transaction history was refreshed.' => 'L\'historique de la transaction a été mis à jour.',
     'The transaction update could not be sent to PayZen, see the logs.' => 'La mise à jour de la transaction n\'a pas pu être transmise à PayZen, voir les journaux.',
     'The transaction was cancelled before its capture, the order is cancelled.' => 'La transaction a été annulée avant sa remise en banque, la commande est annulée.',
+    'The transaction was not updated: nothing handled the request, or PayZen answered an unexpected status.' => 'La transaction n\'a pas été mise à jour : rien n\'a traité la demande, ou PayZen a répondu un état inattendu.',
     'The transaction was updated.' => 'La transaction a été mise à jour.',
     'This amount should be greater or equal to the current transaction amount' => 'Ce montant doit être inférieur ou égal au montant initial de la transaction',
     'This information is passed with the payment request, and will be available in your PayZen back-office' => 'Transmis à PayZen et visible dans son back-office.',

@@ -29,6 +29,7 @@ use PayzenEmbedded\LyraClient\RefundOutcome;
 use PayzenEmbedded\LyraClient\RefundOutcomeUnknownException;
 use Thelia\Exception\TheliaProcessException;
 use Thelia\Log\Tlog;
+use PayzenEmbedded\LyraClient\LyraClientWrapper;
 use PayzenEmbedded\LyraClient\LyraTransactionGetWrapper;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
@@ -71,12 +72,19 @@ class OrderEditController extends BaseAdminController
             $data = $form->getData();
 
             if (null !== $order = OrderQuery::create()->findPk($orderId)) {
-                $dispatcher->dispatch(
-                    (new TransactionUpdateEvent($orderId))
-                        ->setAmount($data['amount'])
-                        ->setExpectedCaptureDate($data['capture_date'])
-                        ->setManualValidation(! $data['automatic_validation']),
-                PayzenEmbedded::TRANSACTION_UPDATE_EVENT);
+                $event = (new TransactionUpdateEvent($orderId))
+                    ->setAmount($data['amount'])
+                    ->setExpectedCaptureDate($data['capture_date'])
+                    ->setManualValidation(! $data['automatic_validation']);
+
+                $dispatcher->dispatch($event, PayzenEmbedded::TRANSACTION_UPDATE_EVENT);
+
+                // Nothing handled the event (a listener of a higher priority stopped it), or the
+                // platform answered a status the module does not know: saying "updated" would
+                // send the administrator away from a transaction that did not change.
+                if (null === $event->getPaymentStatus() || LyraClientWrapper::PAYMENT_STATUS_ERROR === $event->getPaymentStatus()) {
+                    throw new TheliaProcessException($translator->trans('The transaction was not updated: nothing handled the request, or PayZen answered an unexpected status.', [], PayzenEmbedded::DOMAIN_NAME));
+                }
 
                 $this->addFlash('success', $translator->trans('The transaction was updated.', [], PayzenEmbedded::DOMAIN_NAME));
 
