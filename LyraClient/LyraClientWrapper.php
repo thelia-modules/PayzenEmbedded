@@ -141,7 +141,8 @@ class LyraClientWrapper extends Client
             ->setParentuuid(self::bounded($outcome->parentUuid, 128))
             ->setAmount($outcome->amount)
             ->setCurrencyId($currencyId)
-            ->setCreationdate($outcome->createdAt !== null ? \DateTime::createFromImmutable($outcome->createdAt) : null)
+            // Kept as a UTC wall clock whatever the offset the platform wrote it with: see TransactionOutcome::fromHistoryRow().
+            ->setCreationdate($outcome->createdAt !== null ? \DateTime::createFromImmutable($outcome->createdAt)->setTimezone(new \DateTimeZone('UTC')) : null)
             ->setErrorcode(self::bounded($answer['errorCode'] ?? null, 10))
             ->setErrormessage(self::bounded($answer['errorMessage'] ?? null, 255))
             ->setDetailederrorcode(self::bounded($answer['detailedErrorCode'] ?? null, 10))

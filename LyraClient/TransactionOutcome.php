@@ -102,6 +102,10 @@ final readonly class TransactionOutcome
      * A row of the module's history, read the way the platform describes a transaction: rows
      * written before 3.4.0 carry no operation type and are debits, and no parent.
      *
+     * The creation date is kept as the platform's UTC wall clock (the column has no time zone),
+     * and the model reads it back in PHP's default time zone: it is read here as UTC again, or a
+     * shop outside UTC would place its own history hours off the notifications it weighs.
+     *
      * @param int|string|null $amount in the smallest unit of the currency, as the history stores it
      */
     public static function fromHistoryRow(
@@ -118,7 +122,7 @@ final readonly class TransactionOutcome
         return new self(
             (string) $uuid,
             strtoupper(trim((string) $status)),
-            null !== $createdAt ? \DateTimeImmutable::createFromInterface($createdAt) : null,
+            null !== $createdAt ? new \DateTimeImmutable($createdAt->format('Y-m-d H:i:s.u'), new \DateTimeZone('UTC')) : null,
             '' === $operationType ? self::OPERATION_DEBIT : $operationType,
             (int) $amount,
             strtoupper(trim((string) $detailedStatus)),
