@@ -74,4 +74,19 @@ final class PendingRefundTest extends TestCase
         self::assertSame(10, PendingRefund::startedAt(self::SENT, 0)->minutesLeft(self::SENT + 1));
         self::assertSame(1, PendingRefund::startedAt(self::SENT, 0)->minutesLeft(self::SENT + 599));
     }
+
+    public function testOnlyACreditAsLargeAsTheLostRequestSettlesTheDoubt(): void
+    {
+        $pending = PendingRefund::startedAt(self::SENT, 0, 1000);
+
+        self::assertTrue($pending->stillUnknown(500, self::SENT + 5), 'a smaller refund made from the PayZen back-office is not the lost one');
+        self::assertFalse($pending->stillUnknown(1000, self::SENT + 5));
+        self::assertFalse($pending->stillUnknown(0, self::SENT + 5, 0), 'nothing left to give back: a cancellation, or everything refunded');
+    }
+
+    public function testTheRequestedAmountRoundTripsAndAnOlderMarkerStillReads(): void
+    {
+        self::assertSame(1000, PendingRefund::fromMarker(PendingRefund::startedAt(self::SENT, 300, 1000)->marker())?->requested);
+        self::assertSame(0, PendingRefund::fromMarker(self::SENT . '|300')?->requested);
+    }
 }

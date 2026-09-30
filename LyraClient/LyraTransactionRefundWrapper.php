@@ -86,7 +86,7 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
             $pending = PendingRefund::fromMarker(PayzenEmbedded::getConfigValue($pendingKey));
 
             if (null !== $pending) {
-                if ($pending->stillUnknown($ledger->refundedAmount, time())) {
+                if ($pending->stillUnknown($ledger->refundedAmount, time(), $ledger->maximumAmount())) {
                     throw new TheliaProcessException(
                         Translator::getInstance()->trans(
                             'A previous refund of this order got no answer from PayZen and the platform does not list it yet: check the PayZen back-office, or try again in %minutes minutes.',
@@ -135,7 +135,7 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
                 // the connection dropped. The next attempt starts by reading the platform's list,
                 // and refuses to go on until the page shows what that list holds.
                 $this->log->addError(sprintf('Order %s: PayZen did not answer the refund request: %s', $order->getRef(), $exception->getMessage()));
-                $this->holdForPendingRefund($order, $ledger);
+                $this->holdForPendingRefund($order, $ledger, $amount);
 
                 throw new RefundOutcomeUnknownException(
                     Translator::getInstance()->trans('PayZen did not answer the refund request: refresh the order before trying again.', [], PayzenEmbedded::DOMAIN_NAME),
@@ -150,7 +150,7 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
             } catch (\Throwable $exception) {
                 // The platform has answered: whatever failed afterwards, the money may have moved.
                 $this->log->addError(sprintf('Order %s: PayZen answered the refund, but recording it failed: %s', $order->getRef(), $exception->getMessage()));
-                $this->holdForPendingRefund($order, $ledger);
+                $this->holdForPendingRefund($order, $ledger, $amount);
 
                 throw new RefundOutcomeUnknownException(
                     Translator::getInstance()->trans('PayZen answered the refund, but its result could not be recorded: refresh the order before trying again.', [], PayzenEmbedded::DOMAIN_NAME),
@@ -167,10 +167,10 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
      * A marker that cannot be written leaves the outcome unknown all the same: the refusal of the
      * page that did not see the refund still stands.
      */
-    private function holdForPendingRefund(Order $order, RefundLedger $ledger): void
+    private function holdForPendingRefund(Order $order, RefundLedger $ledger, int $amount): void
     {
         try {
-            PayzenEmbedded::setConfigValue(self::PENDING_REFUND_KEY . $order->getId(), PendingRefund::startedAt(time(), $ledger->refundedAmount)->marker());
+            PayzenEmbedded::setConfigValue(self::PENDING_REFUND_KEY . $order->getId(), PendingRefund::startedAt(time(), $ledger->refundedAmount, $amount)->marker());
         } catch (\Throwable $failure) {
             $this->log->addError(sprintf('Order %s: the refund of unknown outcome could not be held: %s', $order->getRef(), $failure::class));
         }

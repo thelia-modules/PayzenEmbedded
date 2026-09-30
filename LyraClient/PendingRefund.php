@@ -12,7 +12,7 @@ declare(strict_types=1);
 /*      For the full copyright and license information, please view the LICENSE.txt  */
 /*      file that was distributed with this source code.                             */
 /*************************************************************************************/
-namespace PayzenEmbedded\LyraClient;
+
 namespace PayzenEmbedded\LyraClient;
 
 /**
@@ -30,12 +30,14 @@ final readonly class PendingRefund
         public int $since,
         /** What the order had refunded when the request was sent, in the smallest unit. */
         public int $refundedBefore,
+        /** The amount the lost request asked for: only a credit that large settles the doubt. */
+        public int $requested = 0,
     ) {
     }
 
-    public static function startedAt(int $since, int $refundedBefore): self
+    public static function startedAt(int $since, int $refundedBefore, int $requested = 0): self
     {
-        return new self($since, $refundedBefore);
+        return new self($since, $refundedBefore, $requested);
     }
 
     /**
@@ -43,25 +45,28 @@ final readonly class PendingRefund
      */
     public static function fromMarker(?string $marker): ?self
     {
-        if (null === $marker || 1 !== preg_match('/^(\d+)\|(\d+)$/', $marker, $parts)) {
+        if (null === $marker || 1 !== preg_match('/^(\d+)\|(\d+)(?:\|(\d+))?$/', $marker, $parts)) {
             return null;
         }
 
-        return new self((int) $parts[1], (int) $parts[2]);
+        return new self((int) $parts[1], (int) $parts[2], (int) ($parts[3] ?? 0));
     }
 
     public function marker(): string
     {
-        return $this->since . '|' . $this->refundedBefore;
+        return $this->since . '|' . $this->refundedBefore . '|' . $this->requested;
     }
 
     /**
-     * Whether the refund may still be on its way: the platform lists nothing more than before, and
-     * the wait is not over. A credit listed since settles the doubt, whatever its state.
+     * Whether the refund may still be on its way: the platform lists less refunded than the lost
+     * request would have made (a smaller refund made meanwhile from the PayZen back-office is not
+     * it), something is still left to give back, and the wait is not over.
      */
-    public function stillUnknown(int $refundedNow, int $now): bool
+    public function stillUnknown(int $refundedNow, int $now, int $stillGivable = 1): bool
     {
-        return $refundedNow <= $this->refundedBefore && $now - $this->since < self::WAIT_SECONDS;
+        return $refundedNow < $this->refundedBefore + max(1, $this->requested)
+            && $stillGivable > 0
+            && $now - $this->since < self::WAIT_SECONDS;
     }
 
     public function minutesLeft(int $now): int
