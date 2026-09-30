@@ -101,7 +101,7 @@ class FrontController extends BasePaymentModuleController
             }
         } catch (\Throwable $ex) {
             // Anything the notification makes fail, a malformed answer included, is answered KO.
-            $this->getLog()->addError($translator->trans("Failed to process request, aborting. Error is " .$ex->getMessage(), [], PayzenEmbedded::DOMAIN_NAME));
+            $this->getLog()->addError(sprintf('PayZen notification failed, answered KO: %s: %s at %s:%d', $ex::class, $ex->getMessage(), $ex->getFile(), $ex->getLine()));
         }
 
         return new Response($gatewayResponseCode);
