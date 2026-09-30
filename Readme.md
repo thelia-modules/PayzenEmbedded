@@ -141,6 +141,12 @@ paiement (il précède le marqueur) et, pour un remboursement, seulement s'il po
 commande : deux boutiques sur un même contrat, ou deux environnements dans l'espace TEST, produisent les mêmes
 références de commande. Une notification pour une commande payée avec un autre module est ignorée.
 
+Le marqueur change avec l'URL du site : ne pas modifier l'URL de la boutique tant que des paiements sont en cours, leurs
+notifications seraient ignorées. Le bouton « Mettre l'historique à jour » de la fiche commande relit la liste des
+transactions de la commande chez PayZen (`Order/Get`) et enregistre ce qu'elle contient, remboursements et annulations
+faits depuis le Back Office PayZen compris. La commande passe « remboursée » quand il ne reste rien à rembourser ; une
+annulation faite depuis le Back Office PayZen apparaît dans l'historique et laisse le statut de la commande à la boutique.
+
 ## Installation
 
 Vous pouvez installer ce module avec Composer :
@@ -298,6 +304,12 @@ or a refund of it; what it notifies without one is accepted for a payment (it pr
 refund, only when it gives money back on the order's own transaction: two shops on one contract, or two
 environments in the TEST space, produce the same order references. A notification for an order paid with another
 module is ignored.
+
+The marker changes with the site URL: do not change the shop URL while payments are in progress, their notifications
+would be ignored. The "Refresh history" button of the order page reads the platform's list of the order's transactions
+(`Order/Get`) and records what it holds, refunds and cancellations made from the PayZen back-office included. The order
+moves to the refunded status once nothing is left to refund; a cancellation made from the PayZen back-office shows in
+the history and leaves the order status to the shop.
 
 ## Installation
 

@@ -5,6 +5,7 @@
 - The order page actions flash their outcome and their errors, which the Twig back-office showed nowhere: a refused amount or a platform error went to the log only.
 - Fixed the order page of a transaction still open in the Twig back-office, which broke on the capture date widget, and restored the field guidance the Twig back-office did not render.
 - The PayZen block reads the order id whichever name the back-office hands it: the Twig order page hands `order` to `order-edit.bottom` where every other hook receives `order_id`.
+- The "Refresh history" button also records every transaction the platform lists for the order (`Order/Get`): a refund or a cancellation made from the PayZen back-office now shows in the history, where the notification arbiter alone left a finished transaction untouched. A refund that leaves nothing to refund moves the order to the refunded status, as its notification does; a cancellation leaves the order status to the shop.
 
 - Every payment carries a shop marker in its metadata, and what the platform lists (`Order/Get`) or notifies is checked against it: two shops on one contract, or two environments in the TEST space, produce the same order references. A transaction without a marker is tied to an order only when it is the debit the order stands on, or a credit of that debit; a credit is deducted from the debit it gives money back on (`parentUuid`).
 - The transaction the order stands on is the one its reference names; the paid or latest attempt only speaks when the history does not know that reference.

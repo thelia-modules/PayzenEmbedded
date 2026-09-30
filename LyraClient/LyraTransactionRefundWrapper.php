@@ -32,9 +32,6 @@ use Thelia\Model\OrderStatusQuery;
  */
 class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
 {
-    /** The platform answers at most this many transactions for an order (PSP_015 beyond). */
-    private const ORDER_GET_LIMIT = 30;
-
     /** Two platform calls of up to 45 seconds each fit in this time. */
     private const LOCK_TTL = 120.0;
 
@@ -163,73 +160,6 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
             }
         } finally {
             $lock->release();
-        }
-    }
-
-    /**
-     * Record every transaction the platform holds for the order, credits included, through the
-     * Order/Get service. Nothing here moves the order: the history only catches up. A transaction
-     * the platform lists under this reference for another shop, another space or another order
-     * is left out, see TransactionProvenance.
-     *
-     * @throws LyraException
-     * @throws TheliaProcessException when the platform cannot list the order's transactions
-     */
-    private function syncTransactions(Order $order): void
-    {
-        $response = $this->post('V4/Order/Get', ['orderId' => $order->getRef()]);
-
-        $transactions = $response['answer']['transactions'] ?? null;
-
-        if (($response['status'] ?? null) !== 'SUCCESS' || !\is_array($transactions)) {
-            throw new TheliaProcessException(
-                Translator::getInstance()->trans(
-                    'Cannot check the order with PayZen before refunding it. Error is : %message (code %code)',
-                    [
-                        '%code' => (string) ($response['answer']['errorCode'] ?? 'undefined error code'),
-                        '%message' => (string) ($response['answer']['errorMessage'] ?? 'undefined error message'),
-                    ],
-                    PayzenEmbedded::DOMAIN_NAME
-                )
-            );
-        }
-
-        if (\count($transactions) >= self::ORDER_GET_LIMIT) {
-            $this->log->addWarning(sprintf(
-                'PayZen Order/Get answered %d transactions for order %s, its limit: the list may be incomplete.',
-                \count($transactions),
-                $order->getRef()
-            ));
-        }
-
-        $provenance = new TransactionProvenance(
-            (string) $order->getRef(),
-            PayzenEmbedded::platformMode(),
-            PayzenEmbedded::shopMarker(),
-            (string) $order->getTransactionRef()
-        );
-
-        foreach ($transactions as $answer) {
-            if (!\is_array($answer) || !\is_string($answer['uuid'] ?? null) || 1 !== preg_match('/^[0-9a-f]{32}$/i', $answer['uuid'])) {
-                continue;
-            }
-
-            // Order/Get lists every attempt of the order: no debit hint here, a transaction that
-            // does not say its operation type is a debit like any attempt.
-            $outcome = TransactionOutcome::fromAnswer($answer);
-
-            if (!$provenance->accepts($outcome)) {
-                $this->log->addWarning(sprintf(
-                    'PayZen transaction %s listed for order %s is not this shop\'s, for this order: ignored (%s).',
-                    $outcome->uuid,
-                    $order->getRef(),
-                    json_encode(['orderId' => $outcome->orderRef, 'mode' => $outcome->mode, 'marked' => null !== $outcome->shopMarker, 'parent' => $outcome->parentUuid])
-                ));
-
-                continue;
-            }
-
-            $this->updateTransactionHistory($answer, $order);
         }
     }
 

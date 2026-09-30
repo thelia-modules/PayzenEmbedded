@@ -15,6 +15,7 @@ use PayzenEmbedded\PayzenEmbedded;
 use Thelia\Core\Translation\Translator;
 use Thelia\Exception\TheliaProcessException;
 use Thelia\Model\Order;
+use Thelia\Model\OrderStatusQuery;
 
 /**
  * A wrapper around CreatePayment service to manage bith Javascript Client and PCI-DSS calls
@@ -26,7 +27,13 @@ use Thelia\Model\Order;
 class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
 {
     /**
-     * Perform a Get request to get transaction info and store it in the history table
+     * Bring the order up to date with the platform: the transaction the order stands on is read
+     * first and may move the order, as a notification would; then every transaction the platform
+     * lists for the order (a refund made from the PayZen back-office, a cancellation, an attempt
+     * the notification never reached the shop for) is recorded as the platform holds it, which
+     * the arbiter alone would refuse once the transaction is finished. A refund that leaves
+     * nothing to refund settles the order, as its notification would; a cancellation made from
+     * the PayZen back-office shows in the history and leaves the order status to the shop.
      *
      * @param Order $order
      * @throws LyraException
@@ -37,6 +44,14 @@ class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
         $response = $this->sendTransactionGetRequest($order);
 
         $this->processTransactionGetResponse($response);
+
+        $this->syncTransactions($order);
+
+        $ledger = (new TransactionHistoryReader())->ledgerOf($order);
+
+        if ($ledger->paidAmount > 0 && 0 === $ledger->refundableAmount()) {
+            $this->setOrderStatus($order, OrderStatusQuery::getRefundedStatus());
+        }
     }
 
     /**
