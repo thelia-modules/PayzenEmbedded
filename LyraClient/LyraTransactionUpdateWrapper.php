@@ -29,7 +29,7 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
      * Process the Transaction/Update request, and update the order if required.
      *
      * @param Order $order the order to process
-     * @param int|float|string $amount the new amount in the major unit, <= to the current one: text typed by an administrator, or a number the shop computed
+     * @param int|float|string|null $amount the new amount in the major unit, <= to the current one: text typed by an administrator, or a number the shop computed
      * @param \DateTime|null $captureDate the expected cature date, or null to use the default one.
      * @param boolean|null $manualValidation If false, it will be automatically validated, if null, the default configured in the PayZen back-offcie will be used.
      *
@@ -49,7 +49,7 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
      * Build the Transaction/Update parameters, and call te service.
      *
      * @param Order $order the order to process
-     * @param int|float|string $amount the new amount in the major unit, <= to the current one: text typed by an administrator, or a number the shop computed
+     * @param int|float|string|null $amount the new amount in the major unit, <= to the current one: text typed by an administrator, or a number the shop computed
      * @param \DateTime|null $captureDate the expected cature date, or null to use the default one.
      * @param boolean|null $manualValidation If false, it will be automatically validated, if null, the default configured in the PayZen back-offcie will be used.
      *
