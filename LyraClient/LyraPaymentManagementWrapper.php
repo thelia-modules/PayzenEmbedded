@@ -15,6 +15,7 @@ use PayzenEmbedded\Model\PayzenEmbeddedCustomerToken;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\Lock\Exception\ExceptionInterface as LockException;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\LockInterface;
 use Symfony\Component\Lock\Store\FlockStore;
@@ -44,6 +45,9 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
 
     /** Two platform calls of up to 45 seconds each fit in this time. */
     protected const ORDER_LOCK_TTL = 120.0;
+
+    /** How long an operation the shop runs on its own waits for a locked order before giving up. */
+    protected const ORDER_LOCK_WAIT = 15.0;
 
     protected ?LockFactory $lockFactory;
 
@@ -87,11 +91,13 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
      * A wrapper built without the framework's factory (the notification, the payment) locks on
      * this node's file system: said in the log, since such a lock holds one server only.
      *
-     * @param bool $blocking wait for the order instead of refusing it: for an operation the shop
-     *                       runs on its own, such as the capture after picking, whose refusal
-     *                       would be read as a failed payment
+     * @param bool $blocking wait for the order, up to ORDER_LOCK_WAIT seconds, instead of refusing
+     *                       it at once: for an operation the shop runs on its own, such as the
+     *                       capture after picking, whose refusal would be read as a failed payment.
+     *                       Bounded on purpose: the component's own blocking wait has no limit on
+     *                       a semaphore or flock store, and a web request cannot wait that long.
      *
-     * @throws TheliaProcessException when another operation holds the order
+     * @throws TheliaProcessException when another operation holds the order, or the lock store fails
      */
     protected function acquireOrderLock(Order $order, bool $blocking = false): LockInterface
     {
@@ -106,7 +112,26 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             self::ORDER_LOCK_TTL
         );
 
-        if (!$lock->acquire($blocking)) {
+        $deadline = microtime(true) + ($blocking ? self::ORDER_LOCK_WAIT : 0.0);
+
+        try {
+            $acquired = $lock->acquire();
+
+            while (!$acquired && microtime(true) < $deadline) {
+                usleep(200_000);
+                $acquired = $lock->acquire();
+            }
+        } catch (LockException $storeFailure) {
+            // A store that cannot answer (redis down, no semaphore left) is not an order held by
+            // someone: said as such, and read by the caller as any refusal of the module.
+            throw new TheliaProcessException(
+                Translator::getInstance()->trans('The order could not be locked: %message', ['%message' => $storeFailure->getMessage()], PayzenEmbedded::DOMAIN_NAME),
+                0,
+                $storeFailure
+            );
+        }
+
+        if (!$acquired) {
             throw new TheliaProcessException(
                 Translator::getInstance()->trans('A refund of this order is already running.', [], PayzenEmbedded::DOMAIN_NAME)
             );

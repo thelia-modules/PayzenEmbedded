@@ -112,6 +112,7 @@ return array(
     'The test password. This is the "Test Password" in the PayZen Expert Back Office' => '« Mot de passe de test » du Back Office Expert.',
     'The transaction %uuid was neither cancelled nor refunded (status %status).' => 'La transaction %uuid n\'a été ni annulée ni remboursée (statut %status).',
     'The transaction could not be read from PayZen, see the logs.' => 'La transaction n\'a pas pu être lue chez PayZen, voir les journaux.',
+    'The order could not be locked: %message' => 'La commande n\'a pas pu être verrouillée : %message',
     'The order still carries no PayZen transaction: the history was recorded, but the order was not moved. Replay the notification of its payment from the PayZen back-office.' => 'La commande ne porte toujours aucune transaction PayZen : l\'historique a été enregistré, mais la commande n\'a pas bougé. Rejouer la notification de son paiement depuis le Back Office Marchand PayZen.',
     'The transaction history was refreshed.' => 'L\'historique de la transaction a été mis à jour.',
     'The transaction update could not be sent to PayZen, see the logs.' => 'La mise à jour de la transaction n\'a pas pu être transmise à PayZen, voir les journaux.',
