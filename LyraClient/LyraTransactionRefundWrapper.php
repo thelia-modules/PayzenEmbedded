@@ -132,7 +132,7 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
                 );
             }
         } finally {
-            $lock->release();
+            $this->releaseOrderLock($lock, $order);
         }
     }
 

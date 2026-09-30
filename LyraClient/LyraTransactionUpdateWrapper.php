@@ -51,7 +51,7 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
 
             return $this->processTransactionUpdateResponse($response);
         } finally {
-            $lock->release();
+            $this->releaseOrderLock($lock, $order);
         }
     }
 

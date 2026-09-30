@@ -144,6 +144,20 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
     }
 
     /**
+     * Give the order back once the operation is over, whatever the store says: the operation's own
+     * result (money refunded, payment captured) is what the caller has to read, and a lock the store
+     * cannot release expires on its own after ORDER_LOCK_TTL.
+     */
+    protected function releaseOrderLock(LockInterface $lock, Order $order): void
+    {
+        try {
+            $lock->release();
+        } catch (LockException $releaseFailure) {
+            $this->log->addError(sprintf('PayZen order lock: release failed on order %d, it expires on its own: %s', $order->getId(), $releaseFailure::class));
+        }
+    }
+
+    /**
      * Build CreatePayement web service input parameters from the givent order, and call the service.
      *
      * @param Order $order

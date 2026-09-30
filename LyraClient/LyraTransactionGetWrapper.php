@@ -67,7 +67,7 @@ class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
                 $this->setOrderStatus($order, OrderStatusQuery::getRefundedStatus());
             }
         } finally {
-            $lock->release();
+            $this->releaseOrderLock($lock, $order);
         }
     }
 
