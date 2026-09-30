@@ -151,7 +151,7 @@ class BackHookManager extends BaseHook
             $this->render('payzen-embedded/order-edit.html.twig', [
                 'order_id' => $orderId,
                 'transactions' => $transactions,
-                'finished' => $finished,
+                'finished' => $finished || '' === $reference,
                 'last_transaction_amount' => $lastTransactionAmount,
                 'paid_amount' => RefundAmount::format($ledger->paidAmount, $currencyCode),
                 'refunded_amount' => RefundAmount::format($ledger->refundedAmount, $currencyCode),
@@ -159,7 +159,9 @@ class BackHookManager extends BaseHook
                 'refundable_amount' => RefundAmount::format($ledger->refundableAmount(), $currencyCode),
                 'is_cancellable' => $ledger->isCancellable(),
                 'maximum_amount' => RefundAmount::format($ledger->maximumAmount(), $currencyCode),
-                'can_give_back' => $ledger->maximumAmount() > 0,
+                // An order that carries no transaction cannot be refunded nor updated: the history
+                // may list its payment, but only the notification ties the order to it.
+                'can_give_back' => '' !== $reference && $ledger->maximumAmount() > 0,
                 'can_act' => $canAct,
                 'currency_symbol' => $order->getCurrency()?->getSymbol() ?? '',
                 'get_form' => $getForm->createView()->getView(),
