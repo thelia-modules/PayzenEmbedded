@@ -23,8 +23,9 @@ EXECUTE add_parent_statement;
 DEALLOCATE PREPARE add_parent_statement;
 
 -- The detailed statuses of the platform go up to 33 characters (WAITING_AUTHORISATION_TO_VALIDATE), and
--- every transaction the platform lists for an order is recorded now: a column too short refuses
--- the row, and the refund with it. Widened only when it is still too short.
+-- every transaction the platform lists for an order is recorded now: a column too short cuts the
+-- status, read back as another one, or refuses the row on a strict server. Widened only when it is
+-- still too short.
 SET @widen_status := (SELECT COUNT(*) = 1 FROM `information_schema`.`COLUMNS` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = 'payzen_embedded_transaction_history' AND `COLUMN_NAME` = 'detailedStatus' AND `CHARACTER_MAXIMUM_LENGTH` < 64);
 SET @statement := IF(@widen_status, 'ALTER TABLE `payzen_embedded_transaction_history` MODIFY `detailedStatus` VARCHAR(64)', 'DO 0');
 PREPARE widen_status_statement FROM @statement;
@@ -52,3 +53,11 @@ SET @statement := IF(@admin_constraint IS NULL, 'DO 0', CONCAT('ALTER TABLE `pay
 PREPARE add_admin_statement FROM @statement;
 EXECUTE add_admin_statement;
 DEALLOCATE PREPARE add_admin_statement;
+
+-- The replacement above is two statements: a run stopped between them leaves no constraint on
+-- the administrator, which the guard above cannot see. It is created here whenever none exists.
+SET @admin_missing := (SELECT COUNT(*) = 0 FROM `information_schema`.`KEY_COLUMN_USAGE` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = 'payzen_embedded_transaction_history' AND `COLUMN_NAME` = 'admin_id' AND `REFERENCED_TABLE_NAME` = 'admin');
+SET @statement := IF(@admin_missing, 'ALTER TABLE `payzen_embedded_transaction_history` ADD CONSTRAINT `payzen_embedded_transaction_history_fk_admin` FOREIGN KEY (`admin_id`) REFERENCES `admin` (`id`) ON UPDATE RESTRICT ON DELETE SET NULL', 'DO 0');
+PREPARE restore_admin_statement FROM @statement;
+EXECUTE restore_admin_statement;
+DEALLOCATE PREPARE restore_admin_statement;
