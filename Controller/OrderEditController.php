@@ -86,7 +86,13 @@ class OrderEditController extends BaseAdminController
                     throw new TheliaProcessException($translator->trans('The transaction was not updated: nothing handled the request, or PayZen answered an unexpected status.', [], PayzenEmbedded::DOMAIN_NAME));
                 }
 
-                $this->addFlash('success', $translator->trans('The transaction was updated.', [], PayzenEmbedded::DOMAIN_NAME));
+                // The platform answered, but the payment is not paid (refused, or a transaction the
+                // order does not stand on): the order may have been cancelled, never "updated".
+                if (LyraClientWrapper::PAYMENT_STATUS_NOT_PAID === $event->getPaymentStatus()) {
+                    $this->addFlash('warning', $translator->trans('PayZen answered, but the payment is not paid: check the order and its history.', [], PayzenEmbedded::DOMAIN_NAME));
+                } else {
+                    $this->addFlash('success', $translator->trans('The transaction was updated.', [], PayzenEmbedded::DOMAIN_NAME));
+                }
 
                 // The platform has answered: a failure to write the trace is not a failed update.
                 try {
