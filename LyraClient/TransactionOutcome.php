@@ -89,9 +89,14 @@ final readonly class TransactionOutcome
             strtoupper((string) ($answer['status'] ?? '')),
             $createdAt,
             $operationType,
-            (int) ($answer['amount'] ?? 0),
+            // A credit gives money back whatever the sign the platform writes it with: counted
+            // negative, it would add to what is left to refund.
+            self::OPERATION_CREDIT === $operationType ? abs((int) ($answer['amount'] ?? 0)) : (int) ($answer['amount'] ?? 0),
             strtoupper(trim((string) ($answer['detailedStatus'] ?? ''))),
-            self::stringOrNull($answer['transactionDetails']['parentTransactionUuid'] ?? null),
+            // A credit the module asked for on the debit it names gives money back on that debit,
+            // whether or not the answer says so.
+            self::stringOrNull($answer['transactionDetails']['parentTransactionUuid'] ?? null)
+                ?? (self::OPERATION_CREDIT === $operationType && null !== $debitUuid && '' !== $debitUuid && $uuid !== $debitUuid ? $debitUuid : null),
             self::stringOrNull($answer['metadata'][self::SHOP_MARKER_KEY] ?? null),
             strtoupper(trim((string) ($answer['orderDetails']['mode'] ?? ''))),
             trim((string) ($answer['orderDetails']['orderId'] ?? ''))

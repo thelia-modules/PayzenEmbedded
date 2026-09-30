@@ -37,6 +37,8 @@ final readonly class NotificationProvenance
         private string $shopMarker,
         private string $orderDebitUuid,
         private string $expectedMode = 'TEST',
+        /** @var list<string> the transactions the history already holds for this order: the shop's */
+        private array $knownUuids = [],
     ) {
     }
 
@@ -44,6 +46,10 @@ final readonly class NotificationProvenance
     {
         if ('' !== $this->notifiedMode && $this->notifiedMode !== $this->expectedMode) {
             return false;
+        }
+
+        if (\in_array($transaction->uuid, $this->knownUuids, true)) {
+            return true;
         }
 
         if (null !== $transaction->shopMarker) {

@@ -280,7 +280,8 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
                         strtoupper(trim((string) ($response['orderDetails']['mode'] ?? ''))),
                         PayzenEmbedded::shopMarker(),
                         (string) $order->getTransactionRef(),
-                        PayzenEmbedded::platformMode()
+                        PayzenEmbedded::platformMode(),
+                        (new TransactionHistoryReader())->uuidsOf($order)
                     );
 
                     if (!$provenance->accepts($incoming)) {
@@ -461,7 +462,8 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             (string) $order->getRef(),
             PayzenEmbedded::platformMode(),
             PayzenEmbedded::shopMarker(),
-            (string) $order->getTransactionRef()
+            (string) $order->getTransactionRef(),
+            (new TransactionHistoryReader())->uuidsOf($order)
         );
 
         foreach ($transactions as $answer) {

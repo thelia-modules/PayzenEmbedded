@@ -138,7 +138,8 @@ class LyraClientWrapper extends Client
             ->setDetailedstatus(self::bounded($outcome->detailedStatus, 64))
             ->setStatus(self::bounded($outcome->status, 32))
             ->setOperationtype(self::bounded($outcome->operationType, 16))
-            ->setParentuuid(self::bounded($outcome->parentUuid, 128))
+            // A parent the answer does not repeat is kept: an answer that says less is no correction.
+            ->setParentuuid(self::bounded($outcome->parentUuid ?? $transaction->getParentuuid(), 128))
             ->setAmount($outcome->amount)
             ->setCurrencyId($currencyId)
             // Kept as a UTC wall clock whatever the offset the platform wrote it with: see TransactionOutcome::fromHistoryRow().

@@ -187,7 +187,7 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
         $this->log->addInfo(sprintf(
             'PayZen CancelOrRefund answer for order %s: %s',
             $order->getRef(),
-            json_encode(array_intersect_key($answer, array_flip(['uuid', 'status', 'detailedStatus', 'operationType', 'amount', 'currency', 'errorCode', 'errorMessage', 'detailedErrorCode'])))
+            json_encode(array_intersect_key($answer, array_flip(['uuid', 'status', 'detailedStatus', 'operationType', 'amount', 'currency', 'errorCode', 'errorMessage', 'detailedErrorCode', 'transactionDetails', 'metadata'])))
         ));
 
         $debitUuid = (string) $order->getTransactionRef();

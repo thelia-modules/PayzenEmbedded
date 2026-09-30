@@ -20,7 +20,8 @@ namespace PayzenEmbedded\LyraClient;
  * order. Two shops on one contract, or two environments in the TEST space, produce the same
  * references: the marker sent with every payment tells them apart. A transaction without one
  * (created before the marker existed, or by another instance) is trusted only when it is the
- * debit the order stands on, or a credit of that debit.
+ * debit the order stands on, or a credit of that debit. One the history already holds for this
+ * order is the shop's: the history refuses a transaction of another order.
  */
 final readonly class TransactionProvenance
 {
@@ -29,6 +30,8 @@ final readonly class TransactionProvenance
         private string $mode,
         private string $shopMarker,
         private string $orderDebitUuid,
+        /** @var list<string> the transactions the history already holds for this order */
+        private array $knownUuids = [],
     ) {
     }
 
@@ -40,6 +43,10 @@ final readonly class TransactionProvenance
 
         if ('' !== $transaction->mode && $transaction->mode !== $this->mode) {
             return false;
+        }
+
+        if (\in_array($transaction->uuid, $this->knownUuids, true)) {
+            return true;
         }
 
         if (null !== $transaction->shopMarker) {

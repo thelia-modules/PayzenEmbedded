@@ -56,4 +56,15 @@ final readonly class TransactionHistoryReader
     {
         return RefundLedger::fromTransactions($this->outcomesOf($order), (string) $order->getTransactionRef());
     }
+
+    /**
+     * @return list<string> the transactions the history holds for the order
+     */
+    public function uuidsOf(Order $order): array
+    {
+        return array_values(array_filter(array_map(
+            static fn (TransactionOutcome $outcome): string => $outcome->uuid,
+            $this->outcomesOf($order)
+        ), static fn (string $uuid): bool => '' !== $uuid));
+    }
 }
