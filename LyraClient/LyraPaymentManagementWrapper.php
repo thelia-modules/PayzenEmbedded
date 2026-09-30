@@ -130,6 +130,7 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             throw new TheliaProcessException(
                 Translator::getInstance()->trans('The order could not be locked: %message', ['%message' => $storeFailure->getMessage()], PayzenEmbedded::DOMAIN_NAME),
                 0,
+                null,
                 $storeFailure
             );
         }
