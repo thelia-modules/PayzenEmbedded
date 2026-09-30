@@ -68,7 +68,14 @@ class FrontController extends BasePaymentModuleController
             /* Retrieve the IPN content */
             $rawAnswer = $lyraClient->getParsedFormAnswer();
 
-            if (!$lyraClient->checkHash()) {
+            // The platform signs its notification with the REST password (kr-hash-key "password").
+            // The answer the shopper's browser receives is signed with the public HMAC key: it is
+            // the shopper's to hold, and must not be taken here for the platform's word. An empty
+            // password would sign with an empty key, which anyone can do.
+            $signedByThePlatform = 'password' === $this->getRequest()->request->get('kr-hash-key')
+                && '' !== (string) $lyraClient->getPassword();
+
+            if (!$signedByThePlatform || !$lyraClient->checkHash()) {
                 $this->getLog()->addError($translator->trans("Invalid signature received, aborting.", [], PayzenEmbedded::DOMAIN_NAME));
                 throw new \Exception($translator->trans("Invalid signature received, aborting.", [], PayzenEmbedded::DOMAIN_NAME));
             }
