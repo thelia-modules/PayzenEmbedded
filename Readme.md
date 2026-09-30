@@ -130,7 +130,9 @@ hors limites ou un refus de la plateforme lève une `TheliaProcessException` ; u
 
 ### Verrou et instances multiples
 
-Un remboursement verrouille la commande le temps des appels à PayZen. Le verrou passe par le composant `lock` de
+Un remboursement, une mise à jour de l'historique ou une modification de la transaction (la remise en banque après
+préparation, par exemple) verrouille la commande le temps des appels à PayZen : la modification attend la fin du
+remboursement, les deux autres refusent. Le verrou passe par le composant `lock` de
 Symfony : avec le magasin par défaut (`LOCK_DSN=semaphore` ou `flock`), il ne vaut que pour un serveur. Une boutique
 servie par plusieurs serveurs doit configurer un magasin partagé (`LOCK_DSN=redis://…` ou `pdo`).
 
@@ -295,7 +297,9 @@ attempt starts by reading the platform again.
 
 ### Lock and multiple instances
 
-A refund locks the order while the platform is called. The lock goes through Symfony's `lock` component: with the
+A refund, a history refresh or a transaction update (the capture after picking, say) locks the order while the
+platform is called: the update waits for a running refund, the two others refuse. The lock goes through Symfony's
+`lock` component: with the
 default store (`LOCK_DSN=semaphore` or `flock`) it holds one server. A shop served by several servers needs a shared
 store (`LOCK_DSN=redis://…` or `pdo`).
 
