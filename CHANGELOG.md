@@ -22,6 +22,9 @@
 - The transaction update reports a failure when nothing handled its event or the platform answered an unexpected status, instead of "updated".
 - The order page of a transaction still open broke on the capture date widget; the outcome and the errors of the three actions went to the parser context and were lost on redirect, they are flashed now; the field guidance is rendered again; the update form is kept until the payment is captured, and its amount rule is declared the way the current form component expects, every submission failed on it before.
 
+## Payment request
+- The amount sent to create a payment is rounded to the smallest unit of the currency, where it was truncated: a total with more decimals than the currency (a legacy order total keeps four) is sent to the nearest cent instead of the cent below.
+
 ## Front-office
 - The SmartForm no longer asks to register the card when the one click payments are allowed: the platform left Apple Pay and Google Pay out of such a form. A customer who already registered a card keeps paying with it. The card form is unchanged.
 - The payment error page no longer links to a `contact` route: Flexy has none, and the missing route turned a refused payment form into a 500.
