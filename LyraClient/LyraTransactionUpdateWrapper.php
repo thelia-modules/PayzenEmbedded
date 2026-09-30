@@ -41,8 +41,9 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
      */
     public function updateTransaction(Order $order, int|float|string|null $amount, $captureDate, $manualValidation)
     {
-        // The same lock as the refund, waited for (a few seconds) rather than refused at once: the
-        // capture after picking is the shop's own doing, and a refusal would be read as a failed payment.
+        // The same lock as the refund, waited for (up to ORDER_LOCK_WAIT seconds) rather than refused
+        // at once: the capture after picking is the shop's own doing, and a refusal would be read as a
+        // failed payment.
         $lock = $this->acquireOrderLock($order, true);
 
         try {

@@ -123,7 +123,10 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             }
         } catch (LockException $storeFailure) {
             // A store that cannot answer (redis down, no semaphore left) is not an order held by
-            // someone: said as such, and read by the caller as any refusal of the module.
+            // someone: said as such, and read by the caller as any refusal of the module. The cause
+            // stays in the log by its class only: a store's own message may quote its DSN.
+            $this->log->addError(sprintf('PayZen order lock: store failure on order %d: %s caused by %s', $order->getId(), $storeFailure::class, get_debug_type($storeFailure->getPrevious())));
+
             throw new TheliaProcessException(
                 Translator::getInstance()->trans('The order could not be locked: %message', ['%message' => $storeFailure->getMessage()], PayzenEmbedded::DOMAIN_NAME),
                 0,

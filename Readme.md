@@ -132,7 +132,8 @@ hors limites ou un refus de la plateforme lève une `TheliaProcessException` ; u
 
 Un remboursement, une mise à jour de l'historique ou une modification de la transaction (la remise en banque après
 préparation, par exemple) verrouille la commande le temps des appels à PayZen : la modification attend la fin du
-remboursement (15 secondes au plus, puis elle échoue), les deux autres refusent. Le verrou passe par le composant `lock` de
+remboursement (15 secondes au plus, puis elle échoue : le module hôte qui a demandé la capture décide alors du statut de
+la commande, et la capture se rejoue une fois le remboursement terminé), les deux autres refusent. Le verrou passe par le composant `lock` de
 Symfony : avec le magasin par défaut (`LOCK_DSN=semaphore` ou `flock`), il ne vaut que pour un serveur. Une boutique
 servie par plusieurs serveurs doit configurer un magasin partagé (`LOCK_DSN=redis://…` ou `pdo`).
 
@@ -298,7 +299,9 @@ attempt starts by reading the platform again.
 ### Lock and multiple instances
 
 A refund, a history refresh or a transaction update (the capture after picking, say) locks the order while the
-platform is called: the update waits for a running refund (15 seconds at most, then it fails), the two others refuse. The lock goes through Symfony's
+platform is called: the update waits for a running refund (15 seconds at most, then it fails: the host module that
+asked for the capture decides on the order status, and the capture is asked for again once the refund is over), the
+two others refuse. The lock goes through Symfony's
 `lock` component: with the
 default store (`LOCK_DSN=semaphore` or `flock`) it holds one server. A shop served by several servers needs a shared
 store (`LOCK_DSN=redis://…` or `pdo`).
