@@ -79,7 +79,7 @@ class LyraClientWrapper extends Client
         $currency = isset($answer['currency']) ? CurrencyQuery::create()->findOneByCode($answer['currency']) : null;
 
         $transaction = PayzenEmbeddedTransactionHistoryQuery::create()
-            ->filterByUuid($outcome->uuid)
+            ->filterByUuid(self::bounded($outcome->uuid, 128))
             ->findOne()
             ?? new PayzenEmbeddedTransactionHistory();
 
@@ -108,7 +108,7 @@ class LyraClientWrapper extends Client
             $previous = $exception->getPrevious();
             $duplicate = $previous instanceof \PDOException && 1062 === (int) ($previous->errorInfo[1] ?? 0);
 
-            if (!$duplicate || !$transaction->isNew() || null === $existing = PayzenEmbeddedTransactionHistoryQuery::create()->filterByUuid($outcome->uuid)->findOne()) {
+            if (!$duplicate || !$transaction->isNew() || null === $existing = PayzenEmbeddedTransactionHistoryQuery::create()->filterByUuid(self::bounded($outcome->uuid, 128))->findOne()) {
                 throw $exception;
             }
 
@@ -134,7 +134,7 @@ class LyraClientWrapper extends Client
         $transaction
             ->setOrderId($order->getId())
             ->setCustomerId($order->getCustomerId())
-            ->setUuid($outcome->uuid)
+            ->setUuid(self::bounded($outcome->uuid, 128))
             ->setDetailedstatus(self::bounded($outcome->detailedStatus, 64))
             ->setStatus(self::bounded($outcome->status, 32))
             ->setOperationtype(self::bounded($outcome->operationType, 16))
