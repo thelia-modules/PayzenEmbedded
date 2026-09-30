@@ -42,6 +42,7 @@ return array(
     'Test payments' => 'Paiements de test',
     'The customer paid %paid, %refunded was refunded so far and %refundable can still be refunded. A payment not captured yet is cancelled in full; a captured one is refunded, in full or in part. This cannot be undone.' => 'Le client a payé %paid, %refunded a déjà été remboursé et %refundable peut encore l\'être. Un paiement non encore remis en banque est annulé en totalité ; un paiement remis est remboursé, en totalité ou en partie. Cette opération est irréversible.',
     'The payment of %amount is waiting for its capture: it can only be cancelled, in full. This cannot be undone.' => 'Le paiement de %amount est en attente de remise en banque : il ne peut être qu\'annulé, en totalité. Cette opération est irréversible.',
+    'If the bank captured it since, refresh the history first: a captured payment can be refunded in part.' => 'Si la banque l\'a remis depuis, mettez d\'abord l\'historique à jour : un paiement remis en banque peut être remboursé en partie.',
     'There is no history for this transaction.' => 'Il n\'existe pas d\'historique pour cette transaction',
     'There is no transaction history for this customer.' => 'Ce client n\'a pas réalisé de transaction avec PayZen',
     'This refund cannot be undone. Continue?' => 'Ce remboursement est irréversible. Continuer ?',

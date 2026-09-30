@@ -89,6 +89,7 @@
                     <div class="alert alert-info">
                         {% if is_cancellable %}
                             {{ 'The payment of %amount is waiting for its capture: it can only be cancelled, in full. This cannot be undone.'|trans({'%amount': maximum_amount ~ ' ' ~ currency_symbol}, _d) }}
+                            {{ 'If the bank captured it since, refresh the history first: a captured payment can be refunded in part.'|trans({}, _d) }}
                         {% else %}
                             {{ 'The customer paid %paid, %refunded was refunded so far and %refundable can still be refunded. A payment not captured yet is cancelled in full; a captured one is refunded, in full or in part. This cannot be undone.'|trans({
                                 '%paid': paid_amount ~ ' ' ~ currency_symbol,
@@ -110,14 +111,8 @@
                             <div class="col-md-4">
                                 {{ form_label(refund_form.amount) }}
                                 <div class="input-group">
-                                    {# A cancellation is total, so the amount is fixed. A refund is typed in: prefilled with the maximum, a hasty click would have refunded everything. #}
-                                    {% set refund_amount_attr = {'class': 'form-control' ~ (refund_form.amount.vars.errors|length ? ' is-invalid' : '')} %}
-                                    {% if is_cancellable %}
-                                        {% set refund_amount_attr = refund_amount_attr|merge({'readonly': 'readonly'}) %}
-                                    {% else %}
-                                        {% set refund_amount_attr = refund_amount_attr|merge({'placeholder': maximum_amount}) %}
-                                    {% endif %}
-                                    {{ form_widget(refund_form.amount, {'value': is_cancellable ? maximum_amount : '', 'attr': refund_amount_attr}) }}
+                                    {# Typed in, never prefilled: a hasty click would have given everything back. Never locked either: the history may be behind the platform (a payment captured since), which the refund reads again before anything is sent. #}
+                                    {{ form_widget(refund_form.amount, {'value': '', 'attr': {'class': 'form-control' ~ (refund_form.amount.vars.errors|length ? ' is-invalid' : ''), 'placeholder': maximum_amount}}) }}
                                     <span class="input-group-text">{{ currency_symbol }}</span>
                                 </div>
                                 {% if refund_form.amount.vars.label_attr.help is defined %}<div class="form-text">{{ refund_form.amount.vars.label_attr.help }}</div>{% endif %}
