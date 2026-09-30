@@ -75,6 +75,16 @@ class LyraClientWrapper extends Client
      */
     protected function updateTransactionHistory($answer, Order $order, ?Admin $admin = null, ?string $debitUuid = null): void
     {
+        // An answer that does not say what the transaction is (a listing, say) is no correction of a
+        // type the history already holds: a credit read back as a debit would leave the ledger.
+        if ('' === trim((string) ($answer['operationType'] ?? '')) && \is_scalar($answer['uuid'] ?? null)) {
+            $known = PayzenEmbeddedTransactionHistoryQuery::create()->filterByUuid(self::bounded($answer['uuid'], 128))->findOne();
+
+            if (null !== $known && '' !== (string) $known->getOperationtype()) {
+                $answer['operationType'] = $known->getOperationtype();
+            }
+        }
+
         $outcome = TransactionOutcome::fromAnswer($answer, $debitUuid);
         $currency = isset($answer['currency']) ? CurrencyQuery::create()->findOneByCode($answer['currency']) : null;
 

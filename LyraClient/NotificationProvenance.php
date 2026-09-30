@@ -48,6 +48,11 @@ final readonly class NotificationProvenance
             return false;
         }
 
+        // A marker of another shop is never this shop's, whatever the history holds.
+        if (null !== $transaction->shopMarker && $transaction->shopMarker !== $this->shopMarker) {
+            return false;
+        }
+
         if (\in_array($transaction->uuid, $this->knownUuids, true)) {
             return true;
         }

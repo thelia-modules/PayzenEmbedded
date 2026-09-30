@@ -129,7 +129,7 @@ final readonly class TransactionOutcome
             strtoupper(trim((string) $status)),
             null !== $createdAt ? new \DateTimeImmutable($createdAt->format('Y-m-d H:i:s.u'), new \DateTimeZone('UTC')) : null,
             '' === $operationType ? self::OPERATION_DEBIT : $operationType,
-            (int) $amount,
+            self::OPERATION_CREDIT === $operationType ? abs((int) $amount) : (int) $amount,
             strtoupper(trim((string) $detailedStatus)),
             self::stringOrNull($parentUuid)
         );

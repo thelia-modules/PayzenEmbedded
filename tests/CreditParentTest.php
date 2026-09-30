@@ -97,4 +97,18 @@ final class CreditParentTest extends TestCase
         self::assertSame(669, TransactionOutcome::fromAnswer(['uuid' => self::CREDIT, 'status' => 'PAID', 'operationType' => 'CREDIT', 'amount' => -669])->amount);
         self::assertSame(-5, TransactionOutcome::fromAnswer(['uuid' => self::DEBIT, 'status' => 'PAID', 'operationType' => 'DEBIT', 'amount' => -5])->amount);
     }
+
+    public function testAKnownTransactionMarkedByAnotherShopStaysOut(): void
+    {
+        $foreign = TransactionOutcome::fromAnswer(['uuid' => self::CREDIT, 'status' => 'PAID', 'operationType' => 'CREDIT', 'metadata' => ['thelia_shop' => 'another-shop'], 'orderDetails' => ['orderId' => self::REF, 'mode' => 'TEST']]);
+
+        self::assertFalse((new TransactionProvenance(self::REF, 'TEST', self::SHOP, self::DEBIT, [self::CREDIT]))->accepts($foreign));
+        self::assertFalse((new NotificationProvenance('TEST', self::SHOP, self::DEBIT, 'TEST', [self::CREDIT]))->accepts($foreign));
+    }
+
+    public function testACreditStoredNegativeIsReadBackPositive(): void
+    {
+        self::assertSame(669, TransactionOutcome::fromHistoryRow(self::CREDIT, 'PAID', null, 'CREDIT', -669, 'CAPTURED', self::DEBIT)->amount);
+        self::assertSame(-5, TransactionOutcome::fromHistoryRow(self::DEBIT, 'PAID', null, 'DEBIT', -5, 'CAPTURED', null)->amount);
+    }
 }
