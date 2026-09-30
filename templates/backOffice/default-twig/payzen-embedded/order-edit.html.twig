@@ -79,6 +79,10 @@
                     {{ form_end(update_form) }}
                 {% endif %}
 
+                {% if other_payments_left and can_act %}
+                    <div class="alert alert-warning">{{ 'Another payment of this order, %amount, was taken by PayZen and is not refunded: refund it from the PayZen back-office. The order is not set refunded while it is held.'|trans({'%amount': other_payments_left ~ ' ' ~ currency_symbol}, _d) }}</div>
+                {% endif %}
+
                 {% if can_give_back and can_act %}
                     <hr>
                     <h3 class="h6">{{ 'Cancel or refund the payment'|trans({}, _d) }}</h3>

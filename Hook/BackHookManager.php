@@ -162,6 +162,7 @@ class BackHookManager extends BaseHook
                 // An order that carries no transaction cannot be refunded nor updated: the history
                 // may list its payment, but only the notification ties the order to it.
                 'can_give_back' => '' !== $reference && $ledger->maximumAmount() > 0,
+                'other_payments_left' => $ledger->otherPaymentsLeft > 0 ? RefundAmount::format($ledger->otherPaymentsLeft, $currencyCode) : null,
                 'can_act' => $canAct,
                 'currency_symbol' => $order->getCurrency()?->getSymbol() ?? '',
                 'get_form' => $getForm->createView()->getView(),

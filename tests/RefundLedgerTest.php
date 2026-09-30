@@ -259,6 +259,59 @@ final class RefundLedgerTest extends TestCase
         return RefundLedger::fromTransactions($transactions, self::ORDER_DEBIT);
     }
 
+    public function testASecondPaymentTakenKeepsTheOrderFromBeingSettled(): void
+    {
+        $ledger = $this->ledger([
+            $this->debit(self::ORDER_DEBIT, 'PAID', 1000, 'CAPTURED'),
+            $this->debit('t0', 'PAID', 1000, 'CAPTURED'),
+            $this->credit('r1', 'PAID', 1000),
+        ]);
+
+        self::assertSame(1000, $ledger->otherPaymentsLeft);
+        self::assertFalse($ledger->isFullyRefunded());
+        self::assertSame(0, $ledger->refundableAmount(), 'what is left to refund stays the payment the order stands on');
+    }
+
+    public function testASecondPaymentGivenBackLetsTheOrderBeSettled(): void
+    {
+        $ledger = $this->ledger([
+            $this->debit(self::ORDER_DEBIT, 'PAID', 1000, 'CAPTURED'),
+            $this->debit('t0', 'PAID', 1000, 'CAPTURED'),
+            $this->credit('r1', 'PAID', 1000),
+            new TransactionOutcome('r0', 'PAID', null, TransactionOutcome::OPERATION_CREDIT, 1000, '', 't0'),
+        ]);
+
+        self::assertSame(0, $ledger->otherPaymentsLeft);
+        self::assertTrue($ledger->isFullyRefunded());
+    }
+
+    public function testAnAttemptGivenUpOnWeighsNothing(): void
+    {
+        $ledger = $this->ledger([
+            $this->debit(self::ORDER_DEBIT, 'PAID', 1000, 'CAPTURED'),
+            $this->debit('t0', 'UNPAID', 1000, 'REFUSED'),
+            $this->debit('t2', 'RUNNING', 1000, 'AUTHORISED_TO_VALIDATE'),
+            $this->credit('r1', 'PAID', 1000),
+        ]);
+
+        self::assertSame(0, $ledger->otherPaymentsLeft);
+        self::assertTrue($ledger->isFullyRefunded());
+    }
+
+    public function testASecondPaymentRefundedOnlyInPartIsStillHeld(): void
+    {
+        $ledger = $this->ledger([
+            $this->debit(self::ORDER_DEBIT, 'PAID', 1000, 'CAPTURED'),
+            $this->debit('t0', 'PAID', 1000, 'CAPTURED'),
+            $this->credit('r1', 'PAID', 1000),
+            new TransactionOutcome('r0', 'PAID', null, TransactionOutcome::OPERATION_CREDIT, 400, '', 't0'),
+            new TransactionOutcome('r9', 'RUNNING', null, TransactionOutcome::OPERATION_CREDIT, 600, '', 't0'),
+        ]);
+
+        self::assertSame(600, $ledger->otherPaymentsLeft, 'a credit still running gives nothing back yet');
+        self::assertFalse($ledger->isFullyRefunded());
+    }
+
     private function debit(string $uuid, string $status, int $amount, string $detailedStatus): TransactionOutcome
     {
         return new TransactionOutcome($uuid, $status, null, TransactionOutcome::OPERATION_DEBIT, $amount, $detailedStatus);

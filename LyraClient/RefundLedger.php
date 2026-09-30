@@ -30,6 +30,8 @@ final readonly class RefundLedger
         /** The money the platform confirmed it gave back: what settles the order. */
         public int $settledRefundedAmount,
         public int $authorisedAmount,
+        /** Money taken on another debit of the order (a double payment) and not given back yet. */
+        public int $otherPaymentsLeft = 0,
     ) {
     }
 
@@ -45,6 +47,8 @@ final readonly class RefundLedger
         $refundedAmount = 0;
         $settledRefundedAmount = 0;
         $authorisedAmount = 0;
+        $otherPayments = [];
+        $otherCredits = [];
 
         foreach ($transactions as $transaction) {
             if ($transaction->isCredit()) {
@@ -66,10 +70,20 @@ final readonly class RefundLedger
                     $settledRefundedAmount += $transaction->amount;
                 }
 
+                if (!$ofThisDebit && $transaction->isPaid()) {
+                    $otherCredits[$transaction->parentUuid] = ($otherCredits[$transaction->parentUuid] ?? 0) + $transaction->amount;
+                }
+
                 continue;
             }
 
             if ('' !== $orderTransactionRef && $transaction->uuid !== $orderTransactionRef) {
+                // Another attempt: given up on, unless the platform took its money too. A payment
+                // taken twice is not settled until both are given back.
+                if ($transaction->isPaid()) {
+                    $otherPayments[$transaction->uuid] = $transaction->amount;
+                }
+
                 continue;
             }
 
@@ -80,7 +94,13 @@ final readonly class RefundLedger
             }
         }
 
-        return new self($paidAmount, $refundedAmount, $settledRefundedAmount, $authorisedAmount);
+        $otherPaymentsLeft = 0;
+
+        foreach ($otherPayments as $uuid => $amount) {
+            $otherPaymentsLeft += max(0, $amount - ($otherCredits[$uuid] ?? 0));
+        }
+
+        return new self($paidAmount, $refundedAmount, $settledRefundedAmount, $authorisedAmount, $otherPaymentsLeft);
     }
 
     public function refundableAmount(): int
@@ -91,11 +111,12 @@ final readonly class RefundLedger
     /**
      * Whether the customer got back all they paid: the one rule that settles an order as refunded,
      * for the refund service, the notification of a credit and the history refresh alike. A refund
-     * still running does not count, whatever it promises.
+     * still running does not count, whatever it promises, and neither does an order another payment
+     * of which the platform took and still holds.
      */
     public function isFullyRefunded(): bool
     {
-        return $this->paidAmount > 0 && $this->settledRefundedAmount >= $this->paidAmount;
+        return $this->paidAmount > 0 && $this->settledRefundedAmount >= $this->paidAmount && 0 === $this->otherPaymentsLeft;
     }
 
     /** Whether a refund of this amount can be asked for on a captured payment. */
