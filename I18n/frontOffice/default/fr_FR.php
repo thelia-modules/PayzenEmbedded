@@ -9,6 +9,7 @@ return array(
     'One click payment is available !' => 'Le paiement en 1 clic est disponible !',
     'One click payment is available on our shop when you pay your order with PayZen.' => 'Le paiement en 1 clic est activé sur notre boutique quand vous payez votre commande avec PayZen',
     'To clear your credit card details, <a href="%url">please click here</a>' => 'Pour supprimer vos informations de paiement, <a href="%url">merci de cliquer ici</a>',
+    'Payment' => 'Paiement',
     'Try again your payment' => 'Ré-essayer le paiement',
     'We\'re sorry, the payment form could not be displayed.' => 'Nous sommes désolés, le formulaire de paiement ne peut pas être affiché.',
     'You may also <a href="%url">contact us</a> to get help or more information.' => 'Vous pouvez aussi <a href="%url">nous contacter</a> pour obtenir de l\'aide.',

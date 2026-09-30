@@ -38,7 +38,7 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
      * @throws LyraException
      * @throws \Exception
      */
-    public function updateTransaction(Order $order, $amount, $captureDate, $manualValidation)
+    public function updateTransaction(Order $order, int|float|string|null $amount, $captureDate, $manualValidation)
     {
         $response = $this->sendTransactionUpdateRequest($order, $amount, $captureDate, $manualValidation);
 
@@ -58,7 +58,7 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
      * @throws LyraException
      * @throws \Propel\Runtime\Exception\PropelException
      */
-    public function sendTransactionUpdateRequest(Order $order, $amount, $captureDate, $manualValidation)
+    public function sendTransactionUpdateRequest(Order $order, int|float|string|null $amount, $captureDate, $manualValidation)
     {
         // Make the manualValidation parameter. We can only change from manual to automatic, automatic to manual is not allowed.
         if (false === $manualValidation) {
@@ -80,9 +80,7 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
         // shop computed, such as the capture after picking, is converted whatever its decimals: a
         // legacy order total keeps four of them, and a capture refused on that account would leave
         // the authorisation to expire unpaid.
-        $minorAmount = \is_int($amount) || \is_float($amount) || \is_string($amount)
-            ? RefundAmount::fromAmount($amount, $currencyCode)
-            : null;
+        $minorAmount = null !== $amount ? RefundAmount::fromAmount($amount, $currencyCode) : null;
 
         if (null === $minorAmount) {
             throw new TheliaProcessException(Translator::getInstance()->trans(
