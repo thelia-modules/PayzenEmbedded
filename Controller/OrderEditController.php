@@ -183,6 +183,10 @@ class OrderEditController extends BaseAdminController
                 $expectedRefundedAmount
             );
 
+            // What the administrator log says of the attempt: the one lasting trace, read after an
+            // incident to tell a refund that may have gone through from one that was refused.
+            $traceOutcome = null;
+
             try {
                 $dispatcher->dispatch($event, PayzenEmbedded::TRANSACTION_REFUND_EVENT);
 
@@ -193,6 +197,7 @@ class OrderEditController extends BaseAdminController
                 $this->addFlash('warning', $statusFailure->getMessage());
             } catch (RefundOutcomeUnknownException $unknown) {
                 // The platform answered: the next attempt refreshes the order before anything else.
+                $traceOutcome = 'outcome UNKNOWN (PayZen may have processed it, refresh the order)';
                 $this->addFlash('warning', $unknown->getMessage());
             }
 
@@ -204,7 +209,7 @@ class OrderEditController extends BaseAdminController
                     sprintf(
                         "Order %d: %s of %s %s",
                         $order->getId(),
-                        $event->getOutcome()->value ?? 'no outcome',
+                        $traceOutcome ?? $event->getOutcome()->value ?? 'no outcome',
                         RefundAmount::format($amount, $currencyCode),
                         $currencyCode
                     ),
