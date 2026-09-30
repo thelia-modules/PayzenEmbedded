@@ -366,13 +366,12 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         }
 
         // The same transaction in the same state (a refresh of an authorisation still running, a
-        // notification replayed): the history takes what changed in the details, and an order that
-        // already left the unpaid state is not moved back, which would undo its preparation and
-        // send the confirmation again. An order still unpaid is moved: a status the shop failed to
-        // write the first time is written now.
-        if (null !== $applied
-            && $applied->uuid === $incoming->uuid
-            && $applied->status === $incoming->status
+        // notification of it replayed): the history takes what changed in the details, and an order
+        // that already left the unpaid state is not moved back, which would undo its preparation and
+        // send the confirmation again. An order still unpaid is moved, so that the status of an
+        // authorisation still running is written if the shop failed to write it the first time; a
+        // finished transaction never gets this far, see NotificationArbiter.
+        if ((new NotificationArbiter())->isUnchanged($incoming, $applied, (string) $order->getTransactionRef())
             && (int) $order->getStatusId() !== (int) OrderStatusQuery::getNotPaidStatus()->getId()) {
             $this->updateTransactionHistory($answer, $order);
 

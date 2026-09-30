@@ -157,4 +157,16 @@ final class NotificationArbiterTest extends TestCase
     {
         return new TransactionOutcome($uuid, $status, new \DateTimeImmutable($createdAt));
     }
+
+    public function testARepeatOfTheTransactionTheOrderStandsOnIsUnchanged(): void
+    {
+        $applied = $this->transaction('t1', 'RUNNING', '2026-09-21 10:00:00');
+
+        self::assertTrue($this->arbiter->isUnchanged($this->transaction('t1', 'RUNNING', '2026-09-21 10:00:00'), $applied, 't1'));
+        self::assertFalse($this->arbiter->isUnchanged($this->transaction('t1', 'PAID', '2026-09-21 10:00:00'), $applied, 't1'), 'a new state is a change');
+        self::assertFalse($this->arbiter->isUnchanged($this->transaction('t2', 'RUNNING', '2026-09-21 10:05:00'), $applied, 't1'), 'another transaction is a change');
+        self::assertFalse($this->arbiter->isUnchanged($this->transaction('t1', 'RUNNING', '2026-09-21 10:00:00'), $applied, 't9'), 'the row the history falls back on is not the order reference');
+        self::assertFalse($this->arbiter->isUnchanged($this->transaction('t1', 'RUNNING', '2026-09-21 10:00:00'), $applied, ''), 'an order never moved');
+        self::assertFalse($this->arbiter->isUnchanged($this->transaction('t1', 'RUNNING', '2026-09-21 10:00:00'), null, 't1'), 'nothing applied');
+    }
 }

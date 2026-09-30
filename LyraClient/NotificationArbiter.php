@@ -34,6 +34,20 @@ final readonly class NotificationArbiter
      * @param TransactionOutcome|null $applied  the last transaction this order was moved on, null
      *                                          when none was ever recorded
      */
+    /**
+     * Whether a notification only repeats the transaction the order stands on, in the state the
+     * history holds for it: the order's own reference, not merely the row the history would fall
+     * back on when that reference has none.
+     */
+    public function isUnchanged(TransactionOutcome $incoming, ?TransactionOutcome $applied, string $orderTransactionRef): bool
+    {
+        return null !== $applied
+            && '' !== $orderTransactionRef
+            && $applied->uuid === $orderTransactionRef
+            && $incoming->uuid === $applied->uuid
+            && $incoming->status === $applied->status;
+    }
+
     public function accepts(TransactionOutcome $incoming, ?TransactionOutcome $applied): bool
     {
         if (null === $applied) {
