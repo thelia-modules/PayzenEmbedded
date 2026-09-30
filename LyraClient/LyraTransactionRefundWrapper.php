@@ -187,7 +187,13 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
         $this->log->addInfo(sprintf(
             'PayZen CancelOrRefund answer for order %s: %s',
             $order->getRef(),
-            json_encode(array_intersect_key($answer, array_flip(['uuid', 'status', 'detailedStatus', 'operationType', 'amount', 'currency', 'errorCode', 'errorMessage', 'detailedErrorCode', 'transactionDetails', 'metadata'])))
+            // The shape only: the transaction details carry the card (masked number, expiry, 3DS data),
+            // which has no place in a log. The parent and the shop marker tell whether the platform
+            // names them, which is what the module relies on.
+            json_encode(array_intersect_key($answer, array_flip(['uuid', 'status', 'detailedStatus', 'operationType', 'amount', 'currency', 'errorCode', 'errorMessage', 'detailedErrorCode'])) + [
+                'parentTransactionUuid' => $answer['transactionDetails']['parentTransactionUuid'] ?? null,
+                'shopMarker' => $answer['metadata'][TransactionOutcome::SHOP_MARKER_KEY] ?? null,
+            ])
         ));
 
         $debitUuid = (string) $order->getTransactionRef();
