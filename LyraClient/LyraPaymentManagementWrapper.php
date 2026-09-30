@@ -373,8 +373,14 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         if ($orderStatus === 'PAID') {
             $this->log->addInfo(Translator::getInstance()->trans("Order %ref payment was successful.", ['%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
 
-            // Payment OK !
-            $this->setOrderStatus($order, OrderStatusQuery::getPaidStatus());
+            // Payment OK ! Unless every cent of it was already given back: a refund notified or
+            // listed before its payment settles the order as soon as the order stands on that payment.
+            $this->setOrderStatus(
+                $order,
+                (new TransactionHistoryReader())->ledgerOf($order)->isFullyRefunded()
+                    ? OrderStatusQuery::getRefundedStatus()
+                    : OrderStatusQuery::getPaidStatus()
+            );
 
             $status = self::PAYMENT_STATUS_PAID;
         } else if ($orderStatus === 'UNPAID') {
