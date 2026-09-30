@@ -101,8 +101,8 @@ class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
     {
         $paymentStatus = self::PAYMENT_STATUS_NOT_PAID;
 
-        // Be sure to have transaction data.
-        if (isset($response['answer']['uuid'])) {
+        // Be sure to have transaction data: an ERROR status carries an error answer, never a transaction.
+        if (($response['status'] ?? null) === 'SUCCESS' && isset($response['answer']['uuid'])) {
             $orderTransaction = $response['answer']['uuid'];
 
             if (null !== $order = $this->getOrderByTransaction($orderTransaction)) {

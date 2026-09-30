@@ -174,6 +174,15 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
         $answer = \is_array($response['answer'] ?? null) ? $response['answer'] : [];
 
         // The shape of this answer was taken from the documentation: keep what the platform really sends.
+        // A refusal is an ERROR status with an error answer: read as the Order/Get answer is, before
+        // anything in the answer is taken for a transaction.
+        if (($response['status'] ?? null) !== 'SUCCESS') {
+            throw new TheliaProcessException(Translator::getInstance()->trans('Cannot refund the transaction. Error is : %message (code %code)', [
+                '%code' => (string) ($answer['errorCode'] ?? 'undefined error code'),
+                '%message' => (string) ($answer['errorMessage'] ?? 'undefined error message'),
+            ], PayzenEmbedded::DOMAIN_NAME));
+        }
+
         $this->log->addInfo(sprintf(
             'PayZen CancelOrRefund answer for order %s: %s',
             $order->getRef(),
