@@ -65,12 +65,18 @@ final class ClassReferencesResolveTest extends TestCase
     }
 
     /**
-     * Model classes extend Propel classes generated at runtime, which no autoloader knows here:
+     * Model classes extend Propel classes generated at runtime, which no autoloader may know here:
      * the composer loader is asked where the class lives, without loading it. Anything the
      * loader does not know has to be loadable by other means (an enum of PHP, for instance).
      */
     private function resolves(string $className): bool
     {
+        // The ORM generates a TableMap and a Base class for every model, in the shop's cache: the
+        // model they are generated for is what the source can get wrong.
+        if (1 === preg_match('/^(.+\\\\Model)\\\\(?:Map\\\\(\w+)TableMap|Base\\\\(\w+))$/', $className, $generated)) {
+            $className = $generated[1] . '\\' . ('' !== $generated[2] ? $generated[2] : $generated[3]);
+        }
+
         foreach (spl_autoload_functions() as $autoloader) {
             if (\is_array($autoloader) && $autoloader[0] instanceof \Composer\Autoload\ClassLoader) {
                 if (false !== $autoloader[0]->findFile($className)) {

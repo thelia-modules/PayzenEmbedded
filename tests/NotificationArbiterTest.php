@@ -24,7 +24,7 @@ use PHPUnit\Framework\TestCase;
  * its own schedule. These are the sequences a shop actually sees.
  *
  * Run from a Thelia checkout that has this module installed:
- *   vendor/bin/phpunit --bootstrap vendor/autoload.php vendor/thelia/modules/PayzenEmbedded/tests
+ *   vendor/bin/phpunit -c vendor/thelia/modules/PayzenEmbedded
  */
 final class NotificationArbiterTest extends TestCase
 {

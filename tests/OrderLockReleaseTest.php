@@ -31,6 +31,15 @@ use Thelia\Model\Order;
  */
 final class OrderLockReleaseTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        // An order stands in for the one the lock is taken on: its ORM base class is generated in
+        // the shop's cache, see tests/bootstrap.php.
+        if (!class_exists(\Thelia\Model\Base\Order::class)) {
+            self::markTestSkipped('The ORM classes of the shop are not generated yet: build its cache, then run the tests again.');
+        }
+    }
+
     public function testAReleaseTheStoreRefusesIsLoggedNotThrown(): void
     {
         $lock = $this->createMock(LockInterface::class);
