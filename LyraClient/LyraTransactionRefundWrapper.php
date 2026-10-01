@@ -20,6 +20,7 @@ use PayzenEmbedded\PayzenEmbedded;
 use Thelia\Core\Translation\Translator;
 use Thelia\Exception\TheliaProcessException;
 use Thelia\Model\Admin;
+use Thelia\Model\ModuleConfigQuery;
 use Thelia\Model\Order;
 use Thelia\Model\OrderStatusQuery;
 
@@ -115,7 +116,8 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
                     );
                 }
 
-                PayzenEmbedded::setConfigValue($pendingKey, '');
+                // Deleted, not emptied: one row per order would be left behind for good.
+                ModuleConfigQuery::create()->deleteConfigValue(PayzenEmbedded::getModuleId(), $pendingKey);
             }
 
             // The decision is the guard's, see RefundGuard: here it is only put into words.
