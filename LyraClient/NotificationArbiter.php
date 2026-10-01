@@ -30,6 +30,30 @@ namespace PayzenEmbedded\LyraClient;
 final readonly class NotificationArbiter
 {
     /**
+     * Whether a notification only repeats the transaction the order stands on, in the state the
+     * history holds for it: the order's own reference, not merely the row the history would fall
+     * back on when that reference has none.
+     */
+    public function isUnchanged(TransactionOutcome $incoming, ?TransactionOutcome $applied, string $orderTransactionRef): bool
+    {
+        return null !== $applied
+            && '' !== $orderTransactionRef
+            && $applied->uuid === $orderTransactionRef
+            && $incoming->uuid === $applied->uuid
+            && $incoming->status === $applied->status;
+    }
+
+    /**
+     * Whether the notification of a credit may be written over the row the history holds for it:
+     * a credit the platform finished (given back, or refused) is never put back as running by a
+     * notification that arrives late or is replayed. The platform's own listing still writes it.
+     */
+    public function acceptsCredit(TransactionOutcome $incoming, ?TransactionOutcome $known): bool
+    {
+        return null === $known || !$known->isFinished() || $incoming->isFinished();
+    }
+
+    /**
      * @param TransactionOutcome      $incoming the transaction the platform is notifying about
      * @param TransactionOutcome|null $applied  the last transaction this order was moved on, null
      *                                          when none was ever recorded
@@ -51,6 +75,13 @@ final readonly class NotificationArbiter
         // is not something a shop settles by cancelling the order it already owes.
         if ($applied->isPaid() && !$incoming->isPaid()) {
             return false;
+        }
+
+        // Money the platform took outranks an order that holds none, whatever the order the
+        // attempts came in: a refusal notified first must not leave the payment of an earlier
+        // attempt on a cancelled order.
+        if ($incoming->isPaid() && !$applied->isPaid()) {
+            return true;
         }
 
         // Two attempts, and the platform dates both: the later attempt speaks for the order. An

@@ -29,7 +29,7 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
      * Process the Transaction/Update request, and update the order if required.
      *
      * @param Order $order the order to process
-     * @param float $amount the amount of the transaction should be <= to the current amount.
+     * @param int|float|string|null $amount the new amount in the major unit, <= to the current one: text typed by an administrator, or a number the shop computed
      * @param \DateTime|null $captureDate the expected cature date, or null to use the default one.
      * @param boolean|null $manualValidation If false, it will be automatically validated, if null, the default configured in the PayZen back-offcie will be used.
      *
@@ -37,19 +37,32 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
      *
      * @throws LyraException
      * @throws \Exception
+     * @throws TheliaProcessException when the amount cannot be read, or the platform refused
      */
-    public function updateTransaction(Order $order, $amount, $captureDate, $manualValidation)
+    public function updateTransaction(Order $order, int|float|string|null $amount, $captureDate, $manualValidation)
     {
-        $response = $this->sendTransactionUpdateRequest($order, $amount, $captureDate, $manualValidation);
+        // The same lock as the refund, waited for (up to ORDER_LOCK_WAIT seconds) rather than refused
+        // at once: the capture after picking is the shop's own doing, and a refusal would be read as a
+        // failed payment.
+        $lock = $this->acquireOrderLock($order, true);
+        try {
+            // What the order stands on is read again under the lock: a notification may have moved it
+            // while the operation waited. Inside the try: the lock is released whatever happens.
+            $order->reload();
 
-        return $this->processTransactionUpdateResponse($response);
+            $response = $this->sendTransactionUpdateRequest($order, $amount, $captureDate, $manualValidation);
+
+            return $this->processTransactionUpdateResponse($response);
+        } finally {
+            $this->releaseOrderLock($lock, $order);
+        }
     }
 
     /**
      * Build the Transaction/Update parameters, and call te service.
      *
      * @param Order $order the order to process
-     * @param float $amount the amount of the transaction should be <= to the current amount.
+     * @param int|float|string|null $amount the new amount in the major unit, <= to the current one: text typed by an administrator, or a number the shop computed
      * @param \DateTime|null $captureDate the expected cature date, or null to use the default one.
      * @param boolean|null $manualValidation If false, it will be automatically validated, if null, the default configured in the PayZen back-offcie will be used.
      *
@@ -58,7 +71,7 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
      * @throws LyraException
      * @throws \Propel\Runtime\Exception\PropelException
      */
-    public function sendTransactionUpdateRequest(Order $order, $amount, $captureDate, $manualValidation)
+    public function sendTransactionUpdateRequest(Order $order, int|float|string|null $amount, $captureDate, $manualValidation)
     {
         // Make the manualValidation parameter. We can only change from manual to automatic, automatic to manual is not allowed.
         if (false === $manualValidation) {
@@ -74,12 +87,42 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
             $captureDateParam = null;
         }
 
+        $currencyCode = strtoupper($order->getCurrency()->getCode());
+
+        // Text typed by an administrator is read strictly ("4,50" is 4.50, not 4.00); a total the
+        // shop computed, such as the capture after picking, is converted whatever its decimals: a
+        // legacy order total keeps four of them, and a capture refused on that account would leave
+        // the authorisation to expire unpaid.
+        $minorAmount = null !== $amount ? RefundAmount::fromAmount($amount, $currencyCode) : null;
+
+        // A total the shop computed never goes above what the platform holds for the order: an
+        // authorisation taken before 3.4.0 truncated a legacy total to the cent below, where the
+        // total is now rounded, and a capture one cent above the authorisation would be refused.
+        if (null !== $minorAmount && !\is_string($amount)) {
+            $capped = RefundAmount::cappedTo($minorAmount, (new TransactionHistoryReader())->heldAmountOf($order));
+
+            // The cent of the older rounding is expected; more is money the shop will not take, said out loud.
+            if ($minorAmount - $capped > 1) {
+                $this->log->addError(sprintf('Order %s: capture of %d capped to the %d the platform holds.', $order->getRef(), $minorAmount, $capped));
+            }
+
+            $minorAmount = $capped;
+        }
+
+        if (null === $minorAmount) {
+            throw new TheliaProcessException(Translator::getInstance()->trans(
+                'The amount should be a positive number with at most %decimals decimals, such as %example.',
+                ['%decimals' => RefundAmount::decimals($currencyCode), '%example' => RefundAmount::format(1250, $currencyCode)],
+                PayzenEmbedded::DOMAIN_NAME
+            ));
+        }
+
         // Request parameters (see https://payzen.io/fr-FR/rest/V4.0/api/playground.html?ws=Transaction/Update)
         $parameters = [
             'uuid' => $order->getTransactionRef(),
             'cardUpdate' => [
-                'amount' => intval(strval($amount * 100)),
-                'currency' => strtoupper($order->getCurrency()->getCode()),
+                'amount' => $minorAmount,
+                'currency' => $currencyCode,
                 'expectedCaptureDate' => $captureDateParam,
                 'manualValidation' => $manualValidationParam
             ],
@@ -99,17 +142,23 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
     {
         $paymentStatus = self::PAYMENT_STATUS_NOT_PAID;
 
-        // Be sure to have transaction data.
-        if (isset($response['answer']['uuid'])) {
+        // Be sure to have transaction data: an ERROR status carries an error answer, never a transaction.
+        if (($response['status'] ?? null) === 'SUCCESS' && isset($response['answer']['uuid'])) {
             $orderTransaction = $response['answer']['uuid'];
 
             $this->log->addInfo(Translator::getInstance()->trans("PayZen response received for transaction %ref.", ['%ref' => $orderTransaction], PayzenEmbedded::DOMAIN_NAME));
 
             if (null !== $order = $this->getOrderByTransaction($orderTransaction)) {
+                // The order moves first, on the history as it stood: the capture after picking moves a
+                // running authorisation to paid, which the host module reads to go on. The answer to
+                // the shop's own call is then recorded as the platform's word, as its listing is,
+                // where the arbiter left the transaction alone (an amount lowered on a payment
+                // waiting for its capture).
                 $paymentStatus = $this->processOrderStatus($order, $response['answer']);
-            }
+                $this->updateTransactionHistory($response['answer'], $order);
 
-            $this->log->info(Translator::getInstance()->trans("PayZen response for order %ref processing teminated.", ['%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
+                $this->log->info(Translator::getInstance()->trans("PayZen response for order %ref processing teminated.", ['%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
+            }
         } else {
             throw new TheliaProcessException(
                 Translator::getInstance()->trans(

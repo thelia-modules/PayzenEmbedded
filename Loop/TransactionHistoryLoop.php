@@ -14,11 +14,11 @@ use Thelia\Type;
 use Thelia\Type\TypeCollection;
 
 /**
- * Class CustomerCardLoop
- * @package ETransaction\Loop
+ * The PayZen transactions recorded for an order or a customer.
  * @method getOrderId() int|null
  * @method getCustomerId() int|null
  * @method string[] getOrder()
+ * @method string[]|null getOperationType()
  */
 class TransactionHistoryLoop extends BaseLoop implements PropelSearchLoopInterface
 {
@@ -29,6 +29,7 @@ class TransactionHistoryLoop extends BaseLoop implements PropelSearchLoopInterfa
         return new ArgumentCollection(
             Argument::createIntTypeArgument('order_id'),
             Argument::createIntTypeArgument('customer_id'),
+            Argument::createEnumListTypeArgument('operation_type', ['DEBIT', 'CREDIT']),
             new Argument(
                 'order',
                 new TypeCollection(
@@ -59,6 +60,11 @@ class TransactionHistoryLoop extends BaseLoop implements PropelSearchLoopInterfa
             $search->filterByCustomerId($this->getCustomerId());
         }
 
+        // DEBIT keeps the payments, CREDIT the refunds; rows written before 3.4.0 are debits.
+        if (null !== $this->getOperationType()) {
+            $search->filterByOperationtype((array) $this->getOperationType());
+        }
+
         $orders  = $this->getOrder();
 
         foreach ($orders as $order) {
@@ -81,11 +87,12 @@ class TransactionHistoryLoop extends BaseLoop implements PropelSearchLoopInterfa
                 case "transaction_ref_reverse":
                     $search->orderByUuid(Criteria::DESC);
                     break;
+                // The refresh records several transactions in the same second: the id keeps their order.
                 case "created":
-                    $search->addAscendingOrderByColumn('created_at');
+                    $search->addAscendingOrderByColumn('created_at')->orderById(Criteria::ASC);
                     break;
                 case "created_reverse":
-                    $search->addDescendingOrderByColumn('created_at');
+                    $search->addDescendingOrderByColumn('created_at')->orderById(Criteria::DESC);
                     break;
                 case "updated":
                     $search->addAscendingOrderByColumn('updated_at');
@@ -114,6 +121,7 @@ class TransactionHistoryLoop extends BaseLoop implements PropelSearchLoopInterfa
                     ->set('TRANSACTION_REF', $transactionHistory->getUuid())
                     ->set('STATUS', $transactionHistory->getStatus())
                     ->set('DETAILED_STATUS', $transactionHistory->getDetailedstatus())
+                    ->set('OPERATION_TYPE', $transactionHistory->getOperationtype() ?: 'DEBIT')
                     ->set('AMOUNT', $transactionHistory->getAmount())
                     ->set('CURRENCY_ID', $transactionHistory->getCurrencyId())
                     ->set('CREATION_DATE', $transactionHistory->getCreationdate())

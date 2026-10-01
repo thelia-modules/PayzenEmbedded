@@ -19,7 +19,10 @@ namespace PayzenEmbedded\Hook;
 use PayzenEmbedded\Form\ConfigurationForm;
 use PayzenEmbedded\LyraClient\LyraPaymentMethodsWrapper;
 use PayzenEmbedded\Form\TransactionGetForm;
+use PayzenEmbedded\Form\TransactionRefundForm;
 use PayzenEmbedded\Form\TransactionUpdateForm;
+use PayzenEmbedded\LyraClient\RefundAmount;
+use PayzenEmbedded\LyraClient\TransactionHistoryReader;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistory;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistoryQuery;
 use PayzenEmbedded\PayzenEmbedded;
@@ -28,6 +31,9 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Thelia\Core\Event\Hook\HookRenderEvent;
 use Thelia\Core\Form\TheliaFormFactory;
 use Thelia\Core\Hook\BaseHook;
+use Thelia\Core\Security\AccessManager;
+use Thelia\Core\Security\Resource\AdminResources;
+use Thelia\Core\Security\SecurityContext;
 use Thelia\Core\Template\Parser\ParserResolver;
 use Thelia\Model\CurrencyQuery;
 use Thelia\Model\MessageQuery;
@@ -38,6 +44,7 @@ class BackHookManager extends BaseHook
 {
     public function __construct(
         private readonly TheliaFormFactory $formFactory,
+        private readonly SecurityContext $securityContext,
         ?EventDispatcherInterface $dispatcher = null,
         ?ParserResolver $parserResolver = null,
     ) {
@@ -106,7 +113,8 @@ class BackHookManager extends BaseHook
 
     public function onOrderEditBottom(HookRenderEvent $event): void
     {
-        $orderId = (int) $event->getArgument('order_id');
+        // The Smarty back-office hands order_id, the Twig one hands order for this hook only.
+        $orderId = (int) ($event->hasArgument('order_id') ? $event->getArgument('order_id') : $event->getArgument('order'));
 
         $order = OrderQuery::create()->findPk($orderId);
 
@@ -116,25 +124,50 @@ class BackHookManager extends BaseHook
 
         $transactions = $this->getTransactionHistory(orderId: $orderId);
 
-        $finished = false;
-        $lastTransactionAmount = 0;
+        // The transaction to update is the one the order stands on, not the last one listed: the
+        // history also holds the attempts the shopper gave up on. It can be updated until captured.
+        $reference = (string) $order->getTransactionRef();
+        $finished = true;
+        $lastTransactionAmount = '0';
 
         foreach ($transactions as $transaction) {
-            $finished = (bool) $transaction['IS_FINISHED'];
-            $lastTransactionAmount = $transaction['AMOUNT'] / 100;
+            if ('CREDIT' === $transaction['OPERATION_TYPE'] || ('' !== $reference && $transaction['TRANSACTION_REF'] !== $reference)) {
+                continue;
+            }
+
+            $finished = 'UNPAID' === $transaction['STATUS'] || $transaction['IS_CAPTURED'];
+            $lastTransactionAmount = $transaction['AMOUNT_FORMATTED'];
         }
+
+        $ledger = (new TransactionHistoryReader())->ledgerOf($order);
+        $currencyCode = strtoupper((string) $order->getCurrency()?->getCode());
+        $canAct = $this->securityContext->isGranted(['ADMIN'], [AdminResources::MODULE, AdminResources::ORDER], ['PayzenEmbedded'], [AccessManager::UPDATE]);
 
         $getForm = $this->formFactory->createForm(TransactionGetForm::getName());
         $updateForm = $this->formFactory->createForm(TransactionUpdateForm::getName());
+        $refundForm = $this->formFactory->createForm(TransactionRefundForm::getName());
 
         $event->add(
             $this->render('payzen-embedded/order-edit.html.twig', [
                 'order_id' => $orderId,
                 'transactions' => $transactions,
-                'finished' => $finished,
+                'finished' => $finished || '' === $reference,
                 'last_transaction_amount' => $lastTransactionAmount,
+                'paid_amount' => RefundAmount::format($ledger->paidAmount, $currencyCode),
+                'refunded_amount' => RefundAmount::format($ledger->refundedAmount, $currencyCode),
+                'refunded_amount_minor' => $ledger->refundedAmount,
+                'refundable_amount' => RefundAmount::format($ledger->refundableAmount(), $currencyCode),
+                'is_cancellable' => $ledger->isCancellable(),
+                'maximum_amount' => RefundAmount::format($ledger->maximumAmount(), $currencyCode),
+                // An order that carries no transaction cannot be refunded nor updated: the history
+                // may list its payment, but only the notification ties the order to it.
+                'can_give_back' => '' !== $reference && $ledger->maximumAmount() > 0,
+                'other_payments_left' => $ledger->otherPaymentsLeft > 0 ? RefundAmount::format($ledger->otherPaymentsLeft, $currencyCode) : null,
+                'can_act' => $canAct,
+                'currency_symbol' => $order->getCurrency()?->getSymbol() ?? '',
                 'get_form' => $getForm->createView()->getView(),
                 'update_form' => $updateForm->createView()->getView(),
+                'refund_form' => $refundForm->createView()->getView(),
             ])
         );
     }
@@ -169,14 +202,17 @@ class BackHookManager extends BaseHook
         $search
             ->orderByOrderId(Criteria::ASC)
             ->addAscendingOrderByColumn('created_at')
-            ->orderByUuid(Criteria::ASC);
+            ->orderById(Criteria::ASC);
 
         $rows = [];
         $orderRefs = [];
         $currencySymbols = [];
+        $currencyCodes = [];
+        $reader = new TransactionHistoryReader();
 
         /** @var PayzenEmbeddedTransactionHistory $transaction */
         foreach ($search->find() as $transaction) {
+            $outcome = $reader->outcomeOf($transaction);
             $rowOrderId = $transaction->getOrderId();
 
             if ($rowOrderId && !\array_key_exists($rowOrderId, $orderRefs)) {
@@ -189,6 +225,7 @@ class BackHookManager extends BaseHook
             if ($currencyId && !\array_key_exists($currencyId, $currencySymbols)) {
                 $currency = CurrencyQuery::create()->findPk($currencyId);
                 $currencySymbols[$currencyId] = null !== $currency ? $currency->getSymbol() : '';
+                $currencyCodes[$currencyId] = null !== $currency ? (string) $currency->getCode() : '';
             }
 
             $rows[] = [
@@ -198,7 +235,10 @@ class BackHookManager extends BaseHook
                 'TRANSACTION_REF' => $transaction->getUuid(),
                 'STATUS' => $transaction->getStatus(),
                 'DETAILED_STATUS' => $transaction->getDetailedstatus(),
+                'OPERATION_TYPE' => $outcome->operationType,
+                'IS_CAPTURED' => $outcome->isCaptured(),
                 'AMOUNT' => $transaction->getAmount(),
+                'AMOUNT_FORMATTED' => RefundAmount::format((int) $transaction->getAmount(), $currencyId ? ($currencyCodes[$currencyId] ?? '') : ''),
                 'CURRENCY_ID' => $currencyId,
                 'CURRENCY_SYMBOL' => $currencyId ? ($currencySymbols[$currencyId] ?? '') : '',
                 'CREATION_DATE' => $transaction->getCreationdate(),

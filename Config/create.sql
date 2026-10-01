@@ -32,8 +32,10 @@ CREATE TABLE IF NOT EXISTS `payzen_embedded_transaction_history`
     `order_id` INTEGER,
     `admin_id` INTEGER,
     `uuid` VARCHAR(128),
-    `status` VARCHAR(10),
-    `detailedStatus` VARCHAR(32),
+    `status` VARCHAR(32),
+    `detailedStatus` VARCHAR(64),
+    `operationType` VARCHAR(16) DEFAULT 'DEBIT',
+    `parentUuid` VARCHAR(128),
     `amount` INTEGER(11),
     `currency_id` INTEGER NOT NULL,
     `creationDate` DATETIME,
@@ -64,7 +66,7 @@ CREATE TABLE IF NOT EXISTS `payzen_embedded_transaction_history`
         FOREIGN KEY (`admin_id`)
         REFERENCES `admin` (`id`)
         ON UPDATE RESTRICT
-        ON DELETE RESTRICT,
+        ON DELETE SET NULL,
     CONSTRAINT `payzen_embedded_transaction_history_FK_4`
         FOREIGN KEY (`currency_id`)
         REFERENCES `currency` (`id`)

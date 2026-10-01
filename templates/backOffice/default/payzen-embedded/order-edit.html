@@ -37,26 +37,28 @@
                 {/ifloop}
 
                 {elseloop rel="transaction-history"}
-                    {form name="payzen_embedded_get_form"}
-                        {if $form_error}
-                            <div class="alert alert-danger">{$form_error_message}</div>
-                        {/if}
-
-                        <div class="alert alert-info">
-                            <form method="post" action="{url path="/admin/module/payzen-embedded/refresh-transaction/$order_id"}">
-                                {form_hidden_fields}
-
-                                {form_field field="order_id"}
-                                    <input type="hidden" name="{$name}" value="{$order_id}">
-                                {/form_field}
-
-                                <p>{intl l='There is no history for this transaction.' d=$_d}</p>
-
-                                <button type="submit" class="btn btn-info">{intl l='Refresh history' d=$_d}</button>
-                            </form>
-                        </div>
-                    {/form}
+                    <div class="alert alert-info">{intl l='There is no history for this transaction.' d=$_d}</div>
                 {/elseloop}
+
+                {form name="payzen_embedded_get_form"}
+                    {if $form_error}
+                        <div class="alert alert-danger">{$form_error_message}</div>
+                    {/if}
+
+                    <form method="post" action="{url path="/admin/module/payzen-embedded/refresh-transaction/$order_id"}">
+                        {form_hidden_fields}
+
+                        {form_field field="order_id"}
+                            <input type="hidden" name="{$name}" value="{$order_id}">
+                        {/form_field}
+
+                        <p class="help-block">{intl l='Reads the transactions of this order from PayZen, refunds and cancellations made from its back-office included.' d=$_d}</p>
+
+                        <div class="text-right">
+                            <button type="submit" class="btn btn-info">{intl l='Refresh history' d=$_d}</button>
+                        </div>
+                    </form>
+                {/form}
             </div>
 
             {ifloop rel="transaction-history"}
@@ -66,7 +68,7 @@
                 </div>
                 <div class="col-md-12">
                     <div class="alert alert-info">
-                        {intl l='You can update here the PayZen transaction related to this order. You can change the transaction amount (it should be greater or eaqual to the current amount), define the capture date (the date at which the payment is done), and the validation mode, to change manual validation to automatic validation of the transaction' d=$_d}
+                        {intl l='You can update here the PayZen transaction related to this order. You can change the transaction amount (it can only be lowered), define the capture date (the date at which the payment is done), and the validation mode, to change manual validation to automatic validation of the transaction' d=$_d}
                     </div>
                     {loop type="order" name="order" customer="*" id=$order_id}
                         {form name="payzen_embedded_order_edit_form"}

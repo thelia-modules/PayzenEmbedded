@@ -15,6 +15,7 @@ use PayzenEmbedded\PayzenEmbedded;
 use Thelia\Core\Translation\Translator;
 use Thelia\Exception\TheliaProcessException;
 use Thelia\Model\Order;
+use Thelia\Model\OrderStatusQuery;
 
 /**
  * A wrapper around CreatePayment service to manage bith Javascript Client and PCI-DSS calls
@@ -26,17 +27,78 @@ use Thelia\Model\Order;
 class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
 {
     /**
-     * Perform a Get request to get transaction info and store it in the history table
+     * Bring the order up to date with the platform: every transaction the platform lists for the
+     * order (a refund made from the PayZen back-office, a cancellation, an attempt the notification
+     * never reached the shop for) is recorded first, as the platform holds it, which the arbiter
+     * alone would refuse once the transaction is finished. Then the transaction the order stands on
+     * is read and may move the order, as a notification would, with the refunds already counted: a
+     * refund that leaves nothing to refund settles the order. A cancellation made from the PayZen
+     * back-office cancels the order while the history holds the authorisation as running; one of a
+     * payment the history already holds as paid only shows in the history, and leaves the order
+     * status to the shop.
      *
-     * @param Order $order
+     * An order without a transaction yet (its notification never came) has only the platform's
+     * list to learn from. The order is held while it is read, so that a refund and a refresh
+     * never write its history at the same time.
+     *
+     * @return list<TransactionOutcome> the attempts the platform lists that outrank the one the order
+     *                                   stands on: only their notification moves the order onto them
+     *
      * @throws LyraException
-     * @throws \Exception
+     * @throws TheliaProcessException when the order was not paid with PayZen, is held by another
+     *                                operation, or the platform refused
      */
-    public function getTransaction(Order $order)
+    public function getTransaction(Order $order): array
     {
-        $response = $this->sendTransactionGetRequest($order);
+        if (PayzenEmbedded::getModuleId() !== (int) $order->getPaymentModuleId()) {
+            throw new TheliaProcessException(
+                Translator::getInstance()->trans('This order was not paid with PayZen.', [], PayzenEmbedded::DOMAIN_NAME)
+            );
+        }
 
-        $this->processTransactionGetResponse($response);
+        $lock = $this->acquireOrderLock($order);
+        try {
+            // What the order stands on is read again under the lock: a notification may have moved it
+            // while the operation waited. Inside the try: the lock is released whatever happens.
+            $order->reload();
+
+            // The platform's list first: the refunds it holds are in the history before the transaction
+            // the order stands on moves it, so that an order refunded on the platform goes to refunded,
+            // not through paid (and the host's pickup notice). The list leaves that transaction to the
+            // notification path when it changed, see syncTransactions().
+            $diverging = $this->syncTransactions($order);
+            $heldBack = null === $diverging ? null : TransactionOutcome::fromAnswer($diverging);
+            $rowAtList = null === $heldBack ? null : $this->storedHistoryRow($order, $heldBack);
+            $this->refreshOrderLock($lock, $order);
+
+            if ('' !== (string) $order->getTransactionRef()) {
+                $this->processTransactionGetResponse($this->sendTransactionGetRequest($order));
+                // What the response did to the order is read back from the database.
+                $order->reload();
+            }
+
+            // Once the order had its chance to move on it, the transaction the list held back is
+            // written as the platform listed it, where the arbiter left it (a finished one), unless
+            // something wrote it since the list was read: that answer is the later one.
+            if (null !== $heldBack && $this->storedHistoryRow($order, $heldBack) === $rowAtList) {
+                $this->updateTransactionHistory($diverging, $order);
+            }
+
+            $ledger = (new TransactionHistoryReader())->ledgerOf($order);
+
+            // Only an order moved on its payment is refunded: one that carries no transaction yet was
+            // never paid in the shop's eyes, and the notification of its payment would undo the status.
+            if ('' !== (string) $order->getTransactionRef() && $ledger->isFullyRefunded()) {
+                $this->setOrderStatus($order, OrderStatusQuery::getRefundedStatus());
+            }
+
+            return GoverningTransaction::outrankingAttempts(
+                (new TransactionHistoryReader())->outcomesOf($order),
+                (string) $order->getTransactionRef()
+            );
+        } finally {
+            $this->releaseOrderLock($lock, $order);
+        }
     }
 
     /**
@@ -69,8 +131,8 @@ class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
     {
         $paymentStatus = self::PAYMENT_STATUS_NOT_PAID;
 
-        // Be sure to have transaction data.
-        if (isset($response['answer']['uuid'])) {
+        // Be sure to have transaction data: an ERROR status carries an error answer, never a transaction.
+        if (($response['status'] ?? null) === 'SUCCESS' && isset($response['answer']['uuid'])) {
             $orderTransaction = $response['answer']['uuid'];
 
             if (null !== $order = $this->getOrderByTransaction($orderTransaction)) {

@@ -4,7 +4,8 @@
   "type": "thelia-module",
   "require": {
     "thelia/installer": "^1.6",
-    "lyracom/rest-php-sdk": "4.0.*"
+    "lyracom/rest-php-sdk": "4.0.*",
+    "symfony/lock": "^7.4"
   },
   "extra": {
     "installer-name": "PayzenEmbedded"

@@ -62,13 +62,22 @@ class FrontController extends BasePaymentModuleController
         // The response code to the server
         $gatewayResponseCode = 'KO';
 
-        $lyraClient = new LyraPaymentManagementWrapper($dispatcher, $this->getLog());
+        $lyraClient = new LyraPaymentManagementWrapper($dispatcher);
+        $signed = false;
 
         try {
             /* Retrieve the IPN content */
             $rawAnswer = $lyraClient->getParsedFormAnswer();
 
-            if (!$lyraClient->checkHash()) {
+            // The platform signs its notification with the REST password (kr-hash-key "password").
+            // The answer the shopper's browser receives is signed with the public HMAC key: it is
+            // the shopper's to hold, and must not be taken here for the platform's word. An empty
+            // password would sign with an empty key, which anyone can do.
+            $password = (string) $lyraClient->getPassword();
+            $signedByThePlatform = 'password' === $this->getRequest()->request->get('kr-hash-key') && '' !== $password;
+
+            // The key is the server's own, never chosen again from the request.
+            if (!$signedByThePlatform || !($signed = $lyraClient->checkHash($password))) {
                 $this->getLog()->addError($translator->trans("Invalid signature received, aborting.", [], PayzenEmbedded::DOMAIN_NAME));
                 throw new \Exception($translator->trans("Invalid signature received, aborting.", [], PayzenEmbedded::DOMAIN_NAME));
             }
@@ -91,8 +100,16 @@ class FrontController extends BasePaymentModuleController
                 default:
                     $gatewayResponseCode = 'UNKNOWN';
             }
-        } catch (\Exception $ex) {
-            $this->getLog()->addError($translator->trans("Failed to process request, aborting. Error is " .$ex->getMessage(), [], PayzenEmbedded::DOMAIN_NAME));
+        } catch (\Throwable $ex) {
+            $this->getLog()->addError(sprintf('PayZen notification failed: %s: %s at %s:%d', $ex::class, $ex->getMessage(), $ex->getFile(), $ex->getLine()));
+
+            // A signed notification the module failed on (a database or lock failure, a bug) is
+            // answered with a server error: the platform replays a failed call and warns the
+            // merchant, where a KO would close it. Anything before the signature is checked stays
+            // a KO: an unsigned request never gets to make the shop answer an error.
+            if ($signed) {
+                return new Response('ERROR', Response::HTTP_INTERNAL_SERVER_ERROR);
+            }
         }
 
         return new Response($gatewayResponseCode);

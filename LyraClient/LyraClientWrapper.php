@@ -11,9 +11,12 @@
 namespace PayzenEmbedded\LyraClient;
 
 use Lyra\Client;
+use PayzenEmbedded\Model\Map\PayzenEmbeddedTransactionHistoryTableMap;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistory;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistoryQuery;
+use Propel\Runtime\Exception\PropelException;
 use PayzenEmbedded\PayzenEmbedded;
+use Thelia\Log\Tlog;
 use Thelia\Model\Admin;
 use Thelia\Model\CurrencyQuery;
 use Thelia\Model\Order;
@@ -56,6 +59,24 @@ class LyraClientWrapper extends Client
         $this->setSHA256Key(PayzenEmbedded::getConfigValue('signature_' . $varMode . '_key'));
     }
 
+    /**
+     * Call the platform. The history rows read before the call are kept in memory by the ORM and
+     * handed back as they were by any later query: a notification may have written them while the
+     * platform answered, so they are read again from the database afterwards.
+     *
+     * @param string       $target
+     * @param array<mixed> $array
+     *
+     * @return array<mixed>
+     */
+    public function post($target, $array)
+    {
+        try {
+            return parent::post($target, $array);
+        } finally {
+            PayzenEmbeddedTransactionHistoryTableMap::clearInstancePool();
+        }
+    }
 
     /**
      * Record a transaction, or bring the record of a transaction already known up to date.
@@ -65,78 +86,109 @@ class LyraClientWrapper extends Client
      * keeps the one row it already has. Without that, a shop reading its own history could not tell
      * a retry from a duplicate notification.
      *
+     * @param string|null $debitUuid the debit the order stands on, when the caller knows it: a transaction
+     *                               of its own that does not say its operation type is then a credit
+     *
      * @throws \Exception
      */
-    protected function updateTransactionHistory($answer, Order $order, ?Admin $admin = null): void
+    protected function updateTransactionHistory($answer, Order $order, ?Admin $admin = null, ?string $debitUuid = null): void
     {
-        // Guess transaction status, terminated or not
-        $finished = in_array($answer['status'], [ 'PAID', 'UNPAID' ]);
+        // An answer that does not say what the transaction is (a listing, say) is no correction of a
+        // type the history already holds: a credit read back as a debit would leave the ledger.
+        if ('' === trim((string) ($answer['operationType'] ?? '')) && \is_scalar($answer['uuid'] ?? null)) {
+            $known = PayzenEmbeddedTransactionHistoryQuery::create()->filterByUuid(HistoryColumn::bounded('uuid', $answer['uuid']))->findOne();
 
-        $currency = CurrencyQuery::create()->findOneByCode($answer['currency']);
-
-        $transaction = PayzenEmbeddedTransactionHistoryQuery::create()
-            ->filterByUuid($answer['uuid'])
-            ->findOne()
-            ?? new PayzenEmbeddedTransactionHistory();
-
-        $transaction
-            ->setOrderId($order->getId())
-            ->setCustomerId($order->getCustomerId())
-            ->setAdmin($admin)
-            ->setUuid($answer['uuid'])
-            ->setDetailedstatus($answer['detailedStatus'])
-            ->setStatus($answer['status'])
-            ->setAmount($answer['amount'])
-            ->setCurrencyId($currency ? $currency->getId() : null)
-            ->setCreationdate(new \DateTime($answer['creationDate']) ?: null)
-            ->setErrorcode($answer['errorCode'])
-            ->setErrormessage($answer['errorMessage'])
-            ->setDetailederrorcode($answer['detailedErrorCode'])
-            ->setDetailederrormessage($answer['detailedErrorMessage'])
-            ->setFinished($finished)
-            ->save();
-    }
-
-    /**
-     * The transaction the order currently stands on.
-     *
-     * A paid transaction speaks for the order whatever else it carries, since a shop does not take
-     * back a payment it has received. Failing one, the latest attempt the platform dated speaks.
-     */
-    protected function governingTransaction(Order $order): ?TransactionOutcome
-    {
-        $transactions = PayzenEmbeddedTransactionHistoryQuery::create()
-            ->filterByOrderId($order->getId())
-            ->find();
-
-        $governing = null;
-
-        foreach ($transactions as $transaction) {
-            $outcome = new TransactionOutcome(
-                (string) $transaction->getUuid(),
-                strtoupper((string) $transaction->getStatus()),
-                $transaction->getCreationdate() !== null
-                    ? \DateTimeImmutable::createFromInterface($transaction->getCreationdate())
-                    : null
-            );
-
-            if (null === $governing) {
-                $governing = $outcome;
-                continue;
-            }
-
-            if ($outcome->isPaid() && !$governing->isPaid()) {
-                $governing = $outcome;
-                continue;
-            }
-
-            if (!$governing->isPaid()
-                && null !== $outcome->createdAt
-                && (null === $governing->createdAt || $outcome->createdAt > $governing->createdAt)) {
-                $governing = $outcome;
+            if (null !== $known && '' !== (string) $known->getOperationtype()) {
+                $answer['operationType'] = $known->getOperationtype();
             }
         }
 
-        return $governing;
+        $outcome = TransactionOutcome::fromAnswer($answer, $debitUuid);
+        $currency = isset($answer['currency']) ? CurrencyQuery::create()->findOneByCode($answer['currency']) : null;
+
+        $transaction = PayzenEmbeddedTransactionHistoryQuery::create()
+            ->filterByUuid(HistoryColumn::bounded('uuid', $outcome->uuid))
+            ->findOne()
+            ?? new PayzenEmbeddedTransactionHistory();
+
+        // A transaction already recorded for another order is not this order's: the platform lists
+        // transactions by the merchant's order reference, which two shops on one contract may share.
+        if (!$transaction->isNew() && null !== $transaction->getOrderId() && (int) $transaction->getOrderId() !== (int) $order->getId()) {
+            Tlog::getInstance()->addWarning(sprintf(
+                'PayZen transaction %s belongs to order #%d, not to order %s: ignored.',
+                $outcome->uuid,
+                (int) $transaction->getOrderId(),
+                $order->getRef()
+            ));
+
+            return;
+        }
+
+        $this->fillTransactionHistory($transaction, $answer, $outcome, $order, $currency?->getId(), $admin);
+
+        try {
+            $transaction->save();
+        } catch (PropelException $exception) {
+            // The platform notifies the same transaction it just answered: the notification may have
+            // inserted the row between the read above and this write. The row is then brought up to date.
+            // A duplicate key only (MySQL 1062): SQLSTATE 23000 also covers a missing value or a
+            // foreign key, which no second write would cure.
+            $previous = $exception->getPrevious();
+            $duplicate = $previous instanceof \PDOException && 1062 === (int) ($previous->errorInfo[1] ?? 0);
+
+            if (!$duplicate || !$transaction->isNew() || null === $existing = PayzenEmbeddedTransactionHistoryQuery::create()->filterByUuid(HistoryColumn::bounded('uuid', $outcome->uuid))->findOne()) {
+                throw $exception;
+            }
+
+            if (null !== $existing->getOrderId() && (int) $existing->getOrderId() !== (int) $order->getId()) {
+                Tlog::getInstance()->addWarning(sprintf('PayZen transaction %s belongs to order #%d, not to order %s: ignored.', $outcome->uuid, (int) $existing->getOrderId(), $order->getRef()));
+
+                return;
+            }
+
+            $this->fillTransactionHistory($existing, $answer, $outcome, $order, $currency?->getId(), $admin);
+            $existing->save();
+        }
+    }
+
+    private function fillTransactionHistory(
+        PayzenEmbeddedTransactionHistory $transaction,
+        array $answer,
+        TransactionOutcome $outcome,
+        Order $order,
+        ?int $currencyId,
+        ?Admin $admin,
+    ): void {
+        $transaction
+            ->setOrderId($order->getId())
+            ->setCustomerId($order->getCustomerId())
+            ->setUuid(HistoryColumn::bounded('uuid', $outcome->uuid))
+            ->setDetailedstatus(HistoryColumn::bounded('detailedStatus', $outcome->detailedStatus))
+            ->setStatus(HistoryColumn::bounded('status', $outcome->status))
+            ->setOperationtype(HistoryColumn::bounded('operationType', $outcome->operationType))
+            // A parent the answer does not repeat is kept: an answer that says less is no correction.
+            ->setParentuuid(HistoryColumn::bounded('parentUuid', $outcome->parentUuid ?? $transaction->getParentuuid()))
+            ->setAmount($outcome->amount)
+            ->setCurrencyId($currencyId)
+            // Kept as a UTC wall clock whatever the offset the platform wrote it with: see TransactionOutcome::fromHistoryRow().
+            ->setCreationdate($outcome->createdAt !== null ? \DateTime::createFromImmutable($outcome->createdAt)->setTimezone(new \DateTimeZone('UTC')) : null)
+            ->setErrorcode(HistoryColumn::bounded('errorCode', $answer['errorCode'] ?? null))
+            ->setErrormessage(HistoryColumn::bounded('errorMessage', $answer['errorMessage'] ?? null))
+            ->setDetailederrorcode(HistoryColumn::bounded('detailedErrorCode', $answer['detailedErrorCode'] ?? null))
+            ->setDetailederrormessage(HistoryColumn::bounded('detailedErrorMessage', $answer['detailedErrorMessage'] ?? null))
+            ->setFinished($outcome->isFinished());
+
+        // The author of a refund is kept; a notification, which has none, never erases it.
+        if (null !== $admin) {
+            $transaction->setAdmin($admin);
+        }
+    }
+
+    /**
+     * The transaction the order currently stands on, see GoverningTransaction.
+     */
+    protected function governingTransaction(Order $order): ?TransactionOutcome
+    {
+        return GoverningTransaction::among((new TransactionHistoryReader())->outcomesOf($order), (string) $order->getTransactionRef());
     }
 }

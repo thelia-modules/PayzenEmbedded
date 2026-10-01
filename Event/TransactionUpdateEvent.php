@@ -109,7 +109,7 @@ class TransactionUpdateEvent extends ActionEvent
     }
 
     /**
-     * @return int
+     * @return int|null one of LyraClientWrapper::PAYMENT_STATUS_*, null until a listener answered
      */
     public function getPaymentStatus()
     {

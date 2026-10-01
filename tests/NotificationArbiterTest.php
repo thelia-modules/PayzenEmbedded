@@ -24,7 +24,7 @@ use PHPUnit\Framework\TestCase;
  * its own schedule. These are the sequences a shop actually sees.
  *
  * Run from a Thelia checkout that has this module installed:
- *   vendor/bin/phpunit --bootstrap vendor/autoload.php vendor/thelia/modules/PayzenEmbedded/tests
+ *   vendor/bin/phpunit -c vendor/thelia/modules/PayzenEmbedded
  */
 final class NotificationArbiterTest extends TestCase
 {
@@ -87,6 +87,27 @@ final class NotificationArbiterTest extends TestCase
         self::assertFalse($this->arbiter->accepts($later, $paid));
     }
 
+    public function testAPaymentOutranksALaterRefusalAppliedFirst(): void
+    {
+        $laterRefusal = $this->transaction('t2', 'UNPAID', '2026-09-21 10:05:00');
+        $earlierPayment = $this->transaction('t1', 'PAID', '2026-09-21 10:00:00');
+
+        self::assertTrue($this->arbiter->accepts($earlierPayment, $laterRefusal));
+    }
+
+    public function testAPaymentOutranksALaterAttemptStillRunning(): void
+    {
+        $laterRunning = $this->transaction('t2', 'RUNNING', '2026-09-21 10:05:00');
+        $earlierPayment = $this->transaction('t1', 'PAID', '2026-09-21 10:00:00');
+
+        self::assertTrue($this->arbiter->accepts($earlierPayment, $laterRunning));
+    }
+
+    public function testAnUndatedPaymentOutranksADatedRefusal(): void
+    {
+        self::assertTrue($this->arbiter->accepts(new TransactionOutcome('t1', 'PAID', null), $this->transaction('t2', 'UNPAID', '2026-09-21 10:05:00')));
+    }
+
     public function testAnOlderAttemptNeverOverridesANewerOne(): void
     {
         $newer = $this->transaction('t2', 'RUNNING', '2026-09-21 10:05:00');
@@ -104,25 +125,62 @@ final class NotificationArbiterTest extends TestCase
         self::assertTrue($this->arbiter->accepts($dated, $undated));
     }
 
-    public function testATransactionWithoutACreationDateIsReadAsUndated(): void
+    /**
+     * The shopper paid twice: the second payment, dated after the first, moves the order onto
+     * its own transaction. The shop then owes one of the two back, and refunds it from the page.
+     */
+    public function testASecondPaymentAfterAFirstOneMovesTheOrder(): void
     {
-        $outcome = TransactionOutcome::fromAnswer(['uuid' => 't1', 'status' => 'paid']);
-
-        self::assertSame('t1', $outcome->uuid);
-        self::assertSame('PAID', $outcome->status);
-        self::assertNull($outcome->createdAt);
-        self::assertTrue($outcome->isPaid());
+        self::assertTrue((new NotificationArbiter())->accepts(
+            $this->transaction('t2', 'PAID', '2026-09-21 10:05:00'),
+            $this->transaction('t1', 'PAID', '2026-09-21 10:00:00')
+        ));
     }
 
-    public function testAnUnparsableCreationDateIsReadAsUndatedRatherThanAsToday(): void
+    public function testTwoAttemptsDatedTheSameSecondKeepTheAppliedOne(): void
     {
-        $outcome = TransactionOutcome::fromAnswer(['uuid' => 't1', 'status' => 'PAID', 'creationDate' => 'not a date']);
+        self::assertFalse((new NotificationArbiter())->accepts(
+            $this->transaction('t2', 'PAID', '2026-09-21 10:00:00'),
+            $this->transaction('t1', 'PAID', '2026-09-21 10:00:00')
+        ));
+    }
 
-        self::assertNull($outcome->createdAt);
+    public function testARunningReplayAfterARefusalIsIgnored(): void
+    {
+        self::assertFalse((new NotificationArbiter())->accepts(
+            $this->transaction('t1', 'RUNNING', '2026-09-21 10:00:00'),
+            $this->transaction('t1', 'UNPAID', '2026-09-21 10:00:00')
+        ));
     }
 
     private function transaction(string $uuid, string $status, string $createdAt): TransactionOutcome
     {
         return new TransactionOutcome($uuid, $status, new \DateTimeImmutable($createdAt));
+    }
+
+    public function testARepeatOfTheTransactionTheOrderStandsOnIsUnchanged(): void
+    {
+        $applied = $this->transaction('t1', 'RUNNING', '2026-09-21 10:00:00');
+
+        self::assertTrue($this->arbiter->isUnchanged($this->transaction('t1', 'RUNNING', '2026-09-21 10:00:00'), $applied, 't1'));
+        self::assertFalse($this->arbiter->isUnchanged($this->transaction('t1', 'PAID', '2026-09-21 10:00:00'), $applied, 't1'), 'a new state is a change');
+        self::assertFalse($this->arbiter->isUnchanged($this->transaction('t2', 'RUNNING', '2026-09-21 10:05:00'), $applied, 't1'), 'another transaction is a change');
+        self::assertFalse($this->arbiter->isUnchanged($this->transaction('t1', 'RUNNING', '2026-09-21 10:00:00'), $applied, 't9'), 'the row the history falls back on is not the order reference');
+        self::assertFalse($this->arbiter->isUnchanged($this->transaction('t1', 'RUNNING', '2026-09-21 10:00:00'), $applied, ''), 'an order never moved');
+        self::assertFalse($this->arbiter->isUnchanged($this->transaction('t1', 'RUNNING', '2026-09-21 10:00:00'), null, 't1'), 'nothing applied');
+    }
+
+    public function testAFinishedCreditIsNeverPutBackAsRunning(): void
+    {
+        $paid = new TransactionOutcome('c1', 'PAID', null, TransactionOutcome::OPERATION_CREDIT, 300);
+        $running = new TransactionOutcome('c1', 'RUNNING', null, TransactionOutcome::OPERATION_CREDIT, 300);
+        $refused = new TransactionOutcome('c1', 'UNPAID', null, TransactionOutcome::OPERATION_CREDIT, 300);
+
+        self::assertFalse($this->arbiter->acceptsCredit($running, $paid), 'a late RUNNING after PAID');
+        self::assertFalse($this->arbiter->acceptsCredit($running, $refused), 'a late RUNNING after UNPAID');
+        self::assertTrue($this->arbiter->acceptsCredit($paid, $running), 'the credit confirmed');
+        self::assertTrue($this->arbiter->acceptsCredit($refused, $running), 'the credit refused');
+        self::assertTrue($this->arbiter->acceptsCredit($running, $running), 'the same state again');
+        self::assertTrue($this->arbiter->acceptsCredit($running, null), 'a credit the history does not hold');
     }
 }

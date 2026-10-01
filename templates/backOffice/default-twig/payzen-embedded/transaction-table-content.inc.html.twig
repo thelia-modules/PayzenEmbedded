@@ -2,7 +2,12 @@
 {% set _d = 'payzenembedded.bo.default' %}
 {% set hide_order_ref = hide_order_ref|default(false) %}
 <tr>
-    <td>{{ transaction.TRANSACTION_REF }}</td>
+    <td>
+        {{ transaction.TRANSACTION_REF }}
+        {% if transaction.OPERATION_TYPE|default('DEBIT') == 'CREDIT' %}
+            <span class="badge text-bg-secondary">{{ 'Refund'|trans({}, _d) }}</span>
+        {% endif %}
+    </td>
     {% if not hide_order_ref %}
         <td>
             {% if transaction.ORDER_ID %}
@@ -27,7 +32,7 @@
         {% if transaction.DETAILED_STATUS %} ({{ transaction.DETAILED_STATUS }}){% endif %}
     </td>
     <td>
-        {{ (transaction.AMOUNT / 100)|number_format(2, '.', ' ') }} {{ transaction.CURRENCY_SYMBOL }}
+        {% if transaction.OPERATION_TYPE|default('DEBIT') == 'CREDIT' %}&minus; {% endif %}{{ transaction.AMOUNT_FORMATTED }} {{ transaction.CURRENCY_SYMBOL }}
     </td>
     <td>
         {% if transaction.ERROR_CODE %}

@@ -5,7 +5,10 @@
     {$curr_trans = $TRANSACTION_REF}
 {/if}
 <tr>
-    <td>{$TRANSACTION_REF}</td>
+    <td>
+        {$TRANSACTION_REF}
+        {if $OPERATION_TYPE == 'CREDIT'}<div class="label label-default">{intl l='Refund' d=$dmn}</div>{/if}
+    </td>
     {if ! $hide_order_ref}
         <td>
             {if $ORDER_ID}
@@ -35,7 +38,7 @@
         {loop type="currency" name="cur" id=$CURRENCY_ID}
         {$symbol = $SYMBOL}
         {/loop}
-        {format_money number=$AMOUNT/100 symbol=$symbol}
+        {if $OPERATION_TYPE == 'CREDIT'}&minus; {/if}{format_money number=$AMOUNT/100 symbol=$symbol}
     </td>
     <td>
         {if $ERROR_CODE}

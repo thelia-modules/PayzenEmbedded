@@ -28,11 +28,11 @@
                     </table>
                 </div>
 
-                {% if not finished %}
+                {% if not finished and can_act %}
                     <hr>
                     <h3 class="h6">{{ 'Update PayZen transaction'|trans({}, _d) }}</h3>
                     <div class="alert alert-info">
-                        {{ 'You can update here the PayZen transaction related to this order. You can change the transaction amount (it should be greater or eaqual to the current amount), define the capture date (the date at which the payment is done), and the validation mode, to change manual validation to automatic validation of the transaction'|trans({}, _d) }}
+                        {{ 'You can update here the PayZen transaction related to this order. You can change the transaction amount (it can only be lowered), define the capture date (the date at which the payment is done), and the validation mode, to change manual validation to automatic validation of the transaction'|trans({}, _d) }}
                     </div>
 
                     {{ form_start(update_form, {'action': path('payzen_embedded_order_edit_update_transaction', {'orderId': order_id}), 'method': 'post'}) }}
@@ -46,17 +46,21 @@
                                 <div class="input-group">
                                     {{ form_widget(update_form.amount, {'value': last_transaction_amount, 'attr': {'class': 'form-control' ~ (update_form.amount.vars.errors|length ? ' is-invalid' : '')}}) }}
                                 </div>
-                                {{ form_help(update_form.amount) }}
+                                {% if update_form.amount.vars.label_attr.help is defined %}<div class="form-text">{{ update_form.amount.vars.label_attr.help }}</div>{% endif %}
                                 {{ form_errors(update_form.amount) }}
                             </div>
                             <div class="col-md-4">
                                 <div class="mb-3">
                                     {{ form_label(update_form.capture_date) }}
-                                    <div class="d-flex gap-2">
-                                        {{ form_widget(update_form.capture_date.day, {attr: {class: 'form-select'}}) }}
-                                        {{ form_widget(update_form.capture_date.month, {attr: {class: 'form-select'}}) }}
-                                        {{ form_widget(update_form.capture_date.year, {attr: {class: 'form-select'}}) }}
-                                    </div>
+                                    {% if update_form.capture_date.day is defined %}
+                                        <div class="d-flex gap-2">
+                                            {{ form_widget(update_form.capture_date.day, {attr: {class: 'form-select'}}) }}
+                                            {{ form_widget(update_form.capture_date.month, {attr: {class: 'form-select'}}) }}
+                                            {{ form_widget(update_form.capture_date.year, {attr: {class: 'form-select'}}) }}
+                                        </div>
+                                    {% else %}
+                                        {{ form_widget(update_form.capture_date, {attr: {class: 'form-control'}}) }}
+                                    {% endif %}
                                     {{ form_errors(update_form.capture_date) }}
                                 </div>
                             </div>
@@ -74,14 +78,71 @@
                         </div>
                     {{ form_end(update_form) }}
                 {% endif %}
+
+                {% if other_payments_left and can_act %}
+                    <div class="alert alert-warning">{{ 'Another payment of this order, %amount, was taken by PayZen and is not refunded: refund it from the PayZen back-office. The order is not set refunded while it is held.'|trans({'%amount': other_payments_left ~ ' ' ~ currency_symbol}, _d) }}</div>
+                {% endif %}
+
+                {% if can_give_back and can_act %}
+                    <hr>
+                    <h3 class="h6">{{ 'Cancel or refund the payment'|trans({}, _d) }}</h3>
+                    <div class="alert alert-info">
+                        {% if is_cancellable %}
+                            {{ 'The payment of %amount is waiting for its capture: it can only be cancelled, in full. This cannot be undone.'|trans({'%amount': maximum_amount ~ ' ' ~ currency_symbol}, _d) }}
+                            {{ 'If the bank captured it since, refresh the history first: a captured payment can be refunded in part.'|trans({}, _d) }}
+                        {% else %}
+                            {{ 'The customer paid %paid, %refunded was refunded so far and %refundable can still be refunded. A payment not captured yet is cancelled in full; a captured one is refunded, in full or in part. This cannot be undone.'|trans({
+                                '%paid': paid_amount ~ ' ' ~ currency_symbol,
+                                '%refunded': refunded_amount ~ ' ' ~ currency_symbol,
+                                '%refundable': refundable_amount ~ ' ' ~ currency_symbol,
+                            }, _d) }}
+                        {% endif %}
+                    </div>
+
+                    {{ form_start(refund_form, {'action': path('payzen_embedded_order_edit_refund_transaction', {'orderId': order_id}), 'method': 'post', 'attr': {'onsubmit': "if (!confirm('" ~ ('This refund cannot be undone. Continue?'|trans({}, _d)|e('js')) ~ "')) { return false; } this.querySelector('[type=submit]').disabled = true; return true;"}}) }}
+                        {{ form_errors(refund_form) }}
+                        <input type="hidden" name="{{ refund_form.order_id.vars.full_name }}" value="{{ order_id }}">
+                        {% do refund_form.order_id.setRendered %}
+                        {# What this page shows as refunded so far: a refund it did not show is refused until the page is reloaded. #}
+                        <input type="hidden" name="{{ refund_form.refunded_amount.vars.full_name }}" value="{{ refunded_amount_minor }}">
+                        {% do refund_form.refunded_amount.setRendered %}
+
+                        <div class="row">
+                            <div class="col-md-4">
+                                {{ form_label(refund_form.amount) }}
+                                <div class="input-group">
+                                    {# Typed in, never prefilled: a hasty click would have given everything back. Never locked either: the history may be behind the platform (a payment captured since), which the refund reads again before anything is sent. #}
+                                    {{ form_widget(refund_form.amount, {'value': '', 'attr': {'class': 'form-control' ~ (refund_form.amount.vars.errors|length ? ' is-invalid' : ''), 'placeholder': maximum_amount}}) }}
+                                    <span class="input-group-text">{{ currency_symbol }}</span>
+                                </div>
+                                {% if refund_form.amount.vars.label_attr.help is defined %}<div class="form-text">{{ refund_form.amount.vars.label_attr.help }}</div>{% endif %}
+                                {{ form_errors(refund_form.amount) }}
+                            </div>
+                            <div class="col-md-8">
+                                {{ form_label(refund_form.comment) }}
+                                {{ form_widget(refund_form.comment, {'attr': {'class': 'form-control' ~ (refund_form.comment.vars.errors|length ? ' is-invalid' : '')}}) }}
+                                {% if refund_form.comment.vars.label_attr.help is defined %}<div class="form-text">{{ refund_form.comment.vars.label_attr.help }}</div>{% endif %}
+                                {{ form_errors(refund_form.comment) }}
+                            </div>
+                        </div>
+
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-danger">{{ (is_cancellable ? 'Cancel the payment' : 'Refund')|trans({}, _d) }}</button>
+                        </div>
+                    {{ form_end(refund_form) }}
+                {% endif %}
             {% else %}
+                <div class="alert alert-info mb-0">{{ 'There is no history for this transaction.'|trans({}, _d) }}</div>
+            {% endif %}
+
+            {% if can_act %}
                 {{ form_start(get_form, {'action': path('payzen_embedded_order_edit_refresh_transaction', {'orderId': order_id}), 'method': 'post'}) }}
                     {{ form_errors(get_form) }}
-                    <div class="alert alert-info">
-                        <input type="hidden" name="{{ get_form.order_id.vars.full_name }}" value="{{ order_id }}">
-                        {% do get_form.order_id.setRendered %}
-                        <p>{{ 'There is no history for this transaction.'|trans({}, _d) }}</p>
-                        <button type="submit" class="btn btn-info">{{ 'Refresh history'|trans({}, _d) }}</button>
+                    <input type="hidden" name="{{ get_form.order_id.vars.full_name }}" value="{{ order_id }}">
+                    {% do get_form.order_id.setRendered %}
+                    <div class="d-flex align-items-center justify-content-between gap-3 mt-3">
+                        <p class="mb-0 text-muted small">{{ 'Reads the transactions of this order from PayZen, refunds and cancellations made from its back-office included.'|trans({}, _d) }}</p>
+                        <button type="submit" class="btn btn-outline-info text-nowrap">{{ 'Refresh history'|trans({}, _d) }}</button>
                     </div>
                 {{ form_end(get_form) }}
             {% endif %}

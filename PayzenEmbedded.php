@@ -21,6 +21,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Thelia\Core\Template\Parser\ParserResolver;
 use Thelia\Core\Translation\Translator;
 use Thelia\Core\Install\Database;
+use Thelia\Model\ConfigQuery;
 use Thelia\Model\Lang;
 use Thelia\Model\LangQuery;
 use Thelia\Model\Message;
@@ -39,6 +40,9 @@ class PayzenEmbedded extends AbstractPaymentModule
 
     /** The transaction update event identifier */
     const TRANSACTION_UPDATE_EVENT = "payzenembedded.transaction_update_event";
+
+    /** The transaction refund event identifier, see Event\TransactionRefundEvent */
+    const TRANSACTION_REFUND_EVENT = "payzenembedded.transaction_refund_event";
 
     /** Payment form types, see the form_type configuration variable */
     const FORM_TYPE_CARD = 'CARD';
@@ -94,6 +98,22 @@ class PayzenEmbedded extends AbstractPaymentModule
 
             return new Response($renderedTemplate);
         }
+    }
+
+    /**
+     * What names this shop on the platform: two shops on one contract, or two environments in the
+     * TEST space, produce the same order references. Sent with every payment as metadata, and
+     * required back on what the platform lists or notifies.
+     */
+    public static function shopMarker(): string
+    {
+        return md5((string) ConfigQuery::read('url_site', '') . '#' . (string) self::getConfigValue('site_id', ''));
+    }
+
+    /** TEST or PRODUCTION, the space the platform files this shop's transactions in. */
+    public static function platformMode(): string
+    {
+        return 'TEST' === self::getConfigValue('mode', 'TEST') ? 'TEST' : 'PRODUCTION';
     }
 
     /**
@@ -313,7 +333,7 @@ class PayzenEmbedded extends AbstractPaymentModule
     public static function configureServices(ServicesConfigurator $servicesConfigurator): void
     {
         $servicesConfigurator->load(self::getModuleCode().'\\', __DIR__)
-            ->exclude([__DIR__ . '/I18n/*'])
+            ->exclude([__DIR__ . '/I18n/*', __DIR__ . '/tests/*'])
             ->autowire(true)
             ->autoconfigure(true);
     }

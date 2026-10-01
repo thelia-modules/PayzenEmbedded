@@ -50,6 +50,9 @@ certification PCI-DSS n'est pas nécessaire.
 Les clients peuvent demander à tout moment la suppression des informations de paiement enregistrées, depuis leur compte
 client, ou au moment de payer leur commande.
 
+Avec le formulaire SmartForm, l'enregistrement de la carte n'est pas proposé : PayZen retire Apple Pay et Google Pay
+d'un formulaire qui demande un enregistrement. Un client qui a déjà enregistré sa carte continue de payer en un clic.
+
 ## Historique des transactions
 
 L'historique des transactions PayZen est disponible pour chaque commande sur le détail de la commande dans le 
@@ -92,6 +95,65 @@ LyraClientWrapper::PAYMENT_STATUS_* :
 - PAYMENT_STATUS_IN_PROGRESS : la transaction est en cours, et peut être modifiée si nécessaire.
 - PAYMENT_STATUS_ERROR : l'opération de modification a échoué, généralement parce que la transaction est terminée ou
 expirée.
+
+## Annulation et remboursement depuis le back-office
+
+Sur la page de détail d'une commande payée, l'administrateur peut rendre au client tout ou partie de ce qu'il a payé.
+Le module s'en remet à PayZen pour choisir l'opération :
+
+- une transaction non encore remise en banque est annulée, en totalité ;
+- une transaction remise en banque fait l'objet d'un remboursement, total ou partiel. Plusieurs remboursements partiels
+  sont possibles, jusqu'au montant payé.
+
+La commande passe au statut « remboursée » quand PayZen a confirmé chaque remboursement et qu'il ne reste rien à rembourser, au statut « annulée » quand la
+transaction a été annulée, et reste inchangée après un remboursement partiel. Chaque remboursement apparaît dans
+l'historique des transactions, avec un montant négatif.
+
+### Évènement de remboursement
+
+Nom de l'évènement : `PayzenEmbedded::TRANSACTION_REFUND_EVENT`
+
+L'action event `\PayzenEmbedded\Event\TransactionRefundEvent` reçoit :
+
+- l'ID ($orderId) de la commande concernée,
+- le montant ($amount) à rembourser, dans la plus petite unité de la devise (1250 pour 12,50 EUR),
+- un motif ($comment) facultatif, inscrit sur le remboursement dans le Back Office PayZen,
+- l'ID ($adminId) facultatif de l'administrateur, conservé sur la ligne d'historique,
+- le montant ($expectedRefundedAmount) facultatif déjà remboursé tel que l'appelant l'a vu, dans la plus petite
+  unité : si la plateforme en connaît un autre, la demande est refusée, pour ne jamais redemander un remboursement
+  que l'appelant n'a pas vu.
+
+Une fois dispatché, l'event retourne à travers `getOutcome()` ce que PayZen a fait, une des valeurs de
+`\PayzenEmbedded\LyraClient\RefundOutcome` : `Cancelled`, `Refunded`, `PartiallyRefunded` ou `Pending`. Un montant
+hors limites ou un refus de la plateforme lève une `TheliaProcessException` ; une demande restée sans réponse lève une
+`RefundOutcomeUnknownException`, et la tentative suivante commence par relire la plateforme.
+
+### Statut et stock
+
+Le module passe la commande en « Remboursée » quand la plateforme a confirmé des remboursements qui couvrent le paiement, et en « Annulée » quand la transaction a été annulée avant sa remise en banque. Ces statuts ont l'effet que le cœur Thelia leur donne sur le stock : une commande payée qui passe en remboursée remet ses produits en stock, y compris quand ce sont des gestes commerciaux qui atteignent le total. Une commande dont un autre paiement est encore encaissé (paiement en double) n'est pas passée en remboursée.
+
+### Verrou et instances multiples
+
+Un remboursement, une mise à jour de l'historique ou une modification de la transaction (la remise en banque après
+préparation, par exemple) verrouille la commande le temps des appels à PayZen : la modification attend la fin du
+remboursement (15 secondes au plus, puis elle échoue : le module hôte qui a demandé la capture décide alors du statut de
+la commande, et la capture se rejoue une fois le remboursement terminé), les deux autres refusent. Le verrou passe par le composant `lock` de
+Symfony : avec le magasin par défaut (`LOCK_DSN=semaphore` ou `flock`), il ne vaut que pour un serveur. Une boutique
+servie par plusieurs serveurs doit configurer un magasin partagé (`LOCK_DSN=redis://…` ou `pdo`).
+
+Chaque paiement porte en `metadata` un marqueur de la boutique (empreinte de l'URL du site et de l'identifiant
+PayZen). Ce que la plateforme liste (`Order/Get`) sans ce marqueur n'est rattaché à une commande que s'il s'agit de
+sa transaction connue, ou d'un remboursement de celle-ci ; ce qu'elle notifie sans marqueur est accepté pour un
+paiement (il précède le marqueur) et, pour un remboursement, seulement s'il porte sur la transaction de la
+commande : deux boutiques sur un même contrat, ou deux environnements dans l'espace TEST, produisent les mêmes
+références de commande. Une notification pour une commande payée avec un autre module est ignorée.
+
+Le marqueur change avec l'URL du site : ne pas modifier l'URL de la boutique tant que des paiements sont en cours, leurs
+notifications seraient ignorées. Le bouton « Mettre l'historique à jour » de la fiche commande, proposé avec ou sans
+historique, relit la liste des transactions de la commande chez PayZen (`Order/Get`) et enregistre ce qu'elle contient,
+remboursements et annulations faits depuis le Back Office PayZen compris. La commande passe « remboursée » quand chaque
+remboursement est confirmé et qu'il ne reste rien à rembourser ; une annulation faite depuis le Back Office PayZen
+apparaît dans l'historique et laisse le statut de la commande à la boutique.
 
 ## Installation
 
@@ -162,6 +224,9 @@ PCI-DSS certification is not required.
 Customers may request at any time the removal of the registered payment information from their account
 customer page, or before paying an order.
 
+With the SmartForm, the card registration is not offered: PayZen leaves Apple Pay and Google Pay out of a form that
+asks for a registration. A customer who already registered a card keeps paying in one click.
+
 ## Transaction History
 
 The PayZen transaction history is available for each order on the order detail page in the
@@ -202,6 +267,67 @@ Once dispatched, the event returns in $paymentStatus the status of the transacti
 - `PAYMENT_STATUS_IN_PROGRESS`: the transaction is in progress, and can be modified if necessary.
 - `PAYMENT_STATUS_ERROR`: The change operation failed, usually because the transaction is complete or
 expired.
+
+## Cancel or refund from the back-office
+
+On the page of a paid order, the administrator can give the customer back all or part of what they paid. The module
+lets PayZen choose the operation:
+
+- a transaction not captured yet is cancelled, in full;
+- a captured transaction gets a refund, in full or in part. Several partial refunds are possible, up to the amount
+  paid.
+
+The order moves to the refunded status once the platform confirmed every refund and nothing is left to refund, to the
+cancelled status when the transaction was cancelled, and stays as it is after a partial or a pending refund. Each refund shows in the transaction history, with a negative
+amount.
+
+### Transaction refund event
+
+Event name: `PayzenEmbedded::TRANSACTION_REFUND_EVENT`
+
+The `\PayzenEmbedded\Event\TransactionRefundEvent` action event takes:
+
+- the ID ($orderId) of the order,
+- the amount ($amount) to refund, in the smallest unit of the currency (1250 for 12.50 EUR),
+- an optional reason ($comment), written on the refund in the PayZen back-office,
+- the optional ID ($adminId) of the administrator, kept on the history row,
+- the optional amount ($expectedRefundedAmount) refunded so far as the caller saw it, in the smallest unit: the
+  refund is refused when the platform knows another figure, so that a refund the caller did not see is never asked
+  for again.
+
+Once dispatched, `getOutcome()` tells what PayZen did, one of `\PayzenEmbedded\LyraClient\RefundOutcome`:
+`Cancelled`, `Refunded`, `PartiallyRefunded` or `Pending`. An amount out of range or a refusal from the platform
+raises a `TheliaProcessException`; a request left unanswered raises a `RefundOutcomeUnknownException`, and the next
+attempt starts by reading the platform again.
+
+### Status and stock
+
+The module sets the order refunded once the platform confirmed refunds that cover the payment, and cancelled when the transaction was cancelled before its capture. These statuses have the stock effect the Thelia core gives them: a paid order moving to refunded puts its products back in stock, gestures of goodwill that add up to the total included. An order another payment of which is still held (a double payment) is not set refunded.
+
+### Lock and multiple instances
+
+A refund, a history refresh or a transaction update (the capture after picking, say) locks the order while the
+platform is called: the update waits for a running refund (15 seconds at most, then it fails: the host module that
+asked for the capture decides on the order status, and the capture is asked for again once the refund is over), the
+two others refuse. The lock goes through Symfony's
+`lock` component: with the
+default store (`LOCK_DSN=semaphore` or `flock`) it holds one server. A shop served by several servers needs a shared
+store (`LOCK_DSN=redis://…` or `pdo`).
+
+Every payment carries a shop marker in its `metadata` (a fingerprint of the site URL and of the PayZen shop id).
+What the platform lists (`Order/Get`) without that marker is tied to an order only when it is its known transaction,
+or a refund of it; what it notifies without one is accepted for a payment (it precedes the marker) and, for a
+refund, only when it gives money back on the order's own transaction: two shops on one contract, or two
+environments in the TEST space, produce the same order references. A notification for an order paid with another
+module is ignored.
+
+The marker changes with the site URL: do not change the shop URL while payments are in progress, their notifications
+would be ignored. The "Refresh history" button of the order page, offered with or without a history, reads the
+platform's list of the order's transactions (`Order/Get`) and records what it holds, refunds and cancellations made from
+the PayZen back-office included. The order moves to the refunded status once every refund is confirmed and nothing is
+left to refund. A cancellation made from the PayZen back-office cancels the order while the history holds the
+authorisation as running, as its notification does; one of a payment the history already holds as paid only shows in
+the history, and leaves the order status to the shop.
 
 ## Installation
 

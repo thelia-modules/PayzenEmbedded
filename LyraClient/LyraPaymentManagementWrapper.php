@@ -11,16 +11,26 @@
 namespace PayzenEmbedded\LyraClient;
 
 use Lyra\Exceptions\LyraException;
+use Propel\Runtime\ActiveQuery\Criteria;
+use Propel\Runtime\Propel;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerToken;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
+use PayzenEmbedded\Model\Map\PayzenEmbeddedTransactionHistoryTableMap;
+use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistoryQuery;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\Lock\Exception\ExceptionInterface as LockException;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\LockInterface;
+use Symfony\Component\Lock\Store\FlockStore;
 use Thelia\Core\Event\Order\OrderEvent;
 use Thelia\Core\Event\TheliaEvents;
 use Thelia\Core\Translation\Translator;
+use Thelia\Exception\TheliaProcessException;
 use Thelia\Log\Tlog;
 use Thelia\Model\ConfigQuery;
 use Thelia\Model\Order;
+use Thelia\Model\Map\OrderTableMap;
 use Thelia\Model\OrderQuery;
 use Thelia\Model\OrderStatus;
 use Thelia\Model\OrderStatusQuery;
@@ -35,6 +45,17 @@ use Thelia\Tools\URL;
 
 class LyraPaymentManagementWrapper extends LyraClientWrapper
 {
+    /** The platform answers at most this many transactions for an order (PSP_015 beyond). */
+    protected const ORDER_GET_LIMIT = 30;
+
+    /** Two platform calls of up to 45 seconds each fit in this time. */
+    protected const ORDER_LOCK_TTL = 120.0;
+
+    /** How long an operation the shop runs on its own waits for a locked order before giving up. */
+    protected const ORDER_LOCK_WAIT = 15.0;
+
+    protected ?LockFactory $lockFactory;
+
     /**
      * @var boolean
      */
@@ -48,7 +69,15 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
      */
     protected $dispatcher;
 
-    public function __construct(EventDispatcherInterface $dispatcher)
+    /**
+     * @param LockFactory|null $lockFactory the framework's lock factory. It spans every node of the
+     *                                      shop only when LOCK_DSN names a network store (redis,
+     *                                      pdo); the default semaphore or flock store holds one
+     *                                      host. Without it, a lock on this node's file system,
+     *                                      built the first time an operation asks for it: the
+     *                                      notification and the payment never do.
+     */
+    public function __construct(EventDispatcherInterface $dispatcher, ?LockFactory $lockFactory = null)
     {
         parent::__construct();
 
@@ -56,6 +85,108 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
 
         $this->log = Tlog::getInstance();
         $this->dispatcher = $dispatcher;
+        $this->lockFactory = $lockFactory;
+    }
+
+    /**
+     * One operation at a time on the money of an order: a refund and a refresh reading the same
+     * ledger would both pass its checks, and a capture would cross a cancellation. One lock per
+     * order and per shop, since the nodes of one host may serve several shops. The caller releases it.
+     *
+     * A wrapper built without the framework's factory (the notification, the payment) locks on
+     * this node's file system: said in the log, since such a lock holds one server only.
+     *
+     * @param bool $blocking wait for the order, up to ORDER_LOCK_WAIT seconds, instead of refusing
+     *                       it at once: for an operation the shop runs on its own, such as the
+     *                       capture after picking, whose refusal would be read as a failed payment.
+     *                       Bounded on purpose: the component's own blocking wait has no limit on
+     *                       a semaphore or flock store, and a web request cannot wait that long.
+     *
+     * @throws TheliaProcessException when another operation holds the order, or the lock store fails
+     */
+    protected function acquireOrderLock(Order $order, bool $blocking = false): LockInterface
+    {
+        if (null === $this->lockFactory) {
+            $this->log->addWarning('PayZen order lock: no lock factory given, locking on this server\'s file system only.');
+
+            $this->lockFactory = new LockFactory(new FlockStore());
+        }
+
+        $lock = $this->lockFactory->createLock(
+            'payzen-embedded-refund-' . PayzenEmbedded::shopMarker() . '-' . $order->getId(),
+            self::ORDER_LOCK_TTL
+        );
+
+        $deadline = microtime(true) + ($blocking ? self::ORDER_LOCK_WAIT : 0.0);
+
+        try {
+            $acquired = $lock->acquire();
+
+            while (!$acquired && microtime(true) < $deadline) {
+                usleep(200_000);
+                $acquired = $lock->acquire();
+            }
+        } catch (LockException $storeFailure) {
+            // A store that cannot answer (redis down, no semaphore left) is not an order held by
+            // someone: said as such, and read by the caller as any refusal of the module. The cause
+            // stays in the log by its class only: a store's own message may quote its DSN.
+            $this->log->addError(sprintf('PayZen order lock: store failure on order %d: %s caused by %s', $order->getId(), $storeFailure::class, get_debug_type($storeFailure->getPrevious())));
+
+            throw new TheliaProcessException(
+                Translator::getInstance()->trans('The order could not be locked, see the logs.', [], PayzenEmbedded::DOMAIN_NAME),
+                0,
+                null,
+                $storeFailure
+            );
+        }
+
+        if (!$acquired) {
+            throw new TheliaProcessException(
+                Translator::getInstance()->trans('A refund of this order is already running.', [], PayzenEmbedded::DOMAIN_NAME)
+            );
+        }
+
+        // The history rows this request already read are kept in memory by the ORM and handed back
+        // as they were by any later query: the rows are read again from the database under the lock.
+        PayzenEmbeddedTransactionHistoryTableMap::clearInstancePool();
+
+        return $lock;
+    }
+
+    /**
+     * Keep the order held for another ORDER_LOCK_TTL between two platform calls. A store that
+     * cannot extend it is refused like a store that cannot take it: nothing was sent yet.
+     *
+     * @throws TheliaProcessException when the store fails
+     */
+    protected function refreshOrderLock(LockInterface $lock, Order $order): void
+    {
+        try {
+            $lock->refresh();
+        } catch (LockException $storeFailure) {
+            $this->log->addError(sprintf('PayZen order lock: refresh failed on order %d: %s', $order->getId(), $storeFailure::class));
+
+            throw new TheliaProcessException(
+                Translator::getInstance()->trans('The order could not be locked, see the logs.', [], PayzenEmbedded::DOMAIN_NAME),
+                0,
+                null,
+                $storeFailure
+            );
+        }
+    }
+
+    /**
+     * Give the order back once the operation is over, whatever the store says: the operation's own
+     * result (money refunded, payment captured) is what the caller has to read, and a lock the store
+     * cannot release expires on its own after ORDER_LOCK_TTL.
+     */
+    protected function releaseOrderLock(LockInterface $lock, Order $order): void
+    {
+        try {
+            $lock->release();
+        } catch (LockException $releaseFailure) {
+            $this->log->addError(sprintf('PayZen order lock: release failed on order %d, it expires on its own: %s', $order->getId(), $releaseFailure::class));
+        }
     }
 
     /**
@@ -73,15 +204,12 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         $currency = $order->getCurrency();
         $customer = $order->getCustomer();
 
-        if ($this->oneClickEnabled) {
-            $formAction = 'ASK_REGISTER_PAY';
-        } else {
-            $formAction = 'PAYMENT';
-        }
+        // A SmartForm asked to register the card would lose its wallets, see PaymentFormAction.
+        $formAction = PaymentFormAction::resolve($this->oneClickEnabled, PayzenEmbedded::isSmartFormEnabled());
 
         // Request parameters (see https://payzen.io/en-EN/rest/V4.0/api/playground.html?ws=Charge/CreatePayment)
         $store = [
-            "amount" => (int)((string)($order->getTotalAmount() * 100)),
+            "amount" => RefundAmount::fromMajor((string) $order->getTotalAmount(), $currency->getCode()),
             'contrib' => 'Thelia version ' . ConfigQuery::read('thelia_version'),
             'currency' => strtoupper($currency->getCode()),
             'orderId' => $order->getRef(),
@@ -93,6 +221,8 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             ],
 
             'strongAuthentication' => PayzenEmbedded::getConfigValue('strong_authentication', 'AUTO'),
+            // Names this shop on the platform: what it lists or notifies is checked against it.
+            'metadata' => [TransactionOutcome::SHOP_MARKER_KEY => PayzenEmbedded::shopMarker()],
             'ipnTargetUrl' => URL::getInstance()->absoluteUrl('/payzen-embedded/ipn-callback'),
 
             'transactionOptions' => [
@@ -131,8 +261,48 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
 
             $this->log->addInfo(Translator::getInstance()->trans("PayZen response received for order %ref.", ['%ref' => $orderRef], PayzenEmbedded::DOMAIN_NAME));
 
-            if (null !== $order = $this->getOrderByRef($orderRef)) {
-                $status = $this->processOrderStatus($order, $response['transactions'][0]);
+            // An order paid with another module is never moved on a PayZen notification, whatever
+            // reference it names: a shop switching payment modules keeps its old references.
+            if (null !== ($order = $this->getOrderByRef($orderRef)) && PayzenEmbedded::getModuleId() !== (int) $order->getPaymentModuleId()) {
+                $this->log->addWarning(sprintf('PayZen notification for order %s ignored: the order was not paid with PayZen.', $orderRef));
+                $order = null;
+            }
+
+            if (null !== $order) {
+                // A notification may carry several transactions: the debit of each attempt, and the
+                // credit of a refund. Each one is read. The platform is answered about the transaction
+                // the order stands on once they are all recorded, not about the last one in the list.
+                $lastStatus = self::PAYMENT_STATUS_NOT_PAID;
+
+                // The debits first: a credit is judged against the debit the order stands on, which
+                // a debit of the same notification may just have set.
+                $answers = array_values(array_filter((array) $response['transactions'], '\is_array'));
+                usort($answers, static fn (array $a, array $b): int => (int) TransactionOutcome::fromAnswer($a)->isCredit() <=> (int) TransactionOutcome::fromAnswer($b)->isCredit());
+
+                foreach ($answers as $answer) {
+                    $incoming = TransactionOutcome::fromAnswer($answer);
+
+                    // The space is named once, at the top level of the notification; the marker
+                    // travels on each transaction. What is not this shop's, for this order, is left
+                    // out, judged on the order as the previous transaction of the list left it.
+                    $provenance = new NotificationProvenance(
+                        strtoupper(trim((string) ($response['orderDetails']['mode'] ?? ''))),
+                        PayzenEmbedded::shopMarker(),
+                        (string) $order->getTransactionRef(),
+                        PayzenEmbedded::platformMode(),
+                        (new TransactionHistoryReader())->uuidsOf($order)
+                    );
+
+                    if (!$provenance->accepts($incoming)) {
+                        $this->log->addWarning(sprintf('PayZen notification for order %s ignored: transaction %s belongs to another shop or space, or gives money back on another transaction.', $orderRef, $incoming->uuid));
+                        continue;
+                    }
+
+                    $lastStatus = $this->processOrderStatus($order, $answer);
+                }
+
+                $governing = $this->governingTransaction($order);
+                $status = null !== $governing ? $this->paymentStatusOf($governing) : $lastStatus;
             }
 
             $this->log->info(Translator::getInstance()->trans("PayZen payment response for order %ref processing teminated.", ['%ref' => $orderRef], PayzenEmbedded::DOMAIN_NAME));
@@ -153,7 +323,7 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
     {
         $status = self::PAYMENT_STATUS_NOT_PAID;
 
-        $orderStatus = $answer['status'];
+        $orderStatus = $answer['status'] ?? '';
         $transactionUuid = $answer['uuid'];
 
         // An order can carry one transaction per payment attempt, and the platform notifies each of
@@ -161,7 +331,56 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         // shopper gave up on would cancel an order that is paid for.
         $incoming = TransactionOutcome::fromAnswer($answer);
 
-        if (!(new NotificationArbiter())->accepts($incoming, $this->governingTransaction($order))) {
+        // A refund is a transaction of its own that gives money back: it is recorded, and it never
+        // moves the order. The refund service settles the order when the shop asks for the refund.
+        if ($incoming->isCredit()) {
+            $known = null;
+
+            foreach ((new TransactionHistoryReader())->outcomesOf($order) as $row) {
+                if ($row->uuid === $incoming->uuid) {
+                    $known = $row;
+                }
+            }
+
+            if (null !== $known && $known->isPaid() && TransactionOutcome::STATUS_UNPAID === $incoming->status) {
+                $this->log->addError(sprintf('Order %s: refund transaction %s, given back, is now refused by the platform: the order status is left to the shop, check it.', $order->getRef(), $incoming->uuid));
+            }
+
+            if (!(new NotificationArbiter())->acceptsCredit($incoming, $known)) {
+                $this->log->addInfo(sprintf('Order %s: refund transaction %s is already %s, the notification of it as %s is left out.', $order->getRef(), $incoming->uuid, $known?->status, $incoming->status));
+
+                return $this->paymentStatusOf($known ?? $incoming);
+            }
+
+            $this->updateTransactionHistory($answer, $order);
+
+            $this->log->addInfo(
+                Translator::getInstance()->trans(
+                    "Order %ref: refund transaction %uuid (%status) recorded.",
+                    ['%ref' => $order->getRef(), '%uuid' => $transactionUuid, '%status' => $orderStatus],
+                    PayzenEmbedded::DOMAIN_NAME
+                )
+            );
+
+            // A refund that was pending when the shop asked for it settles the order once the
+            // platform confirms it and every refund of the order is confirmed too.
+            $ledger = (new TransactionHistoryReader())->ledgerOf($order);
+
+            // Only an order moved on its payment is refunded, as on a refresh.
+            if ($incoming->isPaid() && '' !== (string) $order->getTransactionRef() && $ledger->isFullyRefunded()) {
+                $this->setOrderStatus($order, OrderStatusQuery::getRefundedStatus());
+            }
+
+            return $this->paymentStatusOf($incoming);
+        }
+
+        $applied = GoverningTransaction::appliedBefore(
+            (new TransactionHistoryReader())->outcomesOf($order),
+            (string) $order->getTransactionRef(),
+            $incoming
+        );
+
+        if (!(new NotificationArbiter())->accepts($incoming, $applied)) {
             $this->log->addInfo(
                 Translator::getInstance()->trans(
                     "Order %ref: transaction %uuid (%status) is not the one the order stands on, the order is left as it is.",
@@ -173,19 +392,96 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             return $this->paymentStatusOf($incoming);
         }
 
+        // The same transaction in the same state (a refresh of an authorisation still running, a
+        // notification of it replayed): the history takes what changed in the details, and an order
+        // that already left the unpaid state is not moved back, which would undo its preparation and
+        // send the confirmation again. An order still unpaid is moved, so that the status of an
+        // authorisation still running is written if the shop failed to write it the first time; a
+        // finished transaction never gets this far, see NotificationArbiter.
+        if ((new NotificationArbiter())->isUnchanged($incoming, $applied, (string) $order->getTransactionRef())
+            && (int) $order->getStatusId() !== (int) OrderStatusQuery::getNotPaidStatus()->getId()) {
+            $this->updateTransactionHistory($answer, $order);
+
+            return $this->paymentStatusOf($incoming);
+        }
+
+        // A notification is applied in full or not at all: a history that says the transaction is
+        // applied while the order did not move (a status change refused for want of stock, say)
+        // would have the notification replayed left out, see undoUnappliedNotification().
+        $rowBefore = $this->storedHistoryRow($order, $incoming);
+        $refBefore = (string) $order->getTransactionRef();
+        $versionBefore = $this->storedOrderVersion($order);
+
         // Update transaction history
         $this->updateTransactionHistory($answer, $order);
+
+        $rowWritten = $this->storedHistoryRow($order, $incoming);
+        // Until the reference is set, the order is as it was before the notification.
+        $versionAfterRef = $versionBefore;
+
+        try {
+            $status = $this->applyTransaction($order, $orderStatus, $transactionUuid, $versionAfterRef);
+        } catch (\Throwable $failure) {
+            try {
+                $this->undoUnappliedNotification($order, $incoming, (string) $transactionUuid, $rowBefore, $rowWritten, $refBefore, $versionAfterRef, $failure);
+            } catch (\Throwable $undoFailure) {
+                // The failure to report is the one that stopped the order; the undo's own is logged.
+                $this->log->addError(sprintf('Order %s: the undo of transaction %s failed (%s).', $order->getRef(), $incoming->uuid, $undoFailure::class));
+            }
+
+            throw $failure;
+        }
+
+        // Check if customer has registered its card for 1-click payment
+        if (isset($answer['paymentMethodToken']) && !empty($answer['paymentMethodToken'])) {
+            if (null === $tokenData = PayzenEmbeddedCustomerTokenQuery::create()->findOneByCustomerId($order->getCustomerId())) {
+                $tokenData = (new PayzenEmbeddedCustomerToken())
+                    ->setCustomerId($order->getCustomerId());
+            }
+
+            // Update customer payment token
+            $tokenData
+                ->setPaymentToken($answer['paymentMethodToken'])
+                ->save();
+        }
+
+        return $status;
+    }
+
+    /**
+     * Point the order at the transaction and move it as the transaction says.
+     *
+     * @param-out int $versionAfterRef the version of the order once its reference is set
+     *
+     * @return int one of the PAYMENT_STATUS_* constants
+     */
+    private function applyTransaction(Order $order, mixed $orderStatus, mixed $transactionUuid, int &$versionAfterRef): int
+    {
+        $status = self::PAYMENT_STATUS_NOT_PAID;
 
         // Store the transaction ID
         $event = new OrderEvent($order);
         $event->setTransactionRef($transactionUuid);
         $this->dispatcher->dispatch($event, TheliaEvents::ORDER_UPDATE_TRANSACTION_REF);
 
+        // Every save of the order from here on is a move, whatever status it ends on: a host module
+        // may bring it back to the status it had (the capture after picking sets it paid, then back
+        // to its own status), and a failure after that is no failure to move it.
+        // Read in memory, not in the database: another notification may save the order meanwhile,
+        // and its save would be taken for this one's. The object is the one the reference was saved on.
+        $versionAfterRef = max((int) $order->getVersion(), $versionAfterRef);
+
         if ($orderStatus === 'PAID') {
             $this->log->addInfo(Translator::getInstance()->trans("Order %ref payment was successful.", ['%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
 
-            // Payment OK !
-            $this->setOrderStatus($order, OrderStatusQuery::getPaidStatus());
+            // Payment OK ! Unless every cent of it was already given back: a refund notified or
+            // listed before its payment settles the order as soon as the order stands on that payment.
+            $this->setOrderStatus(
+                $order,
+                (new TransactionHistoryReader())->ledgerOf($order)->isFullyRefunded()
+                    ? OrderStatusQuery::getRefundedStatus()
+                    : OrderStatusQuery::getPaidStatus()
+            );
 
             $status = self::PAYMENT_STATUS_PAID;
         } else if ($orderStatus === 'UNPAID') {
@@ -207,20 +503,229 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             $status = self::PAYMENT_STATUS_ERROR;
         }
 
-        // Check if customer has registered its card for 1-click payment
-        if (isset($answer['paymentMethodToken']) && !empty($answer['paymentMethodToken'])) {
-            if (null === $tokenData = PayzenEmbeddedCustomerTokenQuery::create()->findOneByCustomerId($order->getCustomerId())) {
-                $tokenData = (new PayzenEmbeddedCustomerToken())
-                    ->setCustomerId($order->getCustomerId());
+        return $status;
+    }
+
+    /**
+     * Put the history and the order reference back as they were when the order did not move: the
+     * notification replayed, or the history refresh, then applies the transaction again instead of
+     * finding it applied. The order is read under a row lock, and nothing is undone when it was saved
+     * since the reference was set (it moved, whatever status it ends on), when it stands on another
+     * transaction, or when the history row is no longer the one this notification wrote (another
+     * notification, or a refresh, wrote it meanwhile): what they wrote stands.
+     *
+     * @param array<string, mixed>|null $rowBefore  the history row of the transaction before the notification, null if there was none
+     * @param array<string, mixed>|null $rowWritten the row as the notification wrote it
+     */
+    private function undoUnappliedNotification(
+        Order $order,
+        TransactionOutcome $incoming,
+        string $transactionRef,
+        ?array $rowBefore,
+        ?array $rowWritten,
+        string $refBefore,
+        int $versionUnmoved,
+        \Throwable $failure,
+    ): void {
+        $connection = null;
+        $undone = false;
+
+        try {
+            $connection = Propel::getWriteConnection(OrderTableMap::DATABASE_NAME);
+            $connection->beginTransaction();
+
+            // select() of several columns hands back an array of them, not an order.
+            /** @var array<string, mixed>|null $stored */
+            $stored = OrderQuery::create()
+                ->filterById($order->getId())
+                ->select(['Version', 'TransactionRef'])
+                ->lockForUpdate()
+                ->findOne($connection);
+
+            if (!\is_array($stored) || (int) $stored['Version'] !== $versionUnmoved || (string) $stored['TransactionRef'] !== $transactionRef) {
+                $connection->commit();
+
+                return;
             }
 
-            // Update customer payment token
-            $tokenData
-                ->setPaymentToken($answer['paymentMethodToken'])
-                ->save();
+            PayzenEmbeddedTransactionHistoryTableMap::clearInstancePool();
+            $row = null === $rowWritten ? null : PayzenEmbeddedTransactionHistoryQuery::create()
+                ->filterByOrderId($order->getId())
+                ->filterByUuid(mb_substr((string) $incoming->uuid, 0, 128))
+                ->filterByStatus($rowWritten['Status'])
+                ->filterByDetailedstatus($rowWritten['Detailedstatus'], null === $rowWritten['Detailedstatus'] ? Criteria::ISNULL : Criteria::EQUAL)
+                ->filterByAmount($rowWritten['Amount'], null === $rowWritten['Amount'] ? Criteria::ISNULL : Criteria::EQUAL)
+                ->filterByUpdatedAt($rowWritten['UpdatedAt'])
+                ->lockForUpdate()
+                ->findOne($connection);
+
+            if (null !== $row && null === $rowBefore) {
+                $row->delete($connection);
+            } elseif (null !== $row) {
+                $row->fromArray($rowBefore);
+                $row->keepUpdateDateUnchanged()->save($connection);
+            }
+
+            if ($transactionRef !== $refBefore) {
+                OrderQuery::create()->filterById($order->getId())->update(['TransactionRef' => '' === $refBefore ? null : $refBefore], $connection);
+            }
+
+            $connection->commit();
+            $undone = true;
+        } catch (\Throwable $undoFailure) {
+            $this->log->addError(sprintf(
+                'Order %s: transaction %s could not be applied (%s) nor its record undone (%s): check the order against the PayZen back-office.',
+                $order->getRef(),
+                $incoming->uuid,
+                $failure::class,
+                $undoFailure::class
+            ));
+
+            try {
+                $connection?->rollBack();
+            } catch (\Throwable) {
+                // The connection is gone: the database drops what it did not commit.
+            }
         }
 
-        return $status;
+        if (!$undone) {
+            return;
+        }
+
+        // Committed: what follows can no longer make the undo a failure.
+        $this->log->addError(sprintf(
+            'Order %s: transaction %s (%s) could not be applied (%s), its record is undone so that a replayed notification or a history refresh applies it again.',
+            $order->getRef(),
+            $incoming->uuid,
+            $incoming->status,
+            $failure::class
+        ));
+
+        try {
+            // What the failed move left in memory is not the order.
+            $order->reload();
+        } catch (\Throwable) {
+            // The caller rethrows the failure and leaves this order: the database holds the undo.
+        }
+    }
+
+    /**
+     * The history row of a transaction as the database holds it, not as the ORM remembers it.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function storedHistoryRow(Order $order, TransactionOutcome $transaction): ?array
+    {
+        PayzenEmbeddedTransactionHistoryTableMap::clearInstancePool();
+
+        return PayzenEmbeddedTransactionHistoryQuery::create()
+            ->filterByOrderId($order->getId())
+            ->filterByUuid(mb_substr((string) $transaction->uuid, 0, 128))
+            ->findOne()
+            ?->toArray();
+    }
+
+    /** The version of the order as the database holds it: every save of the order adds one. */
+    private function storedOrderVersion(Order $order): int
+    {
+        return (int) OrderQuery::create()->filterById($order->getId())->select('Version')->findOne();
+    }
+
+    /**
+     * Record every transaction the platform holds for the order, credits included, through the
+     * Order/Get service. Nothing here moves the order: the history catches up, whatever the
+     * notification arbiter would say, since the platform's list is the truth about its own
+     * transactions. The one transaction left out is the one the order stands on when the platform
+     * holds it in another state than the history: only the notification path (the notification, or
+     * the Transaction/Get of the refresh) writes it, and moves the order with it. A transaction the
+     * platform lists under this reference for another shop, another space or another order is left
+     * out too, see TransactionProvenance.
+     *
+     * @return array<string, mixed>|null the transaction the order stands on, as the platform answered
+     *                                   it, when that is not the state the history holds (nor wrote)
+     *
+     * @throws LyraException
+     * @throws TheliaProcessException when the platform cannot list the order's transactions
+     */
+    protected function syncTransactions(Order $order): ?array
+    {
+        $response = $this->post('V4/Order/Get', ['orderId' => $order->getRef()]);
+
+        $transactions = $response['answer']['transactions'] ?? null;
+
+        if (($response['status'] ?? null) !== 'SUCCESS' || !\is_array($transactions)) {
+            throw new TheliaProcessException(
+                Translator::getInstance()->trans(
+                    'Cannot list the transactions of the order with PayZen. Error is : %message (code %code)',
+                    [
+                        '%code' => (string) ($response['answer']['errorCode'] ?? 'undefined error code'),
+                        '%message' => (string) ($response['answer']['errorMessage'] ?? 'undefined error message'),
+                    ],
+                    PayzenEmbedded::DOMAIN_NAME
+                )
+            );
+        }
+
+        if (\count($transactions) >= self::ORDER_GET_LIMIT) {
+            $this->log->addWarning(sprintf(
+                'PayZen Order/Get answered %d transactions for order %s, its limit: the list may be incomplete.',
+                \count($transactions),
+                $order->getRef()
+            ));
+        }
+
+        $provenance = new TransactionProvenance(
+            (string) $order->getRef(),
+            PayzenEmbedded::platformMode(),
+            PayzenEmbedded::shopMarker(),
+            (string) $order->getTransactionRef(),
+            (new TransactionHistoryReader())->uuidsOf($order)
+        );
+
+        $governingRef = (string) $order->getTransactionRef();
+        $governingKnown = null;
+        $diverging = null;
+
+        foreach ((new TransactionHistoryReader())->outcomesOf($order) as $row) {
+            if ('' !== $governingRef && $row->uuid === $governingRef) {
+                $governingKnown = $row;
+            }
+        }
+
+        foreach ($transactions as $answer) {
+            if (!\is_array($answer) || !\is_string($answer['uuid'] ?? null) || 1 !== preg_match('/^[0-9a-f]{32}$/i', $answer['uuid'])) {
+                continue;
+            }
+
+            // Order/Get lists every attempt of the order: no debit hint here, a transaction that
+            // does not say its operation type is a debit like any attempt.
+            $outcome = TransactionOutcome::fromAnswer($answer);
+
+            if (!$provenance->accepts($outcome)) {
+                $this->log->addWarning(sprintf(
+                    'PayZen transaction %s listed for order %s is not this shop\'s, for this order: ignored (%s).',
+                    $outcome->uuid,
+                    $order->getRef(),
+                    json_encode(['orderId' => $outcome->orderRef, 'mode' => $outcome->mode, 'marked' => null !== $outcome->shopMarker, 'parent' => $outcome->parentUuid])
+                ));
+
+                continue;
+            }
+
+            // The transaction the order stands on, in a state the history does not hold (the platform
+            // cancelled it, or captured it), is left to the notification path that moves the order:
+            // written here, it would be taken for applied, and the order would never follow. Its
+            // details (a capture date, a detailed status) are written, the status is the same.
+            if (GoverningTransaction::divergesFrom($governingKnown, $outcome, $governingRef)) {
+                $diverging = $answer;
+
+                continue;
+            }
+
+            $this->updateTransactionHistory($answer, $order);
+        }
+
+        return $diverging;
     }
 
     /**
