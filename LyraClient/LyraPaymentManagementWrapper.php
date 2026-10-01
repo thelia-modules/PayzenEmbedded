@@ -528,6 +528,7 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         \Throwable $failure,
     ): void {
         $connection = null;
+        $undone = false;
 
         try {
             $connection = Propel::getWriteConnection(OrderTableMap::DATABASE_NAME);
@@ -570,17 +571,7 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             }
 
             $connection->commit();
-
-            // What the failed move left in memory is not the order.
-            $order->reload();
-
-            $this->log->addError(sprintf(
-                'Order %s: transaction %s (%s) could not be applied (%s), its record is undone so that a replayed notification or a history refresh applies it again.',
-                $order->getRef(),
-                $incoming->uuid,
-                $incoming->status,
-                $failure::class
-            ));
+            $undone = true;
         } catch (\Throwable $undoFailure) {
             $this->log->addError(sprintf(
                 'Order %s: transaction %s could not be applied (%s) nor its record undone (%s): check the order against the PayZen back-office.',
@@ -595,6 +586,26 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             } catch (\Throwable) {
                 // The connection is gone: the database drops what it did not commit.
             }
+        }
+
+        if (!$undone) {
+            return;
+        }
+
+        // Committed: what follows can no longer make the undo a failure.
+        $this->log->addError(sprintf(
+            'Order %s: transaction %s (%s) could not be applied (%s), its record is undone so that a replayed notification or a history refresh applies it again.',
+            $order->getRef(),
+            $incoming->uuid,
+            $incoming->status,
+            $failure::class
+        ));
+
+        try {
+            // What the failed move left in memory is not the order.
+            $order->reload();
+        } catch (\Throwable) {
+            // The caller rethrows the failure and leaves this order: the database holds the undo.
         }
     }
 
