@@ -41,13 +41,12 @@ class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
      * list to learn from. The order is held while it is read, so that a refund and a refresh
      * never write its history at the same time.
      *
-     * @throws LyraException
-     * @throws TheliaProcessException when the order was not paid with PayZen, is held by another
-     *                                operation, or the platform refused
      * @return list<TransactionOutcome> the attempts the platform lists that outrank the one the order
      *                                   stands on: only their notification moves the order onto them
      *
-     * @throws \Exception
+     * @throws LyraException
+     * @throws TheliaProcessException when the order was not paid with PayZen, is held by another
+     *                                operation, or the platform refused
      */
     public function getTransaction(Order $order): array
     {
@@ -81,7 +80,7 @@ class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
             // Once the order had its chance to move on it, the transaction the list held back is
             // written as the platform listed it, where the arbiter left it (a finished one), unless
             // something wrote it since the list was read: that answer is the later one.
-            if (null !== $heldBack && $this->storedHistoryRow($order, $heldBack) == $rowAtList) {
+            if (null !== $heldBack && $this->storedHistoryRow($order, $heldBack) === $rowAtList) {
                 $this->updateTransactionHistory($diverging, $order);
             }
 
