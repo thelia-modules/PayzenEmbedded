@@ -15,7 +15,7 @@ declare(strict_types=1);
 
 namespace PayzenEmbedded\Tests;
 
-use PayzenEmbedded\LyraClient\LyraClientWrapper;
+use PayzenEmbedded\LyraClient\HistoryColumn;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -26,31 +26,38 @@ use PHPUnit\Framework\TestCase;
 final class HistoryColumnBoundsTest extends TestCase
 {
     /**
-     * @return iterable<string, array{mixed, int, string|null}>
+     * @return iterable<string, array{string, mixed, string|null}>
      */
     public static function values(): iterable
     {
-        yield 'a status that fits' => ['PAID', 32, 'PAID'];
-        yield 'the longest detailed status known' => ['WAITING_AUTHORISATION_TO_VALIDATE', 64, 'WAITING_AUTHORISATION_TO_VALIDATE'];
-        yield 'a message longer than its column' => [str_repeat('é', 300), 255, str_repeat('é', 255)];
-        yield 'a code longer than its column' => ['PSP_0123456789', 10, 'PSP_012345'];
-        yield 'nothing said' => [null, 10, null];
-        yield 'an empty value' => ['', 10, null];
-        yield 'a number' => [5, 10, '5'];
-        yield 'not a value' => [['x'], 10, null];
+        yield 'a status that fits' => ['status', 'PAID', 'PAID'];
+        yield 'the longest detailed status known' => ['detailedStatus', 'WAITING_AUTHORISATION_TO_VALIDATE', 'WAITING_AUTHORISATION_TO_VALIDATE'];
+        yield 'a message longer than its column' => ['errorMessage', str_repeat('é', 300), str_repeat('é', 255)];
+        yield 'a code longer than its column' => ['errorCode', 'PSP_0123456789', 'PSP_012345'];
+        yield 'nothing said' => ['errorCode', null, null];
+        yield 'an empty value' => ['errorCode', '', null];
+        yield 'a number' => ['errorCode', 5, '5'];
+        yield 'not a value' => ['errorCode', ['x'], null];
     }
 
     #[DataProvider('values')]
-    public function testAValueIsCutToItsColumn(mixed $value, int $length, ?string $recorded): void
+    public function testAValueIsCutToItsColumn(string $column, mixed $value, ?string $recorded): void
     {
-        self::assertSame($recorded, (new \ReflectionMethod(LyraClientWrapper::class, 'bounded'))->invoke(null, $value, $length));
+        self::assertSame($recorded, HistoryColumn::bounded($column, $value));
+    }
+
+    public function testAColumnTheHistoryDoesNotHaveIsAMistake(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        HistoryColumn::bounded('statuss', 'PAID');
     }
 
     /**
-     * The bound of each column is the one of the schema: a schema widened without the code, or the
-     * other way round, would refuse or cut the row again.
+     * The bounds are the columns of the schema, every text column of the table: a schema widened
+     * without the code, or a column added without a bound, would cut or refuse the row again.
      */
-    public function testTheBoundsAreTheColumnsOfTheSchema(): void
+    public function testTheBoundsAreTheTextColumnsOfTheSchema(): void
     {
         $schema = simplexml_load_file(__DIR__ . '/../Config/schema.xml');
         self::assertNotFalse($schema);
@@ -60,14 +67,10 @@ final class HistoryColumnBoundsTest extends TestCase
             $sizes[(string) $column['name']] = (int) $column['size'];
         }
 
-        $code = (string) file_get_contents(__DIR__ . '/../LyraClient/LyraClientWrapper.php');
-        preg_match_all('/->set(\w+)\(self::bounded\([^;]*?, (\d+)\)\)/', $code, $calls, PREG_SET_ORDER);
-        self::assertNotEmpty($calls);
+        ksort($sizes);
+        $bounds = HistoryColumn::LENGTHS;
+        ksort($bounds);
 
-        $byLowerName = array_change_key_case($sizes);
-        foreach ($calls as [, $setter, $bound]) {
-            self::assertArrayHasKey(strtolower($setter), $byLowerName, $setter . ' writes no VARCHAR column of the schema');
-            self::assertSame($byLowerName[strtolower($setter)], (int) $bound, $setter . ' is not cut to its column');
-        }
+        self::assertSame($sizes, $bounds);
     }
 }

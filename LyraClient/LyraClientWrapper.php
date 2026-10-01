@@ -96,7 +96,7 @@ class LyraClientWrapper extends Client
         // An answer that does not say what the transaction is (a listing, say) is no correction of a
         // type the history already holds: a credit read back as a debit would leave the ledger.
         if ('' === trim((string) ($answer['operationType'] ?? '')) && \is_scalar($answer['uuid'] ?? null)) {
-            $known = PayzenEmbeddedTransactionHistoryQuery::create()->filterByUuid(self::bounded($answer['uuid'], 128))->findOne();
+            $known = PayzenEmbeddedTransactionHistoryQuery::create()->filterByUuid(HistoryColumn::bounded('uuid', $answer['uuid']))->findOne();
 
             if (null !== $known && '' !== (string) $known->getOperationtype()) {
                 $answer['operationType'] = $known->getOperationtype();
@@ -107,7 +107,7 @@ class LyraClientWrapper extends Client
         $currency = isset($answer['currency']) ? CurrencyQuery::create()->findOneByCode($answer['currency']) : null;
 
         $transaction = PayzenEmbeddedTransactionHistoryQuery::create()
-            ->filterByUuid(self::bounded($outcome->uuid, 128))
+            ->filterByUuid(HistoryColumn::bounded('uuid', $outcome->uuid))
             ->findOne()
             ?? new PayzenEmbeddedTransactionHistory();
 
@@ -136,7 +136,7 @@ class LyraClientWrapper extends Client
             $previous = $exception->getPrevious();
             $duplicate = $previous instanceof \PDOException && 1062 === (int) ($previous->errorInfo[1] ?? 0);
 
-            if (!$duplicate || !$transaction->isNew() || null === $existing = PayzenEmbeddedTransactionHistoryQuery::create()->filterByUuid(self::bounded($outcome->uuid, 128))->findOne()) {
+            if (!$duplicate || !$transaction->isNew() || null === $existing = PayzenEmbeddedTransactionHistoryQuery::create()->filterByUuid(HistoryColumn::bounded('uuid', $outcome->uuid))->findOne()) {
                 throw $exception;
             }
 
@@ -162,39 +162,26 @@ class LyraClientWrapper extends Client
         $transaction
             ->setOrderId($order->getId())
             ->setCustomerId($order->getCustomerId())
-            ->setUuid(self::bounded($outcome->uuid, 128))
-            ->setDetailedstatus(self::bounded($outcome->detailedStatus, 64))
-            ->setStatus(self::bounded($outcome->status, 32))
-            ->setOperationtype(self::bounded($outcome->operationType, 16))
+            ->setUuid(HistoryColumn::bounded('uuid', $outcome->uuid))
+            ->setDetailedstatus(HistoryColumn::bounded('detailedStatus', $outcome->detailedStatus))
+            ->setStatus(HistoryColumn::bounded('status', $outcome->status))
+            ->setOperationtype(HistoryColumn::bounded('operationType', $outcome->operationType))
             // A parent the answer does not repeat is kept: an answer that says less is no correction.
-            ->setParentuuid(self::bounded($outcome->parentUuid ?? $transaction->getParentuuid(), 128))
+            ->setParentuuid(HistoryColumn::bounded('parentUuid', $outcome->parentUuid ?? $transaction->getParentuuid()))
             ->setAmount($outcome->amount)
             ->setCurrencyId($currencyId)
             // Kept as a UTC wall clock whatever the offset the platform wrote it with: see TransactionOutcome::fromHistoryRow().
             ->setCreationdate($outcome->createdAt !== null ? \DateTime::createFromImmutable($outcome->createdAt)->setTimezone(new \DateTimeZone('UTC')) : null)
-            ->setErrorcode(self::bounded($answer['errorCode'] ?? null, 10))
-            ->setErrormessage(self::bounded($answer['errorMessage'] ?? null, 255))
-            ->setDetailederrorcode(self::bounded($answer['detailedErrorCode'] ?? null, 10))
-            ->setDetailederrormessage(self::bounded($answer['detailedErrorMessage'] ?? null, 255))
+            ->setErrorcode(HistoryColumn::bounded('errorCode', $answer['errorCode'] ?? null))
+            ->setErrormessage(HistoryColumn::bounded('errorMessage', $answer['errorMessage'] ?? null))
+            ->setDetailederrorcode(HistoryColumn::bounded('detailedErrorCode', $answer['detailedErrorCode'] ?? null))
+            ->setDetailederrormessage(HistoryColumn::bounded('detailedErrorMessage', $answer['detailedErrorMessage'] ?? null))
             ->setFinished($outcome->isFinished());
 
         // The author of a refund is kept; a notification, which has none, never erases it.
         if (null !== $admin) {
             $transaction->setAdmin($admin);
         }
-    }
-
-    /**
-     * What the platform says, cut to the column that keeps it: every transaction the platform lists
-     * is recorded, and a value too long is refused with the row on a strict server, the refund with it.
-     */
-    private static function bounded(mixed $value, int $length): ?string
-    {
-        if (!\is_scalar($value) || '' === (string) $value) {
-            return null;
-        }
-
-        return mb_substr((string) $value, 0, $length);
     }
 
     /**
