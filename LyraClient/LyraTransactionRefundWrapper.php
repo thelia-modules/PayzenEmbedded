@@ -84,9 +84,13 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
             if (null !== $diverging) {
                 $platform = TransactionOutcome::fromAnswer($diverging);
 
+                // Only a payment the platform took can be given back from its back-office: a cancelled
+                // one has nothing left to refund there.
                 throw new TheliaProcessException(
                     Translator::getInstance()->trans(
-                        'PayZen holds the payment of this order as %status, which its history does not show yet: refresh the history, then try again. If the refresh cannot bring the order along, refund it from the PayZen back-office.',
+                        $platform->isPaid()
+                            ? 'PayZen holds the payment of this order as %status, which its history does not show yet: refresh the history, then try again. If the refresh cannot bring the order along, refund it from the PayZen back-office.'
+                            : 'PayZen holds the payment of this order as %status, which its history does not show yet: refresh the history, then try again.',
                         ['%status' => '' !== $platform->detailedStatus ? $platform->detailedStatus : $platform->status],
                         PayzenEmbedded::DOMAIN_NAME
                     )
