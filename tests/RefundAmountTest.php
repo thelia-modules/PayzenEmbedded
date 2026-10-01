@@ -108,7 +108,7 @@ final class RefundAmountTest extends TestCase
     }
 
     /**
-     * The per-gram prices of the shop produce totals on a half cent (1.005). PHP 8.3 rounds them
+     * Unit prices below a cent produce totals on a half cent (1.005). PHP 8.3 rounds them
      * up, since round() pre-rounds the binary value 100.4999…; a runtime that stops pre-rounding
      * would take one cent less from the shopper on every such order. This pins the amount charged.
      */

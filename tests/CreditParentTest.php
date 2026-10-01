@@ -28,7 +28,7 @@ use PHPUnit\Framework\TestCase;
  */
 final class CreditParentTest extends TestCase
 {
-    private const REF = 'ORD000000012886';
+    private const REF = 'ORD000000000042';
     private const DEBIT = 'd0000000000000000000000000000000';
     private const CREDIT = 'c0000000000000000000000000000000';
     private const SHOP = 'shop-marker';

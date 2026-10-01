@@ -36,7 +36,6 @@ final class PendingRefundTest extends TestCase
         yield 'nine minutes after, nothing listed' => [0, self::SENT + 599, true];
         yield 'the wait is over' => [0, self::SENT + 600, false];
         yield 'the platform lists the refund' => [500, self::SENT + 5, false];
-        yield 'the platform lists less than before' => [0, self::SENT + 5, true];
     }
 
     #[DataProvider('checks')]
@@ -50,6 +49,7 @@ final class PendingRefundTest extends TestCase
         $pending = PendingRefund::startedAt(self::SENT, 300);
 
         self::assertTrue($pending->stillUnknown(300, self::SENT + 5), 'the refund made before is not the one awaited');
+        self::assertTrue($pending->stillUnknown(200, self::SENT + 5), 'the platform lists less than before');
         self::assertFalse($pending->stillUnknown(800, self::SENT + 5));
     }
 

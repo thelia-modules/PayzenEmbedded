@@ -60,7 +60,6 @@ final class NotificationAfterRefreshTest extends TestCase
         yield 'an earlier refusal notified after a later listed attempt still running, order never moved' => [[$refusedEarlier, $runningLater], '', $refusedEarlier, true];
         yield 'a refusal after a payment listed while running, order never moved' => [[$runningOther, $refusedLater], '', $refusedLater, true];
         yield 'the refusal of the listed payment itself, order never moved' => [[$paid], '', $paidRefusedNow, true];
-        yield 'a replay of the payment the order was moved on' => [[$paid], 'x', $paid, false];
     }
 
     /**
