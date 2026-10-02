@@ -1,0 +1,3 @@
+{% for item in messages %}
+    <div class="alert alert-{{ item.type }}" role="alert" data-testid="payzen-embedded-message-{{ item.type }}">{{ item.message }}</div>
+{% endfor %}

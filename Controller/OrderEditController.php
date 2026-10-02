@@ -32,6 +32,7 @@ use Thelia\Log\Tlog;
 use PayzenEmbedded\LyraClient\LyraClientWrapper;
 use PayzenEmbedded\LyraClient\LyraTransactionGetWrapper;
 use PayzenEmbedded\PayzenEmbedded;
+use PayzenEmbedded\Service\OrderEditMessages;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Thelia\Controller\Admin\BaseAdminController;
 use Thelia\Core\Security\AccessManager;
@@ -88,9 +89,9 @@ class OrderEditController extends BaseAdminController
                 // The platform answered, but the payment is not paid (refused, or a transaction the
                 // order does not stand on): the order may have been cancelled, never "updated".
                 if (LyraClientWrapper::PAYMENT_STATUS_NOT_PAID === $event->getPaymentStatus()) {
-                    $this->addFlash('warning', $translator->trans('PayZen answered, but the payment is not paid: check the order and its history.', [], PayzenEmbedded::DOMAIN_NAME));
+                    $this->notify($orderId, OrderEditMessages::UPDATE, 'warning', $translator->trans('PayZen answered, but the payment is not paid: check the order and its history.', [], PayzenEmbedded::DOMAIN_NAME));
                 } else {
-                    $this->addFlash('success', $translator->trans('The transaction was updated.', [], PayzenEmbedded::DOMAIN_NAME));
+                    $this->notify($orderId, OrderEditMessages::UPDATE, 'success', $translator->trans('The transaction was updated.', [], PayzenEmbedded::DOMAIN_NAME));
                 }
 
                 // The platform has answered: a failure to write the trace is not a failed update.
@@ -130,7 +131,7 @@ class OrderEditController extends BaseAdminController
                 $ex
             );
 
-            $this->addFlash('danger', $errorMsg);
+            $this->notify($orderId, OrderEditMessages::UPDATE, 'danger', $errorMsg);
         }
 
         return $this->generateRedirect(URL::getInstance()->absoluteUrl("admin/order/update/$orderId") . '#payzen-embedded');
@@ -195,15 +196,15 @@ class OrderEditController extends BaseAdminController
             try {
                 $dispatcher->dispatch($event, PayzenEmbedded::TRANSACTION_REFUND_EVENT);
 
-                $this->addFlash('success', $this->refundOutcomeMessage($translator, $event->getOutcome(), $amount, $currencyCode));
+                $this->notify($orderId, OrderEditMessages::REFUND, 'success', $this->refundOutcomeMessage($translator, $event->getOutcome(), $amount, $currencyCode));
             } catch (OrderStatusNotUpdatedException $statusFailure) {
                 // The money moved: said as such, with the order to check.
                 $event->setOutcome($statusFailure->outcome);
-                $this->addFlash('warning', $statusFailure->getMessage());
+                $this->notify($orderId, OrderEditMessages::REFUND, 'warning', $statusFailure->getMessage());
             } catch (RefundOutcomeUnknownException $unknown) {
                 // The platform answered: the next attempt refreshes the order before anything else.
                 $traceOutcome = 'outcome UNKNOWN (PayZen may have processed it, refresh the order)';
-                $this->addFlash('warning', $unknown->getMessage());
+                $this->notify($orderId, OrderEditMessages::REFUND, 'warning', $unknown->getMessage());
             }
 
             // From here on the platform has answered: a failure to write the trace is not a failed refund.
@@ -256,10 +257,21 @@ class OrderEditController extends BaseAdminController
                 $ex
             );
 
-            $this->addFlash('danger', $errorMsg);
+            $this->notify($orderId, OrderEditMessages::REFUND, 'danger', $errorMsg);
         }
 
         return $this->generateRedirect(URL::getInstance()->absoluteUrl("admin/order/update/$orderId") . '#payzen-embedded');
+    }
+
+    /**
+     * Told at the top of the page, where the back office puts its flashes, and above the form that
+     * asked, where the administrator is looking.
+     */
+    private function notify(int $orderId, string $form, string $type, string $message): void
+    {
+        $this->addFlash($type, $message);
+
+        OrderEditMessages::add($this->getSession(), $orderId, $form, $type, $message);
     }
 
     private function refundOutcomeMessage(Translator $translator, ?RefundOutcome $outcome, int $amount, string $currencyCode): string
@@ -318,7 +330,7 @@ class OrderEditController extends BaseAdminController
                 // The wrapper comes from the container, with the lock factory of the framework the refund uses.
                 $outranking = $lyraClient->getTransaction($order);
 
-                $this->addFlash('success', $translator->trans('The transaction history was refreshed.', [], PayzenEmbedded::DOMAIN_NAME));
+                $this->notify($orderId, OrderEditMessages::REFRESH, 'success', $translator->trans('The transaction history was refreshed.', [], PayzenEmbedded::DOMAIN_NAME));
 
                 // The platform's list fills the history, but only a notification ties the order to
                 // its transaction: said as such, or the administrator reads a success on an order
@@ -326,11 +338,11 @@ class OrderEditController extends BaseAdminController
                 // The platform lists an attempt a notification would move the order onto: the refresh
                 // records it, only its notification moves the order.
                 foreach ($outranking as $attempt) {
-                    $this->addFlash('warning', $translator->trans('PayZen lists another attempt for this order, %uuid (%status), that outranks the one the order stands on: replay its notification from the PayZen back-office.', ['%uuid' => $attempt->uuid, '%status' => $attempt->status], PayzenEmbedded::DOMAIN_NAME));
+                    $this->notify($orderId, OrderEditMessages::REFRESH, 'warning', $translator->trans('PayZen lists another attempt for this order, %uuid (%status), that outranks the one the order stands on: replay its notification from the PayZen back-office.', ['%uuid' => $attempt->uuid, '%status' => $attempt->status], PayzenEmbedded::DOMAIN_NAME));
                 }
 
                 if ('' === (string) $order->getTransactionRef()) {
-                    $this->addFlash('warning', $translator->trans('The order still carries no PayZen transaction: the history was recorded, but the order was not moved. Replay the notification of its payment from the PayZen back-office.', [], PayzenEmbedded::DOMAIN_NAME));
+                    $this->notify($orderId, OrderEditMessages::REFRESH, 'warning', $translator->trans('The order still carries no PayZen transaction: the history was recorded, but the order was not moved. Replay the notification of its payment from the PayZen back-office.', [], PayzenEmbedded::DOMAIN_NAME));
                 }
 
                 try {
@@ -367,7 +379,7 @@ class OrderEditController extends BaseAdminController
                 $ex
             );
 
-            $this->addFlash('danger', $errorMsg);
+            $this->notify($orderId, OrderEditMessages::REFRESH, 'danger', $errorMsg);
         }
 
         return $this->generateRedirect(URL::getInstance()->absoluteUrl("admin/order/update/$orderId") . '#payzen-embedded');

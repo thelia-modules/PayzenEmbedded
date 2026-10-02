@@ -26,6 +26,7 @@ use PayzenEmbedded\LyraClient\TransactionHistoryReader;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistory;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistoryQuery;
 use PayzenEmbedded\PayzenEmbedded;
+use PayzenEmbedded\Service\OrderEditMessages;
 use Propel\Runtime\ActiveQuery\Criteria;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Thelia\Core\Event\Hook\HookRenderEvent;
@@ -168,6 +169,7 @@ class BackHookManager extends BaseHook
                 'get_form' => $getForm->createView()->getView(),
                 'update_form' => $updateForm->createView()->getView(),
                 'refund_form' => $refundForm->createView()->getView(),
+                'messages' => OrderEditMessages::take($this->getSession(), $orderId),
             ])
         );
     }
