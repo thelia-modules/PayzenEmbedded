@@ -1,6 +1,6 @@
-# Unreleased
+# 3.4.1
 
-- The outcome of a transaction update, a refund or a history refresh is shown above the form that asked for it, on the order page of the Twig back-office, as well as at the top of the page where the back-office puts its messages: a refusal read far above the PayZen block went unseen. A form the operation took away (a refund in full, a capture) leaves its message at the top of the PayZen block.
+- The outcome of a transaction update, a refund or a history refresh is shown above the form that asked for it, on the order page of the Twig back-office, as well as at the top of the page where the back-office puts its messages: a refusal read far above the PayZen block went unseen. A form the operation took away (a refund in full, a capture) leaves its message at the top of the PayZen block. A message not shown within five minutes (the administrator went elsewhere) is dropped rather than shown on a later visit.
 
 # 3.4.0
 
