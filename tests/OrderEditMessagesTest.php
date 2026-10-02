@@ -18,6 +18,7 @@ namespace PayzenEmbedded\Tests;
 use PayzenEmbedded\Service\OrderEditMessages;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Session\Session;
+use Symfony\Component\HttpFoundation\Session\SessionInterface;
 use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
 
 /**
@@ -68,6 +69,77 @@ final class OrderEditMessagesTest extends TestCase
         self::assertSame(
             [OrderEditMessages::REFUND => [['type' => 'danger', 'message' => 'Refused.']]],
             OrderEditMessages::take($session, 12)
+        );
+    }
+
+    public function testAMessageNotReadInTimeIsNotShownOnALaterVisit(): void
+    {
+        $session = new Session(new MockArraySessionStorage());
+        $sent = 1_000_000;
+
+        OrderEditMessages::add($session, 12, OrderEditMessages::REFUND, 'danger', 'Refused.', $sent);
+
+        self::assertSame([], OrderEditMessages::take($session, 12, $sent + OrderEditMessages::MAXIMUM_AGE_SECONDS));
+    }
+
+    public function testAMessageReadRightAfterTheRedirectIsShown(): void
+    {
+        $session = new Session(new MockArraySessionStorage());
+        $sent = 1_000_000;
+
+        OrderEditMessages::add($session, 12, OrderEditMessages::REFUND, 'danger', 'Refused.', $sent);
+
+        self::assertSame(
+            [OrderEditMessages::REFUND => [['type' => 'danger', 'message' => 'Refused.']]],
+            OrderEditMessages::take($session, 12, $sent + OrderEditMessages::MAXIMUM_AGE_SECONDS - 1)
+        );
+    }
+
+    public function testTheExpiredMessagesOfAnOrderNeverDisplayedAgainLeaveTheSession(): void
+    {
+        $session = new Session(new MockArraySessionStorage());
+        $sent = 1_000_000;
+
+        OrderEditMessages::add($session, 12, OrderEditMessages::REFUND, 'danger', 'Refused.', $sent);
+        OrderEditMessages::take($session, 13, $sent + OrderEditMessages::MAXIMUM_AGE_SECONDS);
+
+        self::assertSame([], $session->all());
+    }
+
+    public function testAnOrderPageWithNothingToShowLeavesTheSessionUnwritten(): void
+    {
+        $session = $this->createMock(SessionInterface::class);
+        $session->method('get')->willReturn([]);
+        $session->expects(self::never())->method('set');
+        $session->expects(self::never())->method('remove');
+
+        self::assertSame([], OrderEditMessages::take($session, 12));
+    }
+
+    public function testAMessageWithoutItsDateIsDropped(): void
+    {
+        $session = new Session(new MockArraySessionStorage());
+        $session->set('payzen-embedded.order-edit-messages', [12 => [OrderEditMessages::REFUND => [['type' => 'danger', 'message' => 'Refused.']]]]);
+
+        self::assertSame([], OrderEditMessages::take($session, 12));
+        self::assertSame([], $session->all());
+    }
+
+    public function testAClockSetBackDoesNotKeepAMessagePastTheDelay(): void
+    {
+        $sent = 1_000_000;
+
+        $setBackPastTheDelay = new Session(new MockArraySessionStorage());
+        OrderEditMessages::add($setBackPastTheDelay, 12, OrderEditMessages::REFUND, 'danger', 'Refused.', $sent);
+
+        self::assertSame([], OrderEditMessages::take($setBackPastTheDelay, 12, $sent - OrderEditMessages::MAXIMUM_AGE_SECONDS));
+
+        $setBackALittle = new Session(new MockArraySessionStorage());
+        OrderEditMessages::add($setBackALittle, 12, OrderEditMessages::REFUND, 'danger', 'Refused.', $sent);
+
+        self::assertSame(
+            [OrderEditMessages::REFUND => [['type' => 'danger', 'message' => 'Refused.']]],
+            OrderEditMessages::take($setBackALittle, 12, $sent - 10)
         );
     }
 }

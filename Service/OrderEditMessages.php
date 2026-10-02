@@ -21,7 +21,9 @@ use Symfony\Component\HttpFoundation\Session\SessionInterface;
  *
  * The back office shows its flashes at the top of the page, far above the PayZen block: a refusal
  * read nowhere near the button that caused it goes unseen. The same message is kept here, per
- * order and per form, until the PayZen block of that order is displayed again.
+ * order and per form, until the PayZen block of that order is displayed again, for a few minutes
+ * at most: a message read on a later visit would speak of an operation the administrator no longer
+ * has in mind.
  */
 final readonly class OrderEditMessages
 {
@@ -29,12 +31,17 @@ final readonly class OrderEditMessages
     public const string REFUND = 'refund';
     public const string REFRESH = 'refresh';
 
+    /** Long enough for the redirect that follows the operation, short of a later visit. */
+    public const int MAXIMUM_AGE_SECONDS = 300;
+
     private const string SESSION_KEY = 'payzen-embedded.order-edit-messages';
 
-    public static function add(SessionInterface $session, int $orderId, string $form, string $type, string $message): void
+    public static function add(SessionInterface $session, int $orderId, string $form, string $type, string $message, ?int $now = null): void
     {
-        $messages = $session->get(self::SESSION_KEY, []);
-        $messages[$orderId][$form][] = ['type' => $type, 'message' => $message];
+        $now ??= time();
+
+        $messages = self::withoutExpired($session->get(self::SESSION_KEY, []), $now);
+        $messages[$orderId][$form][] = ['type' => $type, 'message' => $message, 'at' => $now];
 
         $session->set(self::SESSION_KEY, $messages);
     }
@@ -44,23 +51,59 @@ final readonly class OrderEditMessages
      *
      * @return array<string, list<array{type: string, message: string}>> the messages of the order, by form
      */
-    public static function take(SessionInterface $session, int $orderId): array
+    public static function take(SessionInterface $session, int $orderId, ?int $now = null): array
     {
-        $messages = $session->get(self::SESSION_KEY, []);
+        $stored = $session->get(self::SESSION_KEY, []);
+        $messages = self::withoutExpired($stored, $now ?? time());
 
-        if (!isset($messages[$orderId])) {
-            return [];
-        }
-
-        $ofOrder = $messages[$orderId];
+        $ofOrder = $messages[$orderId] ?? [];
         unset($messages[$orderId]);
 
-        if ([] === $messages) {
-            $session->remove(self::SESSION_KEY);
-        } else {
-            $session->set(self::SESSION_KEY, $messages);
+        // Every order page displays the hook: the session is written only when something left it.
+        if ($messages !== $stored) {
+            if ([] === $messages) {
+                $session->remove(self::SESSION_KEY);
+            } else {
+                $session->set(self::SESSION_KEY, $messages);
+            }
         }
 
-        return $ofOrder;
+        return array_map(
+            static fn (array $ofForm): array => array_map(
+                static fn (array $item): array => ['type' => $item['type'], 'message' => $item['message']],
+                $ofForm
+            ),
+            $ofOrder
+        );
+    }
+
+    /**
+     * Every order's expired messages go, not only the order displayed: an order whose page is never
+     * displayed again would keep its own for as long as the session lives.
+     *
+     * @param array<int, array<string, list<array{type: string, message: string, at?: int}>>> $messages
+     *
+     * @return array<int, array<string, list<array{type: string, message: string, at: int}>>>
+     */
+    private static function withoutExpired(array $messages, int $now): array
+    {
+        $kept = [];
+
+        foreach ($messages as $orderId => $ofOrder) {
+            foreach ($ofOrder as $form => $ofForm) {
+                // An entry without its date is dropped, its age unknown; one dated ahead of the clock
+                // (set back since) is aged both ways, so that it does not outlive the delay.
+                $fresh = array_values(array_filter(
+                    $ofForm,
+                    static fn (array $item): bool => isset($item['at']) && abs($now - $item['at']) < self::MAXIMUM_AGE_SECONDS
+                ));
+
+                if ([] !== $fresh) {
+                    $kept[$orderId][$form] = $fresh;
+                }
+            }
+        }
+
+        return $kept;
     }
 }
