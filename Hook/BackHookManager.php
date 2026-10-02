@@ -26,6 +26,7 @@ use PayzenEmbedded\LyraClient\TransactionHistoryReader;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistory;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistoryQuery;
 use PayzenEmbedded\PayzenEmbedded;
+use PayzenEmbedded\Service\OrderEditMessages;
 use Propel\Runtime\ActiveQuery\Criteria;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Thelia\Core\Event\Hook\HookRenderEvent;
@@ -116,6 +117,10 @@ class BackHookManager extends BaseHook
         // The Smarty back-office hands order_id, the Twig one hands order for this hook only.
         $orderId = (int) ($event->hasArgument('order_id') ? $event->getArgument('order_id') : $event->getArgument('order'));
 
+        // Read before the early return: a message left for an order without a PayZen block (a request
+        // made up for an order paid otherwise) would stay in session.
+        $messages = OrderEditMessages::take($this->getSession(), $orderId);
+
         $order = OrderQuery::create()->findPk($orderId);
 
         if (null === $order || PayzenEmbedded::getModuleId() !== $order->getPaymentModuleId()) {
@@ -168,6 +173,7 @@ class BackHookManager extends BaseHook
                 'get_form' => $getForm->createView()->getView(),
                 'update_form' => $updateForm->createView()->getView(),
                 'refund_form' => $refundForm->createView()->getView(),
+                'messages' => $messages,
             ])
         );
     }
