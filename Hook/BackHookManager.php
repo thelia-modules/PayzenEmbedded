@@ -201,6 +201,8 @@ class BackHookManager extends BaseHook
                 'can_give_back' => '' !== $reference && $ledger->maximumAmount() > 0,
                 'other_payments_left' => $ledger->otherPaymentsLeft > 0 ? RefundAmount::format($ledger->otherPaymentsLeft, $currencyCode) : null,
                 'can_act' => $canAct,
+                // Authorizing first, the capture is Thelia's: the form only moves its date.
+                'authorizes_first' => PayzenEmbedded::authorizesFirst(),
                 'currency_symbol' => $order->getCurrency()?->getSymbol() ?? '',
                 'get_form' => $getForm->createView()->getView(),
                 'update_form' => $updateForm->createView()->getView(),
