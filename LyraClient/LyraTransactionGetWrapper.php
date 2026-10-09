@@ -137,6 +137,7 @@ class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
 
             if (null !== $order = $this->getOrderByTransaction($orderTransaction)) {
                 $paymentStatus = $this->processOrderStatus($order, $response['answer']);
+                $this->reportTransaction($order, $response['answer']);
             }
         } else {
             throw new TheliaProcessException(
