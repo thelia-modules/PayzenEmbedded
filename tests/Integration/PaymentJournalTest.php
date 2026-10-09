@@ -18,6 +18,7 @@ namespace PayzenEmbedded\Tests\Integration;
 use PayzenEmbedded\Event\TransactionReportedEvent;
 use PayzenEmbedded\EventListener\PaymentJournalListener;
 use PayzenEmbedded\PayzenEmbedded;
+use PayzenEmbedded\Service\DeferredCapture;
 use Thelia\Domain\Payment\Enum\PaymentTransactionState;
 use Thelia\Domain\Payment\Enum\PaymentTransactionType;
 use Thelia\Domain\Payment\Service\PaymentTransactionRecorder;
@@ -131,6 +132,12 @@ final class PaymentJournalTest extends ActionIntegrationTestCase
         $this->report($order, ['uuid' => 'tx1', 'status' => 'RUNNING', 'detailedStatus' => 'AUTHORISED', 'amount' => 12000]);
 
         self::assertCount(0, OrderPaymentTransactionQuery::create()->findJournal((int) $order->getId()));
+    }
+
+    public function testTheModuleReachesItsCaptureServiceFromTheContainer(): void
+    {
+        // The module class fetches it from the container, which only hands out public services.
+        self::assertTrue(static::$kernel->getContainer()->has(DeferredCapture::class));
     }
 
     private function authorizedOrder(): Order

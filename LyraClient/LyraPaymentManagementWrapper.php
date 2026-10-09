@@ -516,6 +516,28 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
     }
 
     /**
+     * Runs $work with the lock of the order held, waited for, and the order read again under it.
+     *
+     * @template T
+     *
+     * @param callable(): T $work
+     *
+     * @return T
+     */
+    public function withOrderLock(Order $order, callable $work): mixed
+    {
+        $lock = $this->acquireOrderLock($order, true);
+
+        try {
+            $order->reload();
+
+            return $work();
+        } finally {
+            $this->releaseOrderLock($lock, $order);
+        }
+    }
+
+    /**
      * Lets Thelia's payment journal learn what the platform reported, once the history holds it and
      * the order moved on it; see EventListener\PaymentJournalListener.
      */

@@ -13,6 +13,7 @@
 namespace PayzenEmbedded;
 
 use PayzenEmbedded\Service\CardFormProvider;
+use PayzenEmbedded\Service\DeferredCapture;
 use Propel\Runtime\Connection\ConnectionInterface;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ServicesConfigurator;
@@ -27,10 +28,13 @@ use Thelia\Model\LangQuery;
 use Thelia\Model\Message;
 use Thelia\Model\MessageQuery;
 use Thelia\Model\ModuleImageQuery;
+use Thelia\Domain\Payment\DTO\PaymentOperationResult;
 use Thelia\Model\Order;
+use Thelia\Model\OrderPaymentTransaction;
 use Thelia\Module\AbstractPaymentModule;
+use Thelia\Module\PaymentModuleWithCaptureInterface;
 
-class PayzenEmbedded extends AbstractPaymentModule
+class PayzenEmbedded extends AbstractPaymentModule implements PaymentModuleWithCaptureInterface
 {
     /** @var string */
     const DOMAIN_NAME = 'payzenembedded';
@@ -58,6 +62,21 @@ class PayzenEmbedded extends AbstractPaymentModule
     public static function authorizesFirst(): bool
     {
         return 'YES' === self::getConfigValue('validation_mode', '');
+    }
+
+    public function supportsDeferredCapture(): bool
+    {
+        return self::authorizesFirst();
+    }
+
+    public function capture(Order $order, float $amount, OrderPaymentTransaction $transaction): PaymentOperationResult
+    {
+        return $this->getContainer()->get(DeferredCapture::class)->capture($order, $amount);
+    }
+
+    public function voidAuthorization(Order $order, OrderPaymentTransaction $transaction): PaymentOperationResult
+    {
+        return $this->getContainer()->get(DeferredCapture::class)->release($order, $transaction);
     }
 
     public function pay(Order $order): ?Response
