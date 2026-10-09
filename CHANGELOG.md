@@ -1,3 +1,12 @@
+# Unreleased
+
+## Authorize first, capture from Thelia
+- Requires Thelia 3.3: the module implements `Thelia\Module\PaymentModuleWithCaptureInterface` and writes Thelia's payment journal.
+- With manual validation ("Payment validation": manual), the module authorizes first. The authorization is written to Thelia's payment journal and the order moves to "Awaiting capture", no longer to "Paid": a host module that went on from the paid status on an authorization now goes on from the capture. The capture, in full or in part, is made from Thelia's capture dialog or admin API (`Transaction/Update` with `manualValidation: NO`, under the order lock); its outcome comes with PayZen's notification, which settles the journal line and pays the order. PayZen takes a single capture per authorization: the rest is written as released. A platform refusal settles the line as failed; a call without answer leaves it pending until the notification.
+- Cancelling the order releases the authorization at PayZen (`Transaction/CancelOrRefund`). An authorization cancelled or expired at PayZen, and a refused payment with the bank's code and message, are written to the journal. Notifications and history refreshes write the journal once: a replay writes nothing twice.
+- On the order page, the module's update form only sets the capture date when the module authorizes first; the amount and the validation are no longer taken from it, even from a request built by hand.
+- With automatic validation, nothing changes.
+
 # 3.5.0
 
 - A sale unit can be paid on a PayZen contract of its own (a Thelia that knows sale units): shop identifier, mode, web service URL, passwords and keys, set from a sale unit selector on the module configuration page. What a sale unit leaves empty reads the national value, and a shop with no sale unit works as before. Passwords and keys are never shown back.
