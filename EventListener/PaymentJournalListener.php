@@ -61,12 +61,14 @@ final readonly class PaymentJournalListener implements EventSubscriberInterface
 
     public function onTransactionReported(TransactionReportedEvent $event): void
     {
-        if (!PayzenEmbedded::authorizesFirst()) {
-            return;
-        }
-
         $order = $event->getOrder();
         $answer = $event->getAnswer();
+
+        // Refunds are written whatever the mode; the authorization and its capture only when the
+        // module authorizes first, Thelia writing the capture of a payment taken at once.
+        if (!PayzenEmbedded::authorizesFirst() && !TransactionOutcome::fromAnswer($answer)->isCredit()) {
+            return;
+        }
         $authorization = OrderPaymentTransactionQuery::create()->findLatestSucceededAuthorization((int) $order->getId());
 
         $steps = PaymentJournalPlanner::for(
@@ -97,6 +99,8 @@ final readonly class PaymentJournalListener implements EventSubscriberInterface
             JournalMovement::Capture => $this->capture($order, $amount, $step->uuid),
             JournalMovement::Void => $this->recorder->recordVoid($order, $step->uuid, moduleCode: PayzenEmbedded::getModuleCode()),
             JournalMovement::Expiry => $this->recorder->recordExpiry($order, $step->uuid, moduleCode: PayzenEmbedded::getModuleCode()),
+            JournalMovement::Refund => $this->recorder->recordRefund($order, $amount, $step->uuid, PaymentTransactionState::SUCCEEDED, OrderPaymentTransactionQuery::create()->findLatestSucceededCapture((int) $order->getId()), PayzenEmbedded::getModuleCode()),
+            JournalMovement::RefundRefused => $this->recorder->recordRefund($order, $amount, $step->uuid, PaymentTransactionState::FAILED, null, PayzenEmbedded::getModuleCode(), $step->errorCode, $step->errorMessage),
         };
     }
 
