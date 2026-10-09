@@ -27,6 +27,8 @@ use PayzenEmbedded\LyraClient\OrderStatusNotUpdatedException;
 use PayzenEmbedded\LyraClient\RefundAmount;
 use PayzenEmbedded\LyraClient\RefundOutcome;
 use PayzenEmbedded\LyraClient\RefundOutcomeUnknownException;
+use PayzenEmbedded\LyraClient\TransactionHistoryReader;
+use PayzenEmbedded\LyraClient\TransactionUpdateRequest;
 use Thelia\Exception\TheliaProcessException;
 use Thelia\Log\Tlog;
 use PayzenEmbedded\LyraClient\LyraClientWrapper;
@@ -72,10 +74,18 @@ class OrderEditController extends BaseAdminController
             $data = $form->getData();
 
             if (null !== $order = OrderQuery::create()->findPk($orderId)) {
+                // Authorizing first, the form only moves the capture date, see TransactionUpdateRequest.
+                $currencyCode = (string) $order->getCurrency()->getCode();
+                $request = TransactionUpdateRequest::from(
+                    $data,
+                    PayzenEmbedded::authorizesFirst(),
+                    RefundAmount::format((new TransactionHistoryReader())->heldAmountOf($order) ?? RefundAmount::fromMajor((string) $order->getTotalAmount(), $currencyCode), $currencyCode)
+                );
+
                 $event = (new TransactionUpdateEvent($orderId))
-                    ->setAmount($data['amount'])
-                    ->setExpectedCaptureDate($data['capture_date'])
-                    ->setManualValidation(! $data['automatic_validation']);
+                    ->setAmount($request->amount)
+                    ->setExpectedCaptureDate($request->captureDate)
+                    ->setManualValidation($request->manualValidation);
 
                 $dispatcher->dispatch($event, PayzenEmbedded::TRANSACTION_UPDATE_EVENT);
 

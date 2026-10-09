@@ -55,6 +55,20 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
      */
     public function refundTransaction(Order $order, int $amount, ?string $comment = null, ?Admin $admin = null, ?int $expectedRefundedAmount = null): RefundOutcome
     {
+        return $this->refundRecorded($order, $amount, $comment, $admin, $expectedRefundedAmount)->outcome;
+    }
+
+    /**
+     * The same refund, with the transaction the platform created for it (or the one it
+     * cancelled): what Thelia's payment journal files the refund under.
+     *
+     * @throws LyraException                   when the platform cannot list the order's transactions
+     * @throws TheliaProcessException          when the amount cannot be refunded, or the platform refused
+     * @throws RefundOutcomeUnknownException   when the platform did not answer, or its answer could not be recorded
+     * @throws OrderStatusNotUpdatedException when the money moved but the order could not follow
+     */
+    public function refundRecorded(Order $order, int $amount, ?string $comment = null, ?Admin $admin = null, ?int $expectedRefundedAmount = null): RefundRecord
+    {
         if (PayzenEmbedded::getModuleId() !== (int) $order->getPaymentModuleId()) {
             throw new TheliaProcessException(
                 Translator::getInstance()->trans('This order was not paid with PayZen.', [], PayzenEmbedded::DOMAIN_NAME)
@@ -240,7 +254,7 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
      * @throws TheliaProcessException when the platform refused, or answered something unexpected
      * @throws OrderStatusNotUpdatedException when the refund is recorded but the order could not follow
      */
-    private function processCancelOrRefundResponse(Order $order, array $response, ?Admin $admin = null): RefundOutcome
+    private function processCancelOrRefundResponse(Order $order, array $response, ?Admin $admin = null): RefundRecord
     {
         $answer = \is_array($response['answer'] ?? null) ? $response['answer'] : [];
 
@@ -301,8 +315,10 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
             RefundOutcome::PartiallyRefunded, RefundOutcome::Pending => null,
         };
 
+        $record = new RefundRecord($outcome, $resolution->transaction->uuid);
+
         if (null === $newStatus) {
-            return $outcome;
+            return $record;
         }
 
         try {
@@ -314,10 +330,11 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
             throw new OrderStatusNotUpdatedException(
                 $outcome,
                 Translator::getInstance()->trans('The refund was made, but the order status could not be updated: check the order.', [], PayzenEmbedded::DOMAIN_NAME),
-                $exception
+                $exception,
+                $record->transactionUuid
             );
         }
 
-        return $outcome;
+        return $record;
     }
 }
