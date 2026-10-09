@@ -308,6 +308,32 @@ final class PaymentJournalTest extends ActionIntegrationTestCase
         self::assertSame(0, OrderPaymentTransactionQuery::create()->filterByOrderId((int) $order->getId())->filterByType(PaymentTransactionType::CAPTURE->value)->count());
     }
 
+    public function testARefundThePlatformWasStillProcessingIsSettledByItsNotification(): void
+    {
+        $order = $this->authorizedOrder();
+        $this->report($order, ['uuid' => 'tx1', 'status' => 'PAID', 'detailedStatus' => 'CAPTURED', 'amount' => 12000]);
+        // What Thelia wrote when PayZen answered the refund as still running.
+        $pending = $this->recorder->recordRefund($order, 30, null, PaymentTransactionState::PENDING);
+        $this->recorder->attachReference($pending, 'credit-9');
+
+        $this->report($order, ['uuid' => 'credit-9', 'status' => 'PAID', 'amount' => 3000, 'operationType' => 'CREDIT']);
+
+        $pending->reload();
+        self::assertTrue($pending->isSucceeded());
+        self::assertSame('30.000000', $this->totals->forOrder((int) $order->getId())->refunded);
+    }
+
+    public function testARefundMadeFromThePayZenBackOfficeIsWrittenEvenTakingThePaymentAtOnce(): void
+    {
+        PayzenEmbedded::setConfigValue('validation_mode', 'NO');
+        $order = $this->order();
+        $this->recorder->recordCapture($order, 120, 'tx1', moduleCode: PayzenEmbedded::getModuleCode());
+
+        $this->report($order, ['uuid' => 'credit-7', 'status' => 'PAID', 'amount' => 2000, 'operationType' => 'CREDIT']);
+
+        self::assertSame('20.000000', $this->totals->forOrder((int) $order->getId())->refunded);
+    }
+
     public function testTheModuleReachesItsCaptureServiceFromTheContainer(): void
     {
         // The module class fetches it from the container, which only hands out public services.

@@ -25,4 +25,6 @@ enum JournalMovement
     case Capture;
     case Void;
     case Expiry;
+    case Refund;
+    case RefundRefused;
 }

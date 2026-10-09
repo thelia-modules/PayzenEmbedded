@@ -24,6 +24,7 @@ use PayzenEmbedded\LyraClient\RefundOutcomeUnknownException;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
 use Thelia\Domain\Payment\DTO\PaymentOperationResult;
+use Thelia\Domain\Payment\Enum\RefundReason;
 use Thelia\Domain\Payment\Exception\PaymentRefusedException;
 use Thelia\Exception\TheliaProcessException;
 use Thelia\Model\Order;
@@ -108,6 +109,37 @@ final readonly class DeferredCapture
 
             return PaymentOperationResult::pending((string) $response['answer']['uuid']);
         });
+    }
+
+    /**
+     * Gives money back at the platform: a refund transaction of its own, or the cancellation of
+     * a payment not captured yet. Filed in the journal under that transaction's uuid.
+     */
+    public function refund(Order $order, float $amount, RefundReason $reason, ?string $comment): PaymentOperationResult
+    {
+        $minorAmount = RefundAmount::fromMajor($amount, (string) $order->getCurrency()->getCode());
+        // What the PayZen back-office shows beside the refund: the reason, then the merchant's words.
+        $note = $reason->label().(null !== $comment && '' !== $comment ? ': '.$comment : '');
+
+        try {
+            $record = $this->refundWrapper->refundRecorded($order, $minorAmount, $note);
+        } catch (OrderStatusNotUpdatedException $orderNotMoved) {
+            // The platform gave the money back; only the order could not follow.
+            return $this->resultOf($orderNotMoved->outcome, (string) $orderNotMoved->transactionUuid);
+        } catch (RefundOutcomeUnknownException $unknown) {
+            throw $unknown;
+        } catch (TheliaProcessException $refusal) {
+            throw new PaymentRefusedException($refusal->getMessage(), 0, $refusal);
+        }
+
+        return $this->resultOf($record->outcome, $record->transactionUuid);
+    }
+
+    private function resultOf(RefundOutcome $outcome, string $transactionUuid): PaymentOperationResult
+    {
+        return RefundOutcome::Pending === $outcome
+            ? PaymentOperationResult::pending($transactionUuid)
+            : PaymentOperationResult::succeeded($transactionUuid);
     }
 
     public function release(Order $order, OrderPaymentTransaction $transaction): PaymentOperationResult

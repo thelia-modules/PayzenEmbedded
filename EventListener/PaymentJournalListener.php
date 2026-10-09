@@ -71,10 +71,12 @@ final readonly class PaymentJournalListener implements EventSubscriberInterface
         $answer = $event->getAnswer();
         $authorization = OrderPaymentTransactionQuery::create()->findLatestSucceededAuthorization((int) $order->getId());
 
-        // Read on the order and the transaction, see PayzenEmbedded::authorizesFirstFor(): an order
-        // authorized first keeps writing its journal once the mode changed, its capture, release or
-        // lapse still to come, and a payment taken at once is left to Thelia whatever the mode became.
-        if (!PayzenEmbedded::authorizesFirstFor($order, TransactionOutcome::fromAnswer($answer))) {
+        // Refunds are written whatever the mode. The authorization and its capture are read on the
+        // order and the transaction, see PayzenEmbedded::authorizesFirstFor(): an order authorized first
+        // keeps writing its journal once the mode changed, and a payment taken at once is left to Thelia.
+        $incoming = TransactionOutcome::fromAnswer($answer);
+
+        if (!$incoming->isCredit() && !PayzenEmbedded::authorizesFirstFor($order, $incoming)) {
             return;
         }
 
@@ -106,6 +108,8 @@ final readonly class PaymentJournalListener implements EventSubscriberInterface
             JournalMovement::Capture => $this->capture($order, $amount, $step->uuid),
             JournalMovement::Void => $this->release($order, $step->uuid, fn () => $this->recorder->recordVoid($order, $step->uuid, moduleCode: PayzenEmbedded::getModuleCode())),
             JournalMovement::Expiry => $this->release($order, $step->uuid, fn () => $this->recorder->recordExpiry($order, $step->uuid, moduleCode: PayzenEmbedded::getModuleCode())),
+            JournalMovement::Refund => $this->recorder->recordRefund($order, $amount, $step->uuid, PaymentTransactionState::SUCCEEDED, OrderPaymentTransactionQuery::create()->findLatestSucceededCapture((int) $order->getId()), PayzenEmbedded::getModuleCode()),
+            JournalMovement::RefundRefused => $this->recorder->recordRefund($order, $amount, $step->uuid, PaymentTransactionState::FAILED, null, PayzenEmbedded::getModuleCode(), $step->errorCode, $step->errorMessage),
         };
     }
 

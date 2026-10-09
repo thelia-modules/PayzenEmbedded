@@ -95,9 +95,27 @@ final class PaymentJournalPlannerTest extends TestCase
         self::assertSame('Do not honor', $steps[0]->errorMessage);
     }
 
-    public function testARefundIsLeftToTheRefundFeature(): void
+    public function testARefundThePlatformMadeIsWritten(): void
     {
         $credit = TransactionOutcome::fromAnswer(['uuid' => 'r1', 'status' => 'PAID', 'amount' => 300, 'operationType' => 'CREDIT']);
+
+        $steps = PaymentJournalPlanner::for($credit, 't1');
+
+        self::assertSame(JournalMovement::Refund, $steps[0]->movement);
+        self::assertSame('r1', $steps[0]->uuid);
+        self::assertSame(300, $steps[0]->amount);
+    }
+
+    public function testARefundThePlatformRefusedIsWrittenAsRefused(): void
+    {
+        $credit = TransactionOutcome::fromAnswer(['uuid' => 'r1', 'status' => 'UNPAID', 'amount' => 300, 'operationType' => 'CREDIT']);
+
+        self::assertSame(JournalMovement::RefundRefused, PaymentJournalPlanner::for($credit, 't1', 'X1', 'Refused')[0]->movement);
+    }
+
+    public function testARefundStillRunningWritesNothingYet(): void
+    {
+        $credit = TransactionOutcome::fromAnswer(['uuid' => 'r1', 'status' => 'RUNNING', 'amount' => 300, 'operationType' => 'CREDIT']);
 
         self::assertSame([], PaymentJournalPlanner::for($credit, 't1'));
     }

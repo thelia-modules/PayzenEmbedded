@@ -22,7 +22,8 @@ namespace PayzenEmbedded\LyraClient;
  * The journal holds one authorization per order: the transaction the shop captures or releases.
  * Its capture, cancellation or expiry is written against it, and only those of that transaction:
  * the end of an attempt the shopper gave up on releases nothing. An attempt refused before any
- * authorization is written as a refused authorization. Refunds are left to the refund feature.
+ * authorization is written as a refused authorization. A refund the platform made, or refused,
+ * is written under the uuid of its own transaction, whatever the mode.
  *
  * The journal answers a line it already holds with that line, so a notification replayed, or the
  * same transaction read again by a refresh, writes nothing twice.
@@ -36,8 +37,16 @@ final readonly class PaymentJournalPlanner
      */
     public static function for(TransactionOutcome $incoming, ?string $authorization, ?string $errorCode = null, ?string $errorMessage = null): array
     {
-        if ($incoming->isCredit() || '' === $incoming->uuid) {
+        if ('' === $incoming->uuid) {
             return [];
+        }
+
+        if ($incoming->isCredit()) {
+            return match ($incoming->status) {
+                TransactionOutcome::STATUS_PAID => [new JournalStep(JournalMovement::Refund, $incoming->uuid, $incoming->amount)],
+                TransactionOutcome::STATUS_UNPAID => [new JournalStep(JournalMovement::RefundRefused, $incoming->uuid, $incoming->amount, $errorCode, $errorMessage)],
+                default => [],
+            };
         }
 
         if (null !== $authorization && $authorization !== $incoming->uuid) {

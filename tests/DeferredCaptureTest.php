@@ -21,10 +21,12 @@ use PayzenEmbedded\LyraClient\LyraTransactionUpdateWrapper;
 use PayzenEmbedded\LyraClient\OrderStatusNotUpdatedException;
 use PayzenEmbedded\LyraClient\RefundOutcome;
 use PayzenEmbedded\LyraClient\RefundOutcomeUnknownException;
+use PayzenEmbedded\LyraClient\RefundRecord;
 use PayzenEmbedded\Service\DeferredCapture;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use Thelia\Domain\Payment\Enum\PaymentTransactionState;
+use Thelia\Domain\Payment\Enum\RefundReason;
 use Thelia\Domain\Payment\Exception\PaymentRefusedException;
 use Thelia\Exception\TheliaProcessException;
 use Thelia\Model\Currency;
@@ -212,6 +214,44 @@ final class DeferredCaptureTest extends TestCase
         $this->expectException(RefundOutcomeUnknownException::class);
 
         (new DeferredCapture($this->createMock(LyraTransactionUpdateWrapper::class), $refund, $this->createMock(LoggerInterface::class)))->release($this->order(), $this->line('120.000000'));
+    }
+
+    public function testARefundGivesBackUnderTheReferenceOfThePlatformsRefund(): void
+    {
+        $order = $this->order();
+        $refund = $this->createMock(LyraTransactionRefundWrapper::class);
+        $refund->expects(self::once())->method('refundRecorded')
+            ->with($order, 3000, self::stringContains('Goods returned'))
+            ->willReturn(new RefundRecord(RefundOutcome::PartiallyRefunded, 'credit-1'));
+
+        $result = (new DeferredCapture($this->createMock(LyraTransactionUpdateWrapper::class), $refund, $this->createMock(LoggerInterface::class)))
+            ->refund($order, 30.0, RefundReason::Returned, 'Parcel came back');
+
+        self::assertSame(PaymentTransactionState::SUCCEEDED, $result->state);
+        self::assertSame('credit-1', $result->pspReference);
+    }
+
+    public function testARefundThePlatformIsStillProcessingWaitsForItsNotification(): void
+    {
+        $refund = $this->createMock(LyraTransactionRefundWrapper::class);
+        $refund->method('refundRecorded')->willReturn(new RefundRecord(RefundOutcome::Pending, 'credit-2'));
+
+        $result = (new DeferredCapture($this->createMock(LyraTransactionUpdateWrapper::class), $refund, $this->createMock(LoggerInterface::class)))
+            ->refund($this->order(), 30.0, RefundReason::Other, null);
+
+        self::assertSame(PaymentTransactionState::PENDING, $result->state);
+        self::assertSame('credit-2', $result->pspReference);
+    }
+
+    public function testARefundThePlatformRefusesIsARefusal(): void
+    {
+        $refund = $this->createMock(LyraTransactionRefundWrapper::class);
+        $refund->method('refundRecorded')->willThrowException(new TheliaProcessException('Cannot refund the transaction. Error is : too late (code PSP_999)'));
+
+        $this->expectException(PaymentRefusedException::class);
+
+        (new DeferredCapture($this->createMock(LyraTransactionUpdateWrapper::class), $refund, $this->createMock(LoggerInterface::class)))
+            ->refund($this->order(), 30.0, RefundReason::Other, null);
     }
 
     /**

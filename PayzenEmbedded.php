@@ -32,6 +32,7 @@ use Thelia\Model\Message;
 use Thelia\Model\MessageQuery;
 use Thelia\Model\ModuleImageQuery;
 use Thelia\Domain\Payment\DTO\PaymentOperationResult;
+use Thelia\Domain\Payment\Enum\RefundReason;
 use Thelia\Model\Order;
 use Thelia\Model\OrderPaymentTransaction;
 use Thelia\Model\OrderPaymentTransactionQuery;
@@ -43,8 +44,9 @@ use Thelia\Module\AbstractPaymentModule;
 use Thelia\Module\BaseModule;
 use Thelia\Module\PaymentModuleCancellingOnReleaseInterface;
 use Thelia\Module\PaymentModuleCapturingOnceInterface;
+use Thelia\Module\PaymentModuleWithRefundInterface;
 
-class PayzenEmbedded extends AbstractPaymentModule implements PaymentModuleCapturingOnceInterface, PaymentModuleCancellingOnReleaseInterface
+class PayzenEmbedded extends AbstractPaymentModule implements PaymentModuleCapturingOnceInterface, PaymentModuleCancellingOnReleaseInterface, PaymentModuleWithRefundInterface
 {
     /** @var string */
     const DOMAIN_NAME = 'payzenembedded';
@@ -212,6 +214,17 @@ class PayzenEmbedded extends AbstractPaymentModule implements PaymentModuleCaptu
         }
 
         return $this->getContainer()->get(DeferredCapture::class)->capture($order, $amount);
+    }
+
+    /** PayZen gives money back on any payment it took, in full or in part. */
+    public function supportsRefund(): bool
+    {
+        return true;
+    }
+
+    public function refund(Order $order, float $amount, OrderPaymentTransaction $transaction, RefundReason $reason, ?string $comment): PaymentOperationResult
+    {
+        return $this->getContainer()->get(DeferredCapture::class)->refund($order, $amount, $reason, $comment);
     }
 
     public function voidAuthorization(Order $order, OrderPaymentTransaction $transaction): PaymentOperationResult
