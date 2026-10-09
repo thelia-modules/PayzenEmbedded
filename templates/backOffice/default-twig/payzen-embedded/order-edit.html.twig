@@ -44,7 +44,11 @@
                     <hr>
                     <h3 class="h6">{{ 'Update PayZen transaction'|trans({}, _d) }}</h3>
                     <div class="alert alert-info">
-                        {{ 'You can update here the PayZen transaction related to this order. You can change the transaction amount (it can only be lowered), define the capture date (the date at which the payment is done), and the validation mode, to change manual validation to automatic validation of the transaction'|trans({}, _d) }}
+                        {% if authorizes_first %}
+                            {{ 'The payment is authorized and waits for its capture, which is made from the payment card of this page. You can define here the date at which PayZen captures it otherwise.'|trans({}, _d) }}
+                        {% else %}
+                            {{ 'You can update here the PayZen transaction related to this order. You can change the transaction amount (it can only be lowered), define the capture date (the date at which the payment is done), and the validation mode, to change manual validation to automatic validation of the transaction'|trans({}, _d) }}
+                        {% endif %}
                     </div>
 
                     {% include 'payzen-embedded/order-edit-messages.inc.html.twig' with {'messages': messages.update ?? []} only %}
@@ -55,6 +59,12 @@
                         {% do update_form.order_id.setRendered %}
 
                         <div class="row">
+                            {% if authorizes_first %}
+                                {# The amount and the validation are the capture's, made from Thelia's dialog. #}
+                                <input type="hidden" name="{{ update_form.amount.vars.full_name }}" value="{{ last_transaction_amount }}">
+                                {% do update_form.amount.setRendered %}
+                                {% do update_form.automatic_validation.setRendered %}
+                            {% else %}
                             <div class="col-md-4">
                                 {{ form_label(update_form.amount) }}
                                 <div class="input-group">
@@ -63,6 +73,7 @@
                                 {% if update_form.amount.vars.label_attr.help is defined %}<div class="form-text">{{ update_form.amount.vars.label_attr.help }}</div>{% endif %}
                                 {{ form_errors(update_form.amount) }}
                             </div>
+                            {% endif %}
                             <div class="col-md-4">
                                 <div class="mb-3">
                                     {{ form_label(update_form.capture_date) }}
@@ -78,6 +89,7 @@
                                     {{ form_errors(update_form.capture_date) }}
                                 </div>
                             </div>
+                            {% if not authorizes_first %}
                             <div class="col-md-4">
                                 <div class="mb-3 form-check">
                                     {{ form_widget(update_form.automatic_validation, {attr: {class: 'form-check-input'}}) }}
@@ -85,6 +97,7 @@
                                     {{ form_errors(update_form.automatic_validation) }}
                                 </div>
                             </div>
+                            {% endif %}
                         </div>
 
                         <div class="text-end">
