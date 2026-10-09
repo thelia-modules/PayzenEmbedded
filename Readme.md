@@ -97,6 +97,11 @@ Un module hôte qui demande la validation par l'évènement de mise à jour hors
 à lui) vérifie lui-même le droit « Capture des paiements » : sans administrateur dans la requête `/admin`, le module ne
 peut pas le demander.
 
+Le remboursement depuis le bloc de paiement de la fiche commande de Thelia (droit « Remboursement du paiement d'une
+commande ») passe aussi par PayZen, en mode de validation automatique comme manuel : il est noté dans le journal de
+paiement sous la référence de la transaction de remboursement PayZen. Un remboursement fait depuis le back-office PayZen
+y est noté par la notification.
+
 ### Evènement de mise à jour des transactions
 
 Le module propose un event qui permet de réaliser cette opération programmatiquement, depuis un module de picking par
@@ -311,6 +316,10 @@ given back from Thelia.
 A host module asking for the validation through the update event outside the back office (a scheduled task, a route
 of its own) checks the "Order payment capture" right itself: without an administrator in an `/admin` request, the
 module cannot ask for it.
+
+Refunding from the payment card of Thelia's order page (right "Order payment refund") also goes through PayZen,
+whatever the validation mode: the refund is written to the payment journal under the reference of PayZen's refund
+transaction. A refund made from the PayZen back-office is written there by the notification.
 
 ### Transaction update event
 
