@@ -7,6 +7,11 @@
 - On the order page, the module's update form only sets the capture date when the module authorizes first; the amount and the validation are no longer taken from it, even from a request built by hand.
 - With automatic validation, nothing changes.
 
+## Refund from Thelia
+- The module implements `Thelia\Module\PaymentModuleWithRefundInterface`: Thelia's refund dialog and admin API give money back through PayZen (`Transaction/CancelOrRefund`, as the module's own refund form does), with the reason and the merchant's comment written beside it in the PayZen back-office. The refund is filed in Thelia's payment journal under the uuid of the transaction PayZen made it with; one PayZen still processes is settled by its notification.
+- A refund made from the PayZen back-office, or refused there, is written to Thelia's payment journal by the notification, whatever the validation mode.
+- `LyraTransactionRefundWrapper::refundRecorded()` returns the outcome with that transaction; `refundTransaction()` is unchanged. `OrderStatusNotUpdatedException` carries the transaction too.
+
 # 3.4.1
 
 - The outcome of a transaction update, a refund or a history refresh is shown above the form that asked for it, on the order page of the Twig back-office, as well as at the top of the page where the back-office puts its messages: a refusal read far above the PayZen block went unseen. A form the operation took away (a refund in full, a capture) leaves its message at the top of the PayZen block. A message not shown within five minutes (the administrator went elsewhere) is dropped rather than shown on a later visit.

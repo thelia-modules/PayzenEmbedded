@@ -84,6 +84,11 @@ les modules hôtes (débit à l'expédition), fonctionne comme avant.
 Avec une validation automatique, rien ne change : la commande est payée dès l'autorisation, et Thelia écrit une ligne
 de capture dans son journal.
 
+Le remboursement depuis le bloc de paiement de la fiche commande de Thelia (droit « Remboursement du paiement d'une
+commande ») passe aussi par PayZen, en mode de validation automatique comme manuel : il est noté dans le journal de
+paiement sous la référence de la transaction de remboursement PayZen. Un remboursement fait depuis le back-office PayZen
+y est noté par la notification.
+
 ### Evènement de mise à jour des transactions
 
 Le module propose un event qui permet de réaliser cette opération programmatiquement, depuis un module de picking par
@@ -268,6 +273,10 @@ before.
 
 With automatic validation, nothing changes: the order is paid on the authorization, and Thelia writes a capture line
 in its journal.
+
+Refunding from the payment card of Thelia's order page (right "Order payment refund") also goes through PayZen,
+whatever the validation mode: the refund is written to the payment journal under the reference of PayZen's refund
+transaction. A refund made from the PayZen back-office is written there by the notification.
 
 ### Transaction update event
 
