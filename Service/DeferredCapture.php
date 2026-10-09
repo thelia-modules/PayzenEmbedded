@@ -15,6 +15,7 @@ declare(strict_types=1);
 
 namespace PayzenEmbedded\Service;
 
+use Lyra\Exceptions\LyraException;
 use PayzenEmbedded\LyraClient\LyraTransactionRefundWrapper;
 use PayzenEmbedded\LyraClient\LyraTransactionUpdateWrapper;
 use PayzenEmbedded\LyraClient\OrderStatusNotUpdatedException;
@@ -130,6 +131,9 @@ final readonly class DeferredCapture
             throw $unknown;
         } catch (TheliaProcessException $refusal) {
             throw new PaymentRefusedException($refusal->getMessage(), 0, $refusal);
+        } catch (LyraException $unreachable) {
+            // Raised while listing the order's transactions, before the refund is sent: nothing moved.
+            throw new PaymentRefusedException($unreachable->getMessage(), 0, $unreachable);
         }
 
         return $this->resultOf($record->outcome, $record->transactionUuid);
@@ -158,6 +162,9 @@ final readonly class DeferredCapture
             throw $unknown;
         } catch (TheliaProcessException $refusal) {
             throw new PaymentRefusedException($refusal->getMessage(), 0, $refusal);
+        } catch (LyraException $unreachable) {
+            // As for a refund: the send comes after, nothing was cancelled.
+            throw new PaymentRefusedException($unreachable->getMessage(), 0, $unreachable);
         }
 
         $reference = (string) $order->getTransactionRef();

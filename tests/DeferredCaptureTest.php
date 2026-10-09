@@ -254,6 +254,28 @@ final class DeferredCaptureTest extends TestCase
             ->refund($this->order(), 30.0, RefundReason::Other, null);
     }
 
+    public function testARefundThePlatformCouldNotBeAskedAboutIsARefusal(): void
+    {
+        // Listing the order's transactions comes before the refund is sent: nothing moved.
+        $refund = $this->createMock(LyraTransactionRefundWrapper::class);
+        $refund->method('refundRecorded')->willThrowException(new LyraException('Connection timed out'));
+
+        $this->expectException(PaymentRefusedException::class);
+
+        (new DeferredCapture($this->createMock(LyraTransactionUpdateWrapper::class), $refund, $this->createMock(LoggerInterface::class)))
+            ->refund($this->order(), 30.0, RefundReason::Other, null);
+    }
+
+    public function testAReleaseThePlatformCouldNotBeAskedAboutIsARefusal(): void
+    {
+        $refund = $this->createMock(LyraTransactionRefundWrapper::class);
+        $refund->method('refundTransaction')->willThrowException(new LyraException('Connection timed out'));
+
+        $this->expectException(PaymentRefusedException::class);
+
+        (new DeferredCapture($this->createMock(LyraTransactionUpdateWrapper::class), $refund, $this->createMock(LoggerInterface::class)))->release($this->order(), $this->line('120.000000'));
+    }
+
     /**
      * @param array<string, mixed> $response what the platform answers the validation
      */
