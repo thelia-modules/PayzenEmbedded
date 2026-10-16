@@ -17,6 +17,7 @@
 namespace PayzenEmbedded\Hook;
 
 use PayzenEmbedded\Form\ConfigurationForm;
+use PayzenEmbedded\Form\SaleUnitConfigurationForm;
 use PayzenEmbedded\LyraClient\LyraPaymentMethodsWrapper;
 use PayzenEmbedded\Form\TransactionGetForm;
 use PayzenEmbedded\Form\TransactionRefundForm;
@@ -27,6 +28,7 @@ use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistory;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistoryQuery;
 use PayzenEmbedded\PayzenEmbedded;
 use PayzenEmbedded\Service\OrderEditMessages;
+use PayzenEmbedded\Service\SaleUnitContractSettings;
 use Propel\Runtime\ActiveQuery\Criteria;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Thelia\Core\Event\Hook\HookRenderEvent;
@@ -46,6 +48,7 @@ class BackHookManager extends BaseHook
     public function __construct(
         private readonly TheliaFormFactory $formFactory,
         private readonly SecurityContext $securityContext,
+        private readonly SaleUnitContractSettings $saleUnitContracts,
         ?EventDispatcherInterface $dispatcher = null,
         ?ParserResolver $parserResolver = null,
     ) {
@@ -66,7 +69,7 @@ class BackHookManager extends BaseHook
         $availablePaymentMethods = PayzenEmbedded::getAvailablePaymentMethods();
 
         $event->add(
-            $this->render('payzen-embedded/module-configuration.html.twig', [
+            $this->render('payzen-embedded/module-configuration.html.twig', $this->saleUnitContractParameters() + [
                 'form' => $form->createView()->getView(),
                 'default_currency_symbol' => null !== $defaultCurrency ? $defaultCurrency->getSymbol() : '',
                 'payment_confirmation_message_id' => null !== $confirmationMessage ? $confirmationMessage->getId() : null,
@@ -79,6 +82,35 @@ class BackHookManager extends BaseHook
                 'smart_form_value' => PayzenEmbedded::FORM_TYPE_SMART_FORM,
             ])
         );
+    }
+
+    /**
+     * What the configuration page shows to give a sale unit a contract of its own: the units the
+     * administrator may configure, and the form of the one selected. Nothing on a Thelia, or in a
+     * shop, that has no sale unit.
+     *
+     * @return array<string, mixed>
+     */
+    private function saleUnitContractParameters(): array
+    {
+        $request = $this->getRequest();
+        $saleUnits = null === $request ? [] : $this->saleUnitContracts->saleUnits($request->getLocale());
+
+        if (null === $request || [] === $saleUnits) {
+            return ['sale_units' => []];
+        }
+
+        $selected = (int) $request->query->get('sale_unit_id', 0);
+        $selected = \in_array($selected, array_column($saleUnits, 'id'), true) ? $selected : 0;
+
+        return [
+            'sale_units' => $saleUnits,
+            'selected_sale_unit' => $selected,
+            'sale_unit_form' => $selected > 0
+                ? $this->formFactory->createForm(SaleUnitConfigurationForm::getName())->createView()->getView()
+                : null,
+            'configuration_url' => URL::getInstance()->absoluteUrl('/admin/module/PayzenEmbedded'),
+        ];
     }
 
     /**

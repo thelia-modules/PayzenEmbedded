@@ -20,6 +20,7 @@ namespace PayzenEmbedded\Controller;
 
 use PayzenEmbedded\Events\ProcessPaymentResponseEvent;
 use PayzenEmbedded\LyraClient\LyraPaymentManagementWrapper;
+use PayzenEmbedded\LyraClient\PlatformNotification;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\EventDispatcher\EventDispatcher;
@@ -66,39 +67,44 @@ class FrontController extends BasePaymentModuleController
         $signed = false;
 
         try {
-            /* Retrieve the IPN content */
-            $rawAnswer = $lyraClient->getParsedFormAnswer();
+            $notification = PlatformNotification::fromPost($this->getRequest()->request->all());
 
-            // The platform signs its notification with the REST password (kr-hash-key "password").
-            // The answer the shopper's browser receives is signed with the public HMAC key: it is
-            // the shopper's to hold, and must not be taken here for the platform's word. An empty
-            // password would sign with an empty key, which anyone can do.
-            $password = (string) $lyraClient->getPassword();
-            $signedByThePlatform = 'password' === $this->getRequest()->request->get('kr-hash-key') && '' !== $password;
+            // The key that signs a notification is the one of the contract of the order's sale unit,
+            // and the order is only known from the notification itself. The reference it names is
+            // read without believing it, to find the order and so the contract: whether the
+            // notification is genuine is decided afterwards, with that contract's key and no other.
+            $order = null !== ($orderReference = $notification->claimedOrderReference())
+                ? OrderQuery::create()->filterByRef($orderReference)->findOne()
+                : null;
 
-            // The key is the server's own, never chosen again from the request.
-            if (!$signedByThePlatform || !($signed = $lyraClient->checkHash($password))) {
-                $this->getLog()->addError($translator->trans("Invalid signature received, aborting.", [], PayzenEmbedded::DOMAIN_NAME));
-                throw new \Exception($translator->trans("Invalid signature received, aborting.", [], PayzenEmbedded::DOMAIN_NAME));
-            }
+            if (null === $order) {
+                // Nothing to move, whoever signed it, and no key to check it with.
+                $this->getLog()->addError(sprintf('PayZen notification names no known order (%s), ignored.', null !== $orderReference ? substr((string) preg_replace('/[^\w-]/', '_', $orderReference), 0, 40) : 'no reference'));
+            } else {
+                $paymentStatus = $lyraClient->forOrder($order, function () use ($lyraClient, $notification, $translator, &$signed): int {
+                    // The key is the server's own, never chosen again from the request.
+                    if (!($signed = $notification->isSignedBy((string) $lyraClient->getPassword()))) {
+                        $this->getLog()->addError($translator->trans("Invalid signature received, aborting.", [], PayzenEmbedded::DOMAIN_NAME));
+                        throw new \Exception($translator->trans("Invalid signature received, aborting.", [], PayzenEmbedded::DOMAIN_NAME));
+                    }
 
-            $formAnswer = $rawAnswer['kr-answer'];
+                    // Process platform response, and update the order accordingly.
+                    return $lyraClient->processPaymentResponse($notification->answer);
+                });
 
-            // Process platform response, and update the order accordingly.
-            $paymentStatus = $lyraClient->processPaymentResponse($formAnswer);
-
-            switch ($paymentStatus) {
-                case LyraPaymentManagementWrapper::PAYMENT_STATUS_PAID:
-                    $gatewayResponseCode = 'OK';
-                    break;
-                case LyraPaymentManagementWrapper::PAYMENT_STATUS_NOT_PAID:
-                    $gatewayResponseCode = 'KO';
-                    break;
-                case LyraPaymentManagementWrapper::PAYMENT_STATUS_IN_PROGRESS:
-                    $gatewayResponseCode = 'WAIT';
-                    break;
-                default:
-                    $gatewayResponseCode = 'UNKNOWN';
+                switch ($paymentStatus) {
+                    case LyraPaymentManagementWrapper::PAYMENT_STATUS_PAID:
+                        $gatewayResponseCode = 'OK';
+                        break;
+                    case LyraPaymentManagementWrapper::PAYMENT_STATUS_NOT_PAID:
+                        $gatewayResponseCode = 'KO';
+                        break;
+                    case LyraPaymentManagementWrapper::PAYMENT_STATUS_IN_PROGRESS:
+                        $gatewayResponseCode = 'WAIT';
+                        break;
+                    default:
+                        $gatewayResponseCode = 'UNKNOWN';
+                }
             }
         } catch (\Throwable $ex) {
             $this->getLog()->addError(sprintf('PayZen notification failed: %s: %s at %s:%d', $ex::class, $ex->getMessage(), $ex->getFile(), $ex->getLine()));

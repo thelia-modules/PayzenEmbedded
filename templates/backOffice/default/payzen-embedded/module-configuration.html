@@ -119,3 +119,96 @@
         </div>
     </div>
 </div>
+
+{* A contract of its own for a sale unit. Shown only when the shop has sale units. The passwords and
+   the keys are never put back in the page: the field is empty, and its help says whether one is set. *}
+{if !empty($sale_units)}
+<div class="row" id="payzen-embedded-sale-units">
+    <div class="col-md-12 general-block-decorator">
+        <div class="row">
+            <div class="col-md-12 title title-without-tabs">
+                {intl d=$_d l="PayZen contract per sale unit"}
+            </div>
+        </div>
+
+        <div class="form-container">
+            <div class="row">
+                <div class="col-md-12">
+                    <p class="help-block">
+                        {intl d=$_d l="A sale unit can be paid on a PayZen contract of its own. What it leaves empty uses the configuration above: with no value of its own, a sale unit is paid on the national contract."}
+                    </p>
+
+                    <form method="get" action="{$configuration_url}#payzen-embedded-sale-units" class="form-inline">
+                        <div class="form-group">
+                            <label class="control-label" for="payzen-embedded-sale-unit">{intl d=$_d l="Sale unit"}</label>
+                            <select class="form-control" id="payzen-embedded-sale-unit" name="sale_unit_id">
+                                <option value="">{intl d=$_d l="Choose a sale unit"}</option>
+                                {foreach $sale_units as $saleUnit}
+                                    <option value="{$saleUnit.id}" {if $saleUnit.id == $selected_sale_unit}selected="selected"{/if}>
+                                        {$saleUnit.label|escape}{if !$saleUnit.active} ({intl d=$_d l="inactive"}){/if}{if $saleUnit.hasContract} - {intl d=$_d l="own contract"}{/if}
+                                    </option>
+                                {/foreach}
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-default">{intl d=$_d l="Show"}</button>
+                    </form>
+
+                    {if $selected_sale_unit > 0}
+                    {form name="payzenembedded_form_sale_unit_configuration_form"}
+                    <form action="{url path="/admin/module/payzen-embedded/configure-sale-unit"}" method="post">
+                        {form_hidden_fields}
+
+                        {form_field field="sale_unit_id"}
+                            <input type="hidden" name="{$name}" value="{$value}">
+                        {/form_field}
+
+                        {if $form_error}
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="alert alert-danger">{$form_error_message}</div>
+                                </div>
+                            </div>
+                        {/if}
+
+                        <div class="row">
+                            <div class="col-md-4">
+                                <p class="title title-without-tabs">{intl d=$_d l="Access to PayZen Platform"}</p>
+
+                                {render_form_field field="site_id"}
+                                {render_form_field field="mode"}
+                                {render_form_field field="webservice_endpoint"}
+                            </div>
+
+                            <div class="col-md-4">
+                                <p class="title title-without-tabs">{intl d=$_d l="Test parameters"}</p>
+
+                                {render_form_field field="test_password"}
+                                {render_form_field field="remove_test_password"}
+                                {render_form_field field="javascript_test_key"}
+                                {render_form_field field="remove_javascript_test_key"}
+                                {render_form_field field="signature_test_key"}
+                                {render_form_field field="remove_signature_test_key"}
+                            </div>
+
+                            <div class="col-md-4">
+                                <p class="title title-without-tabs">{intl d=$_d l="Production parameters"}</p>
+
+                                {render_form_field field="production_password"}
+                                {render_form_field field="remove_production_password"}
+                                {render_form_field field="javascript_production_key"}
+                                {render_form_field field="remove_javascript_production_key"}
+                                {render_form_field field="signature_production_key"}
+                                {render_form_field field="remove_signature_production_key"}
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-success">{intl d=$_d l="Save"}</button>
+                    </form>
+                    {/form}
+                    {/if}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{/if}

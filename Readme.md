@@ -155,6 +155,23 @@ remboursements et annulations faits depuis le Back Office PayZen compris. La com
 remboursement est confirmé et qu'il ne reste rien à rembourser ; une annulation faite depuis le Back Office PayZen
 apparaît dans l'historique et laisse le statut de la commande à la boutique.
 
+## Un contrat PayZen par point de vente
+
+Sur une boutique qui vend depuis plusieurs points de vente (Thelia qui connaît les points de vente), chaque point de vente peut être payé
+sur son propre contrat PayZen. La page de configuration du module propose, sous le formulaire national, un sélecteur de
+point de vente : identifiant de la boutique, mode, URL du web service, mots de passe et clés (test et production). Ce
+qu'un point de vente laisse vide reprend la valeur nationale ; un point de vente sans valeur propre est donc payé sur le
+contrat national, et une boutique sans point de vente fonctionne comme avant. Les mots de passe et les clés ne sont
+jamais réaffichés : champ vide = valeur conservée, case « Utiliser la valeur nationale » = retour à la valeur nationale.
+
+Le paiement, la notification, le remboursement, la modification et l'historique d'une commande utilisent le contrat du
+point de vente où elle a été passée. La notification est authentifiée en deux temps : la référence de commande qu'elle
+annonce ne sert qu'à retrouver la commande, donc son contrat, puis la signature est vérifiée avec le mot de passe REST de
+ce contrat et aucun autre. Une notification signée avec la clé d'un autre contrat est refusée.
+
+Sur un Thelia qui ne connaît pas les points de vente, le module n'affiche pas cette section et garde sa configuration
+unique.
+
 ## Installation
 
 Vous pouvez installer ce module avec Composer :
@@ -328,6 +345,22 @@ the PayZen back-office included. The order moves to the refunded status once eve
 left to refund. A cancellation made from the PayZen back-office cancels the order while the history holds the
 authorisation as running, as its notification does; one of a payment the history already holds as paid only shows in
 the history, and leaves the order status to the shop.
+
+## One PayZen contract per sale unit
+
+On a shop that sells from several sale units (a Thelia that knows sale units), each sale unit can be paid on a PayZen contract of
+its own. Under the national form, the module configuration page offers a sale unit selector: shop identifier, mode, web
+service URL, passwords and keys (test and production). What a sale unit leaves empty reads the national value, so a sale
+unit with no value of its own is paid on the national contract, and a shop with no sale unit works as before. Passwords
+and keys are never shown back: an empty field keeps the stored value, the "Use the national value" box goes back to the
+national one.
+
+The payment, the notification, the refund, the update and the history of an order use the contract of the sale unit it
+was placed on. The notification is authenticated in two steps: the order reference it names only finds the order, hence
+its contract, then the signature is checked with the REST password of that contract and no other. A notification signed
+with the key of another contract is refused.
+
+On a Thelia that does not know sale units, the module hides this section and keeps its single configuration.
 
 ## Installation
 

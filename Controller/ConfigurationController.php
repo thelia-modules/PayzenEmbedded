@@ -19,7 +19,9 @@
 namespace PayzenEmbedded\Controller;
 
 use PayzenEmbedded\Form\ConfigurationForm;
+use PayzenEmbedded\Form\SaleUnitConfigurationForm;
 use PayzenEmbedded\PayzenEmbedded;
+use PayzenEmbedded\Service\SaleUnitContractSettings;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Routing\Attribute\Route;
 use Thelia\Controller\Admin\BaseAdminController;
@@ -99,5 +101,54 @@ class ConfigurationController extends BaseAdminController
         );
 
         return $this->generateRedirect(URL::getInstance()->absoluteUrl('/admin/module/PayzenEmbedded'));
+    }
+
+    /**
+     * The PayZen contract of one sale unit. What the unit leaves empty reads the national value.
+     */
+    #[Route('/configure-sale-unit', name: 'configure_sale_unit', methods: 'POST')]
+    public function configureSaleUnit(Translator $translator, SaleUnitContractSettings $contracts)
+    {
+        if (null !== $response = $this->checkAuth(AdminResources::MODULE, 'PayzenEmbedded', AccessManager::UPDATE)) {
+            return $response;
+        }
+
+        $configurationForm = $this->createForm(SaleUnitConfigurationForm::getName());
+        $saleUnitId = 0;
+        $ex = null;
+
+        try {
+            $data = $this->validateForm($configurationForm, "POST")->getData();
+            $saleUnitId = (int) ($data['sale_unit_id'] ?? 0);
+
+            // Unknown, or out of the units this administrator is restricted to: refused, nothing is written.
+            if (!$contracts->allows($saleUnitId)) {
+                throw new \InvalidArgumentException($translator->trans('This sale unit cannot be configured.', [], PayzenEmbedded::DOMAIN_NAME));
+            }
+
+            $contracts->apply($saleUnitId, $data);
+
+            // Which settings changed is logged, never their values.
+            $this->adminLogAppend(
+                "payzen-embedded.configuration.message",
+                AccessManager::UPDATE,
+                sprintf("PayzenEmbedded contract of sale unit %d updated", $saleUnitId)
+            );
+
+            return $this->generateRedirect(URL::getInstance()->absoluteUrl('/admin/module/PayzenEmbedded', ['sale_unit_id' => $saleUnitId]));
+        } catch (FormValidationException $ex) {
+            $error_msg = $this->createStandardFormValidationErrorMessage($ex);
+        } catch (\Exception $ex) {
+            $error_msg = $ex->getMessage();
+        }
+
+        $this->setupFormErrorContext(
+            $translator->trans("PayzenEmbedded configuration", [], PayzenEmbedded::DOMAIN_NAME),
+            $error_msg,
+            $configurationForm,
+            $ex
+        );
+
+        return $this->generateRedirect(URL::getInstance()->absoluteUrl('/admin/module/PayzenEmbedded', $saleUnitId > 0 ? ['sale_unit_id' => $saleUnitId] : []));
     }
 }

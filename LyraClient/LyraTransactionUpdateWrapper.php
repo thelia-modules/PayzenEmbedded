@@ -41,6 +41,12 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
      */
     public function updateTransaction(Order $order, int|float|string|null $amount, $captureDate, $manualValidation)
     {
+        // On the contract of the sale unit the order was placed on.
+        return $this->forOrder($order, fn () => $this->updateOnItsContract($order, $amount, $captureDate, $manualValidation));
+    }
+
+    private function updateOnItsContract(Order $order, int|float|string|null $amount, $captureDate, $manualValidation)
+    {
         // The same lock as the refund, waited for (up to ORDER_LOCK_WAIT seconds) rather than refused
         // at once: the capture after picking is the shop's own doing, and a refusal would be read as a
         // failed payment.

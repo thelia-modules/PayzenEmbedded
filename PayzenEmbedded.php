@@ -19,6 +19,7 @@ use Symfony\Component\DependencyInjection\Loader\Configurator\ServicesConfigurat
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Thelia\Core\Template\Parser\ParserResolver;
+use Thelia\Domain\SaleUnit\Config\SaleUnitConfigScope;
 use Thelia\Core\Translation\Translator;
 use Thelia\Core\Install\Database;
 use Thelia\Model\ConfigQuery;
@@ -29,6 +30,7 @@ use Thelia\Model\MessageQuery;
 use Thelia\Model\ModuleImageQuery;
 use Thelia\Model\Order;
 use Thelia\Module\AbstractPaymentModule;
+use Thelia\Module\BaseModule;
 
 class PayzenEmbedded extends AbstractPaymentModule
 {
@@ -48,7 +50,63 @@ class PayzenEmbedded extends AbstractPaymentModule
     const FORM_TYPE_CARD = 'CARD';
     const FORM_TYPE_SMART_FORM = 'SMART_FORM';
 
+    /**
+     * Whether the Thelia this module runs on gives a module a configuration per sale unit. A release
+     * that does not know them, 3.2 for one, has a single configuration, and this module then works
+     * as it always did.
+     */
+    public static function supportsSaleUnits(): bool
+    {
+        return method_exists(BaseModule::class, 'getConfigValueForSaleUnit')
+            && method_exists(Order::class, 'getSaleUnitId')
+            && class_exists(SaleUnitConfigScope::class);
+    }
+
+    /**
+     * Run what is about an order with the configuration of the sale unit the order was placed on,
+     * the national one for a national order: the contract, the keys and the settings the payment
+     * reads are those of its unit, whatever sale unit the request resolved, or without any request.
+     *
+     * @template T
+     *
+     * @param callable(): T $callback
+     *
+     * @return T
+     */
+    public static function runForOrder(Order $order, callable $callback): mixed
+    {
+        if (!self::supportsSaleUnits()) {
+            return $callback();
+        }
+
+        return SaleUnitConfigScope::runFor($order->getSaleUnitId(), $callback);
+    }
+
+    /**
+     * The same for a sale unit by its id, null being the national configuration.
+     *
+     * @template T
+     *
+     * @param callable(): T $callback
+     *
+     * @return T
+     */
+    public static function runForSaleUnit(?int $saleUnitId, callable $callback): mixed
+    {
+        if (!self::supportsSaleUnits()) {
+            return $callback();
+        }
+
+        return SaleUnitConfigScope::runFor($saleUnitId, $callback);
+    }
+
     public function pay(Order $order): ?Response
+    {
+        // The payment is made on the contract of the sale unit the order was placed on.
+        return self::runForOrder($order, fn (): ?Response => $this->payOnContractOf($order));
+    }
+
+    private function payOnContractOf(Order $order): ?Response
     {
         // Through the provider, not the client: a theme showing the card fields in its own
         // checkout step asks the provider for the same order in the same request, and the answer

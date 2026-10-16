@@ -1,3 +1,10 @@
+# 3.5.0
+
+- A sale unit can be paid on a PayZen contract of its own (a Thelia that knows sale units): shop identifier, mode, web service URL, passwords and keys, set from a sale unit selector on the module configuration page. What a sale unit leaves empty reads the national value, and a shop with no sale unit works as before. Passwords and keys are never shown back.
+- The payment, the notification, the refund, the transaction update and the history refresh of an order use the contract of the sale unit the order was placed on, whatever the request resolved.
+- The notification names its order before anything is trusted: the reference only finds the order and its contract, then the signature is checked with the REST password of that contract and no other. The signature is compared in constant time.
+- On a Thelia without sale units the module is unchanged: the section is not displayed and the single configuration applies.
+
 # 3.4.1
 
 - The outcome of a transaction update, a refund or a history refresh is shown above the form that asked for it, on the order page of the Twig back-office, as well as at the top of the page where the back-office puts its messages: a refusal read far above the PayZen block went unseen. A form the operation took away (a refund in full, a capture) leaves its message at the top of the PayZen block. A message not shown within five minutes (the administrator went elsewhere) is dropped rather than shown on a later visit.

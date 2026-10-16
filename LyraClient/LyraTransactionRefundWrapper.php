@@ -55,6 +55,13 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
      */
     public function refundTransaction(Order $order, int $amount, ?string $comment = null, ?Admin $admin = null, ?int $expectedRefundedAmount = null): RefundOutcome
     {
+        // On the contract of the sale unit the order was placed on: the platform is asked with its
+        // keys, and the refund in doubt is looked up where it was written.
+        return $this->forOrder($order, fn (): RefundOutcome => $this->refundOnItsContract($order, $amount, $comment, $admin, $expectedRefundedAmount));
+    }
+
+    private function refundOnItsContract(Order $order, int $amount, ?string $comment, ?Admin $admin, ?int $expectedRefundedAmount): RefundOutcome
+    {
         if (PayzenEmbedded::getModuleId() !== (int) $order->getPaymentModuleId()) {
             throw new TheliaProcessException(
                 Translator::getInstance()->trans('This order was not paid with PayZen.', [], PayzenEmbedded::DOMAIN_NAME)

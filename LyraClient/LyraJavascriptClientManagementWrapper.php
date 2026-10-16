@@ -35,6 +35,12 @@ class LyraJavascriptClientManagementWrapper extends LyraPaymentManagementWrapper
      */
     public function payOrder(Order $order)
     {
+        // On the contract of the sale unit the order was placed on.
+        return $this->forOrder($order, fn () => $this->payOrderOnItsContract($order));
+    }
+
+    private function payOrderOnItsContract(Order $order)
+    {
         $resultData = [
             'success' => false,
             'order_id' => $order->getId(),
