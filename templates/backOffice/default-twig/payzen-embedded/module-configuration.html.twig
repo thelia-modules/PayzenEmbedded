@@ -188,6 +188,74 @@
     </div>
 </div>
 
+{# A contract of its own for a sale unit. Shown only when the shop has sale units. The passwords and
+   the keys are never put back in the page: the field is empty, and the guidance says whether one is set. #}
+{% if sale_units is not empty %}
+    <div class="card mb-3" id="payzen-embedded-sale-units">
+        <div class="card-header py-2">
+            <h2 class="card-title h6 mb-0">{{ 'PayZen contract per sale unit'|trans({}, _d) }}</h2>
+        </div>
+
+        <div class="card-body py-3">
+            <p class="text-muted small">
+                {{ 'A sale unit can be paid on a PayZen contract of its own. What it leaves empty uses the configuration above: with no value of its own, a sale unit is paid on the national contract.'|trans({}, _d) }}
+            </p>
+
+            <form method="get" action="{{ configuration_url }}#payzen-embedded-sale-units" class="row g-2 align-items-end mb-3">
+                <div class="col-sm-6 col-lg-4">
+                    <label class="form-label mb-1" for="payzen-embedded-sale-unit">{{ 'Sale unit'|trans({}, _d) }}</label>
+                    <select class="form-select form-select-sm" id="payzen-embedded-sale-unit" name="sale_unit_id">
+                        <option value="">{{ 'Choose a sale unit'|trans({}, _d) }}</option>
+                        {% for saleUnit in sale_units %}
+                            <option value="{{ saleUnit.id }}" {{ saleUnit.id == selected_sale_unit ? 'selected' : '' }}>
+                                {{ saleUnit.label }}{{ saleUnit.active ? '' : ' (' ~ 'inactive'|trans({}, _d) ~ ')' }}{{ saleUnit.hasContract ? ' - ' ~ 'own contract'|trans({}, _d) : '' }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-outline-secondary btn-sm">{{ 'Show'|trans({}, _d) }}</button>
+                </div>
+            </form>
+
+            {% if sale_unit_form is not null %}
+                {{ form_start(sale_unit_form, {'action': path('payzen_embedded_configure_sale_unit'), 'method': 'post', 'attr': {'class': 'payzen-embedded-sale-unit-form'}}) }}
+                    {{ form_errors(sale_unit_form) }}
+                    {{ form_widget(sale_unit_form.sale_unit_id) }}
+
+                    <div class="row g-4">
+                        <div class="col-lg-4">
+                            {{ ui.field(sale_unit_form.site_id) }}
+                            {{ ui.field(sale_unit_form.mode, 'form-select form-select-sm') }}
+                            {{ ui.field(sale_unit_form.webservice_endpoint) }}
+                        </div>
+
+                        <div class="col-lg-4">
+                            <p class="h6 mb-1">{{ 'Test parameters'|trans({}, _d) }}</p>
+                            {% for name in ['test_password', 'javascript_test_key', 'signature_test_key'] %}
+                                {{ ui.field(sale_unit_form[name]) }}
+                                {{ ui.check(sale_unit_form['remove_' ~ name]) }}
+                            {% endfor %}
+                        </div>
+
+                        <div class="col-lg-4">
+                            <p class="h6 mb-1">{{ 'Production parameters'|trans({}, _d) }}</p>
+                            {% for name in ['production_password', 'javascript_production_key', 'signature_production_key'] %}
+                                {{ ui.field(sale_unit_form[name]) }}
+                                {{ ui.check(sale_unit_form['remove_' ~ name]) }}
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="text-end mt-3">
+                        <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-save"></i> {{ 'Save'|trans({}, _d) }}</button>
+                    </div>
+                {{ form_end(sale_unit_form) }}
+            {% endif %}
+        </div>
+    </div>
+{% endif %}
+
 <script>
     // The wallet options only mean something with the SmartForm. Without JavaScript everything
     // stays visible, which is the harmless outcome.
