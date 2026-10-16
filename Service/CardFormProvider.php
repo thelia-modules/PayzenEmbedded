@@ -45,6 +45,13 @@ class CardFormProvider
 
     public function forOrder(Order $order): CardFormPayload
     {
+        // On the contract of the sale unit the order was placed on: the token, the public key and the
+        // platform the client resources come from are all its.
+        return PayzenEmbedded::runForOrder($order, fn (): CardFormPayload => $this->payloadFor($order));
+    }
+
+    private function payloadFor(Order $order): CardFormPayload
+    {
         $orderId = (int) $order->getId();
 
         if (isset($this->payloads[$orderId])) {

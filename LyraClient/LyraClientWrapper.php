@@ -39,24 +39,54 @@ class LyraClientWrapper extends Client
     {
         parent::__construct();
 
-        $mode = PayzenEmbedded::getConfigValue('mode', false);
+        $this->useConfiguration();
+    }
 
-        if ('TEST' == $mode) {
-            $varMode = 'test';
-        } else {
-            $varMode = 'production';
-        }
-
-        $publicKey = PayzenEmbedded::getConfigValue('javascript_' . $varMode . '_key');
+    /**
+     * Make this client speak for the contract the module is configured with: the one of the sale
+     * unit in scope, or the national one.
+     *
+     * The clients are services shared by everything that runs in a request, and a notification or a
+     * back-office operation works for the sale unit of an order, not for the one of the request:
+     * what is about an order goes through forOrder(), which sets the client up again for it.
+     */
+    protected function useConfiguration(): void
+    {
+        $contract = PaymentContract::read(static fn (string $name): ?string => PayzenEmbedded::getConfigValue($name));
 
         // Inilialize PayZen client
-        $this->setUsername(PayzenEmbedded::getConfigValue('site_id'));
-        $this->setEndpoint(PayzenEmbedded::getConfigValue('webservice_endpoint'));
+        $this->setUsername($contract->siteId);
+        $this->setEndpoint($contract->endpoint);
 
         // Test / Productiuon variable
-        $this->setPassword(PayzenEmbedded::getConfigValue($varMode . '_password'));
-        $this->setPublicKey($publicKey);
-        $this->setSHA256Key(PayzenEmbedded::getConfigValue('signature_' . $varMode . '_key'));
+        $this->setPassword($contract->password);
+        $this->setPublicKey($contract->publicKey);
+        $this->setSHA256Key($contract->signatureKey);
+    }
+
+    /**
+     * Run what is about an order with the contract of the sale unit the order was placed on, the
+     * national one for a national order, a shop that sells from no sale unit, or a Thelia that does
+     * not know them yet. Once it is done the client speaks again for the configuration in scope where it
+     * was called: a call that forgets forOrder() never signs with the contract of the last order.
+     *
+     * @template T
+     *
+     * @param callable(): T $callback
+     *
+     * @return T
+     */
+    public function forOrder(Order $order, callable $callback): mixed
+    {
+        try {
+            return PayzenEmbedded::runForOrder($order, function () use ($callback): mixed {
+                $this->useConfiguration();
+
+                return $callback();
+            });
+        } finally {
+            $this->useConfiguration();
+        }
     }
 
     /**

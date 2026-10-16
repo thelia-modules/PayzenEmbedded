@@ -50,6 +50,15 @@ class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
      */
     public function getTransaction(Order $order): array
     {
+        // On the contract of the sale unit the order was placed on.
+        return $this->forOrder($order, fn (): array => $this->refreshOrder($order));
+    }
+
+    /**
+     * @return list<TransactionOutcome>
+     */
+    private function refreshOrder(Order $order): array
+    {
         if (PayzenEmbedded::getModuleId() !== (int) $order->getPaymentModuleId()) {
             throw new TheliaProcessException(
                 Translator::getInstance()->trans('This order was not paid with PayZen.', [], PayzenEmbedded::DOMAIN_NAME)
