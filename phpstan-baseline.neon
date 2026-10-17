@@ -1,0 +1,25 @@
+# Sale unit symbols of a core newer than the published one, used behind PayzenEmbedded::supportsSaleUnits().
+# Kept out of the report so that PHPStan runs against the published core; an entry the core catches up with is not reported.
+parameters:
+    reportUnmatchedIgnoredErrors: false
+    ignoreErrors:
+        -
+            message: '#^Call to static method runFor\(\) on an unknown class Thelia\\Domain\\SaleUnit\\Config\\SaleUnitConfigScope\.$#'
+            count: 2
+            path: PayzenEmbedded.php
+        -
+            message: '#^Parameter \$adminSaleUnitScope of method PayzenEmbedded\\Service\\SaleUnitContractSettings::__construct\(\) has invalid type Thelia\\Domain\\SaleUnit\\Access\\AdminSaleUnitScope\.$#'
+            count: 1
+            path: Service/SaleUnitContractSettings.php
+        -
+            message: '#^Property PayzenEmbedded\\Service\\SaleUnitContractSettings::\$adminSaleUnitScope has unknown class Thelia\\Domain\\SaleUnit\\Access\\AdminSaleUnitScope as its type\.$#'
+            count: 1
+            path: Service/SaleUnitContractSettings.php
+        -
+            message: '#^Call to static method create\(\) on an unknown class Thelia\\Model\\SaleUnitQuery\.$#'
+            count: 2
+            path: Service/SaleUnitContractSettings.php
+        -
+            message: '#^Call to an undefined static method PayzenEmbedded\\PayzenEmbedded::(deleteConfigValueForSaleUnit|setConfigValueForSaleUnit)\(\)\.$#'
+            count: 3
+            path: Service/SaleUnitContractSettings.php
