@@ -3,7 +3,9 @@
     <div class="panel-body table-responsive">
         <p class="fn">{intl l='One click payment is available on our shop when you pay your order with PayZen.' d=$_d}</p>
         <p>{intl l='Your credit cards details has been registred by PayZen at your request. You no longer have to enter them to pay on our shop.' d=$_d}</p>
-        <p>{intl l='If you want to clear your credit card details, <a href="%url">please click here</a>' url={url path='/payzen-embedded/alias-clear'}  d=$_d}.</p>
-
+        <form method="post" action="{url path='/payzen-embedded/alias-clear'}">
+            <input type="hidden" name="_token" value="{$csrf_token}">
+            <button type="submit" class="btn btn-default">{intl l='Clear my credit card details' d=$_d}</button>
+        </form>
     </div>
 {/loop}

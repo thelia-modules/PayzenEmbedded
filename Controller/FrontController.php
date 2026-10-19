@@ -21,7 +21,8 @@ namespace PayzenEmbedded\Controller;
 use PayzenEmbedded\Events\ProcessPaymentResponseEvent;
 use PayzenEmbedded\LyraClient\LyraPaymentManagementWrapper;
 use PayzenEmbedded\LyraClient\PlatformNotification;
-use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
+use PayzenEmbedded\LyraClient\TokenCancellationFailedException;
+use PayzenEmbedded\Service\StoredMethodRecorder;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
@@ -30,13 +31,19 @@ use Thelia\Core\Event\TheliaEvents;
 use Symfony\Component\HttpFoundation\Response;
 use Thelia\Core\HttpFoundation\Session\Session;
 use Thelia\Core\Security\Exception\AuthorizationException;
+use Thelia\Core\Security\Exception\TokenAuthenticationException;
 use Thelia\Core\Security\SecurityContext;
 use Thelia\Core\Translation\Translator;
+use Thelia\Domain\Payment\CustomerPaymentMethodService;
+use Thelia\Domain\Payment\Exception\StoredMethodRefusedException;
 use Thelia\Model\Customer;
+use Thelia\Model\ModuleQuery;
 use Thelia\Model\Order;
 use Thelia\Model\OrderQuery;
 use Thelia\Model\OrderStatusQuery;
 use Thelia\Module\BasePaymentModuleController;
+use Thelia\Tools\TokenProvider;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
 /**
@@ -56,14 +63,14 @@ class FrontController extends BasePaymentModuleController
      * Process a Payzen platform request
      */
     #[Route('/ipn-callback', name: 'process_ipn')]
-    public function processIpn(EventDispatcherInterface $dispatcher, Translator $translator)
+    public function processIpn(EventDispatcherInterface $dispatcher, Translator $translator, StoredMethodRecorder $storedMethodRecorder)
     {
         $this->getLog()->info($translator->trans("Starting processing PayZen IPN request", [], PayzenEmbedded::DOMAIN_NAME));
 
         // The response code to the server
         $gatewayResponseCode = 'KO';
 
-        $lyraClient = new LyraPaymentManagementWrapper($dispatcher);
+        $lyraClient = new LyraPaymentManagementWrapper($dispatcher, null, $storedMethodRecorder);
         $signed = false;
 
         try {
@@ -140,13 +147,59 @@ class FrontController extends BasePaymentModuleController
         $this->redirectToSuccessPage($orderId);
     }
 
-    #[Route('/alias-clear', name: 'alias_clear')]
-    public function clearCustomerToken(Session $session)
+    /**
+     * The customer asks to forget their cards: PayZen is asked first, and a card it did not cancel
+     * stays among their payment methods, where they can ask again, and the customer is told so.
+     *
+     * A POST that carries the token of the session: a link in a page, a mail or an image must not be
+     * able to have a customer's cards cancelled.
+     */
+    #[Route('/alias-clear', name: 'alias_clear', methods: ['POST'])]
+    public function clearCustomerToken(Session $session, CustomerPaymentMethodService $storedMethods, TokenProvider $tokenProvider, Translator $translator)
     {
-        $customerId = $session->getCustomerUser()->getId();
+        $customer = $session->getCustomerUser();
 
-        if (null !== $token = PayzenEmbeddedCustomerTokenQuery::create()->findOneByCustomerId($customerId)) {
-           $token->delete();
+        if (!$customer instanceof Customer) {
+            throw new AccessDeniedHttpException('Only a customer can forget their cards.');
+        }
+
+        try {
+            $tokenProvider->checkRequestToken($this->getRequest());
+        } catch (TokenAuthenticationException) {
+            $session->getFlashBag()->add('error', $translator->trans('Your request could not be checked, please try again.', [], PayzenEmbedded::DOMAIN_NAME));
+
+            return $this->generateRedirect($session->getReturnToUrl());
+        }
+
+        $module = ModuleQuery::create()->findPk(PayzenEmbedded::getModuleId());
+        $methods = $storedMethods->listFor($customer, $module);
+        $kept = 0;
+
+        foreach ($methods as $position => $method) {
+            try {
+                $storedMethods->forget($customer, $method);
+            } catch (StoredMethodRefusedException $refusal) {
+                $this->getLog()->addError(sprintf('PayZen did not cancel the stored payment method %d of customer %d.', (int) $method->getId(), (int) $customer->getId()));
+
+                if (TokenCancellationFailedException::UNREACHABLE === $refusal->providerReason) {
+                    // PayZen cannot be reached: the next card would wait for the same timeout, and the page answers
+                    // once. The cards not tried are kept too.
+                    $kept += \count($methods) - $position;
+
+                    break;
+                }
+
+                // PayZen refused this card: the next one is a card of its own.
+                ++$kept;
+            }
+        }
+
+        if ($kept > 0) {
+            $this->getLog()->addError(sprintf('%d stored payment method(s) of customer %d kept: PayZen refused them or could not be reached.', $kept, (int) $customer->getId()));
+        }
+
+        if ($kept > 0) {
+            $session->getFlashBag()->add('error', $translator->trans('PayZen could not forget %count% of your cards, they are kept: please try again later.', ['%count%' => $kept], PayzenEmbedded::DOMAIN_NAME));
         }
 
         return $this->generateRedirect($session->getReturnToUrl());

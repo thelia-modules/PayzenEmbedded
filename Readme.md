@@ -53,6 +53,24 @@ client, ou au moment de payer leur commande.
 Avec le formulaire SmartForm, l'enregistrement de la carte n'est pas proposé : PayZen retire Apple Pay et Google Pay
 d'un formulaire qui demande un enregistrement. Un client qui a déjà enregistré sa carte continue de payer en un clic.
 
+### Après la mise à jour vers 3.6.0
+
+Les cartes enregistrées avant la 3.6.0 sont déplacées vers les moyens de paiement de la boutique, sauf celles des
+invités et des comptes anonymisés : PayZen les détient encore, et la mise à jour ne les annule pas (elle ne fait aucun
+appel à PayZen). Elle écrit dans le journal le nombre de cartes à annuler. Pour les annuler chez PayZen, lancez :
+
+```
+php Thelia payzen-embedded:legacy-tokens:cancel
+```
+
+La commande annule au plus `--limit` cartes par exécution (50 par défaut), supprime la ligne de chaque carte annulée,
+garde celle des cartes que PayZen n'a pas annulées, et affiche les comptes annulées et en échec, `Remaining` (toutes les
+lignes restantes, cartes refusées par PayZen comprises : il n'atteint pas 0 tant que PayZen en refuse une), la dernière
+ligne traitée et le nombre de lignes après elle. Après un échec, elle affiche la commande suivante avec
+`--after-id <dernière ligne>` : relancez-la ainsi, ou planifiez-la en cron, jusqu'à ce qu'il ne reste plus de ligne après
+la dernière traitée. Les cartes qui restent sont celles que PayZen refuse : à voir dans le back-office PayZen.
+Limite : un client supprimé avant la mise à jour emporte sa ligne, et sa carte reste active chez PayZen.
+
 ## Historique des transactions
 
 L'historique des transactions PayZen est disponible pour chaque commande sur le détail de la commande dans le 
@@ -243,6 +261,31 @@ customer page, or before paying an order.
 
 With the SmartForm, the card registration is not offered: PayZen leaves Apple Pay and Google Pay out of a form that
 asks for a registration. A customer who already registered a card keeps paying in one click.
+
+The cards are payment methods of the shop (Thelia 3.3.0 and later): the customer chooses one at the checkout, or a
+new card, and forgets them from their account. Forgetting a card cancels it at PayZen. Nothing but the token PayZen
+handed back, a label ("Visa •••• 4242") and the expiry is kept by the shop. The cards registered before 3.6.0 are
+moved to the payment methods of the shop by the update, with a generic label.
+
+When instant means (a gift card, a credit note) paid part of an order, PayZen charges only what is left.
+
+### After the update to 3.6.0
+
+The cards registered before 3.6.0 are moved to the payment methods of the shop, except those of guests and anonymized
+accounts: PayZen still holds them, and the update does not cancel them (it makes no call to PayZen). It logs how many
+cards wait to be cancelled. To cancel them at PayZen, run:
+
+```
+php Thelia payzen-embedded:legacy-tokens:cancel
+```
+
+The command cancels at most `--limit` cards per run (50 by default), drops the row of each card cancelled, keeps the
+row of the cards PayZen did not cancel, and prints the cancelled and failed counts, `Remaining` (every row left, the
+cards PayZen refused included: it does not reach 0 while PayZen refuses one), the last row tried and the number of rows
+after it. After a failure it prints the next command with `--after-id <last row>`: run it that way, or schedule it as a
+cron job, until no row is left after the last one tried. The cards that stay are the ones PayZen refuses: look at them
+in the PayZen back office.
+Limit: a customer deleted before the update takes their row with them, and their card stays active at PayZen.
 
 ## Transaction History
 

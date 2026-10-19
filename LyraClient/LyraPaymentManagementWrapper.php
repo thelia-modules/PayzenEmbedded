@@ -13,11 +13,10 @@ namespace PayzenEmbedded\LyraClient;
 use Lyra\Exceptions\LyraException;
 use Propel\Runtime\ActiveQuery\Criteria;
 use Propel\Runtime\Propel;
-use PayzenEmbedded\Model\PayzenEmbeddedCustomerToken;
-use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
 use PayzenEmbedded\Model\Map\PayzenEmbeddedTransactionHistoryTableMap;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistoryQuery;
 use PayzenEmbedded\PayzenEmbedded;
+use PayzenEmbedded\Service\StoredMethodRecorder;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Lock\Exception\ExceptionInterface as LockException;
 use Symfony\Component\Lock\LockFactory;
@@ -26,9 +25,11 @@ use Symfony\Component\Lock\Store\FlockStore;
 use Thelia\Core\Event\Order\OrderEvent;
 use Thelia\Core\Event\TheliaEvents;
 use Thelia\Core\Translation\Translator;
+use Thelia\Domain\Order\Exception\OrderStatusTransitionRefusedException;
 use Thelia\Exception\TheliaProcessException;
 use Thelia\Log\Tlog;
 use Thelia\Model\ConfigQuery;
+use Thelia\Model\CustomerPaymentMethod;
 use Thelia\Model\Order;
 use Thelia\Model\Map\OrderTableMap;
 use Thelia\Model\OrderQuery;
@@ -56,6 +57,8 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
 
     protected ?LockFactory $lockFactory;
 
+    protected ?StoredMethodRecorder $storedMethodRecorder;
+
     /**
      * @var boolean
      */
@@ -76,8 +79,11 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
      *                                      host. Without it, a lock on this node's file system,
      *                                      built the first time an operation asks for it: the
      *                                      notification and the payment never do.
+     * @param StoredMethodRecorder|null $storedMethodRecorder keeps the card a payment registered among the
+     *                                      payment methods of the customer. Without it, a card the
+     *                                      platform registered is not kept, and the log says so.
      */
-    public function __construct(EventDispatcherInterface $dispatcher, ?LockFactory $lockFactory = null)
+    public function __construct(EventDispatcherInterface $dispatcher, ?LockFactory $lockFactory = null, ?StoredMethodRecorder $storedMethodRecorder = null)
     {
         parent::__construct();
 
@@ -86,6 +92,7 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         $this->log = Tlog::getInstance();
         $this->dispatcher = $dispatcher;
         $this->lockFactory = $lockFactory;
+        $this->storedMethodRecorder = $storedMethodRecorder;
     }
 
     /**
@@ -192,24 +199,33 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
     /**
      * Build CreatePayement web service input parameters from the givent order, and call the service.
      *
-     * @param Order $order
+     * What is charged is what this module is to charge for the order: the balance its own part holds
+     * when instant means (a gift card, a credit note) paid the rest, the total of the order otherwise.
+     *
+     * @param Order                      $order
+     * @param CustomerPaymentMethod|null $storedMethod the card the customer chose among those kept for
+     *                                                 them: it is paid with that card, and no card is
+     *                                                 registered again. Without it, a new card, which the
+     *                                                 customer may register.
      *
      * @return array CreatePayement response
      *
      * @throws LyraException
      * @throws \Propel\Runtime\Exception\PropelException
      */
-    protected function sendCreatePayementRequest(Order $order)
+    protected function sendCreatePayementRequest(Order $order, ?CustomerPaymentMethod $storedMethod = null)
     {
         $currency = $order->getCurrency();
         $customer = $order->getCustomer();
 
         // A SmartForm asked to register the card would lose its wallets, see PaymentFormAction.
-        $formAction = PaymentFormAction::resolve($this->oneClickEnabled, PayzenEmbedded::isSmartFormEnabled());
+        $formAction = null === $storedMethod
+            ? PaymentFormAction::resolve($this->oneClickEnabled, PayzenEmbedded::isSmartFormEnabled())
+            : PaymentFormAction::PAYMENT;
 
         // Request parameters (see https://payzen.io/en-EN/rest/V4.0/api/playground.html?ws=Charge/CreatePayment)
         $store = [
-            "amount" => RefundAmount::fromMajor((string) $order->getTotalAmount(), $currency->getCode()),
+            "amount" => RefundAmount::fromMajor(PayzenEmbedded::amountToCharge($order, $this->dispatcher), $currency->getCode()),
             'contrib' => 'Thelia version ' . ConfigQuery::read('thelia_version'),
             'currency' => strtoupper($currency->getCode()),
             'orderId' => $order->getRef(),
@@ -239,9 +255,10 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
             $store['excludedPaymentMethods'] = $excludedPaymentMethods;
         }
 
-        // Add 1-click payment token if we have one, and if it is allowed
-        if ($this->oneClickEnabled && (null !== $tokenData = PayzenEmbeddedCustomerTokenQuery::create()->findOneByCustomerId($customer->getId()))) {
-            $store['paymentMethodToken'] = $tokenData->getPaymentToken();
+        // The card the customer chose among the ones kept for them. Never a card they did not choose:
+        // a customer who wants to pay with a new card is not sent the stored one.
+        if (null !== $storedMethod) {
+            $store['paymentMethodToken'] = (string) $storedMethod->getToken();
         }
 
         return $this->post("V4/Charge/CreatePayment", $store);
@@ -298,7 +315,7 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
                         continue;
                     }
 
-                    $lastStatus = $this->processOrderStatus($order, $answer);
+                    $lastStatus = $this->processOrderStatus($order, $answer, true);
                 }
 
                 $governing = $this->governingTransaction($order);
@@ -316,10 +333,13 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
      *
      * @param Order $order
      * @param $answer
+     * @param bool $paymentNotification true for the notification or the answer of a payment, the only ones that
+     *                                  may carry a card the shopper registered: a refresh of a transaction, an
+     *                                  update or a capture never registers one
      * @return int
      * @throws \Exception
      */
-    protected function processOrderStatus(Order $order, $answer)
+    protected function processOrderStatus(Order $order, $answer, bool $paymentNotification = false)
     {
         $status = self::PAYMENT_STATUS_NOT_PAID;
 
@@ -422,30 +442,85 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         try {
             $status = $this->applyTransaction($order, $orderStatus, $transactionUuid, $versionAfterRef);
         } catch (\Throwable $failure) {
-            try {
-                $this->undoUnappliedNotification($order, $incoming, (string) $transactionUuid, $rowBefore, $rowWritten, $refBefore, $versionAfterRef, $failure);
-            } catch (\Throwable $undoFailure) {
-                // The failure to report is the one that stopped the order; the undo's own is logged.
-                $this->log->addError(sprintf('Order %s: the undo of transaction %s failed (%s).', $order->getRef(), $incoming->uuid, $undoFailure::class));
-            }
+            $storedState = $failure instanceof OrderStatusTransitionRefusedException
+                && \in_array($orderStatus, [TransactionOutcome::STATUS_PAID, TransactionOutcome::STATUS_RUNNING], true)
+                ? $this->stateOfTheStoredOrder($order)
+                : null;
 
-            throw $failure;
+            if (null !== $storedState) {
+                // The platform holds money for this order and the order is cancelled (the shop did it meanwhile,
+                // say), or already paid or refunded (another payment of the same order, a notification replayed at
+                // the same time). Nothing transient here: a replay is refused the same way. The history row and the
+                // transaction reference stay, so that the module can refund the payment (see
+                // LyraTransactionRefundWrapper), and the platform is answered, so that it stops replaying. A refusal
+                // of the transition graph of the shop on an order that is none of these is no such case: the order
+                // is not paid, and the platform has to replay.
+                $running = TransactionOutcome::STATUS_PAID !== $orderStatus;
+                $this->log->addError(sprintf(
+                    'Order %s: transaction %s is %s at PayZen but the order was refused that status (%s to %s): %s %s, %s.',
+                    $order->getRef(),
+                    $incoming->uuid,
+                    $orderStatus,
+                    $failure->getFromStatusCode(),
+                    $failure->getToStatusCode(),
+                    $running ? 'authorised' : 'paid',
+                    'cancelled' === $storedState ? 'after cancellation' : 'again on an order already ' . $storedState,
+                    $running ? 'to cancel at the platform' : 'to refund'
+                ));
+
+                $status = $this->paymentStatusOf($incoming);
+            } else {
+                try {
+                    $this->undoUnappliedNotification($order, $incoming, (string) $transactionUuid, $rowBefore, $rowWritten, $refBefore, $versionAfterRef, $failure);
+                } catch (\Throwable $undoFailure) {
+                    // The failure to report is the one that stopped the order; the undo's own is logged.
+                    $this->log->addError(sprintf('Order %s: the undo of transaction %s failed (%s).', $order->getRef(), $incoming->uuid, $undoFailure::class));
+                }
+
+                throw $failure;
+            }
         }
 
-        // Check if customer has registered its card for 1-click payment
-        if (isset($answer['paymentMethodToken']) && !empty($answer['paymentMethodToken'])) {
-            if (null === $tokenData = PayzenEmbeddedCustomerTokenQuery::create()->findOneByCustomerId($order->getCustomerId())) {
-                $tokenData = (new PayzenEmbeddedCustomerToken())
-                    ->setCustomerId($order->getCustomerId());
+        // The customer registered the card for 1-click payment: it joins the payment methods of the shop. Only on
+        // the first notification of the transaction (no history row of it before this one): the capture of an
+        // authorisation (RUNNING, then PAID) carries the same token, and a card the customer forgot in between
+        // is not to come back.
+        if ($paymentNotification && null === $rowBefore && isset($answer['paymentMethodToken']) && !empty($answer['paymentMethodToken'])) {
+            if (null === $this->storedMethodRecorder) {
+                $this->log->addWarning(sprintf('PayZen card of order %s not kept as a payment method: the wrapper was built without a recorder.', $order->getRef()));
+            } else {
+                try {
+                    $this->storedMethodRecorder->recordFrom($order, $answer);
+                } catch (\Throwable $notKept) {
+                    // The order moved: the platform is answered, and a card not kept is no reason to have it
+                    // replay a notification. The class only: the message of a failure may quote the token.
+                    $this->log->addError(sprintf('PayZen card of order %s not kept as a payment method: %s.', $order->getRef(), $notKept::class));
+                }
             }
-
-            // Update customer payment token
-            $tokenData
-                ->setPaymentToken($answer['paymentMethodToken'])
-                ->save();
         }
 
         return $status;
+    }
+
+    /**
+     * The state of the order read again from the database, when the shop refusing it a status leaves nothing for the
+     * platform to replay: cancelled, or already paid (paid, processing, sent) or refunded.
+     *
+     * @return 'cancelled'|'paid'|'refunded'|null
+     */
+    private function stateOfTheStoredOrder(Order $order): ?string
+    {
+        OrderTableMap::clearInstancePool();
+
+        $stored = OrderQuery::create()->findPk($order->getId());
+
+        return match (true) {
+            null === $stored => null,
+            $stored->isCancelled() => 'cancelled',
+            $stored->isRefunded(false) => 'refunded',
+            $stored->isPaid(false) => 'paid',
+            default => null,
+        };
     }
 
     /**
@@ -461,7 +536,9 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
 
         // Store the transaction ID
         $event = new OrderEvent($order);
-        $event->setTransactionRef($transactionUuid);
+        $event
+            ->setTransactionRef($transactionUuid)
+            ->setSourceModuleCode(PayzenEmbedded::getModuleCode());
         $this->dispatcher->dispatch($event, TheliaEvents::ORDER_UPDATE_TRANSACTION_REF);
 
         // Every save of the order from here on is a move, whatever status it ends on: a host module
@@ -794,7 +871,13 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
     {
         // Prevent sending several confirmation emails
         if ($order->getStatusId() !== $orderStatus->getId()) {
-            $event = (new OrderEvent($order))->setStatus($orderStatus->getId());
+            // The module names itself as the source: an order paid with several means settles the
+            // part this module holds on its confirmation, and a confirmation of an order the shop
+            // cancelled since (the card was given back) is only kept, to be refunded, when the
+            // provider of the order's part is the one that confirms.
+            $event = (new OrderEvent($order))
+                ->setStatus($orderStatus->getId())
+                ->setSourceModuleCode(PayzenEmbedded::getModuleCode());
 
             $this->dispatcher->dispatch($event, TheliaEvents::ORDER_UPDATE_STATUS);
         }

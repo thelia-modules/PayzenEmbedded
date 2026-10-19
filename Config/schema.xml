@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <database defaultIdMethod="native" name="TheliaMain">
 
+    <!-- Legacy: the cards of the 1-click payment are payment methods of the shop since 3.6.0 (customer_payment_method).
+         Config/update/3.6.0.sql moved its rows there. Nothing reads or writes it any more, and it is dropped in a later version. -->
     <table name="payzen_embedded_customer_token" namespace="PayzenEmbedded\Model">
         <column autoIncrement="true" name="id" primaryKey="true" required="true" type="INTEGER" />
         <column name="payment_token" type="LONGVARCHAR" />

@@ -13,6 +13,7 @@
 namespace PayzenEmbedded\Form;
 
 use PayzenEmbedded\LyraClient\RefundAmount;
+use PayzenEmbedded\LyraClient\TransactionHistoryReader;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
@@ -22,6 +23,8 @@ use Symfony\Component\Validator\Constraints\GreaterThan;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Context\ExecutionContextInterface;
 use Thelia\Form\BaseForm;
+use Thelia\Model\Order;
+use Thelia\Model\OrderPaymentPartQuery;
 use Thelia\Model\OrderQuery;
 
 /**
@@ -122,12 +125,35 @@ class TransactionUpdateForm extends BaseForm
                     '%decimals' => RefundAmount::decimals($currencyCode),
                     '%example' => RefundAmount::format(1250, $currencyCode),
                 ]));
-            } elseif (!RefundAmount::fitsUnder((string) $value, (string) $order->getTotalAmount(), $currencyCode)) {
+            } elseif (!RefundAmount::fitsUnder((string) $value, $this->amountPayZenHolds($order, $currencyCode), $currencyCode)) {
                 $context->addViolation(
-                    $this->trans("The amount should be less or equal to the order current amount.")
+                    $this->trans("The amount should be less or equal to the amount PayZen holds for this order.")
                 );
             }
         }
+    }
+
+    /**
+     * What the update may not exceed, in the major unit: the amount the platform holds for the transaction the
+     * order stands on, as the history recorded it; failing that, the part of the order PayZen holds when instant
+     * means (a gift card, a credit note) paid the rest; failing that, the total of the order. The total of an
+     * order paid in several parts is more than PayZen ever charged.
+     */
+    private function amountPayZenHolds(Order $order, string $currencyCode): string
+    {
+        $held = (new TransactionHistoryReader())->heldAmountOf($order);
+
+        if (null !== $held && $held > 0) {
+            return RefundAmount::format($held, $currencyCode);
+        }
+
+        $part = OrderPaymentPartQuery::create()
+            ->filterByOrderId($order->getId())
+            ->filterByPaymentModuleId(PayzenEmbedded::getModuleId())
+            ->filterByIsPrimary(true)
+            ->findOne();
+
+        return null !== $part ? (string) $part->getAmount() : (string) $order->getTotalAmount();
     }
 
     public static function getName(): string

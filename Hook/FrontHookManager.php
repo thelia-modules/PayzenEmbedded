@@ -16,14 +16,25 @@
  */
 namespace PayzenEmbedded\Hook;
 
-use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
 use PayzenEmbedded\PayzenEmbedded;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Thelia\Core\Event\Hook\HookRenderBlockEvent;
 use Thelia\Core\Event\Hook\HookRenderEvent;
 use Thelia\Core\Hook\BaseHook;
+use Thelia\Core\Template\Parser\ParserResolver;
+use Thelia\Model\CustomerPaymentMethodQuery;
+use Thelia\Tools\TokenProvider;
 
 class FrontHookManager extends BaseHook
 {
+    public function __construct(
+        private readonly TokenProvider $tokenProvider,
+        ?EventDispatcherInterface $dispatcher = null,
+        ?ParserResolver $parserResolver = null,
+    ) {
+        parent::__construct($dispatcher, $parserResolver);
+    }
+
     public function onOrderInvoiceAfterJavascriptInclude(HookRenderEvent $event)
     {
         if (PayzenEmbedded::getConfigValue('popup_mode', false)) {
@@ -57,7 +68,7 @@ class FrontHookManager extends BaseHook
                 // Check if the customer has a registered one click payment
                 $customerId = $this->getSession()->getCustomerUser()->getId();
 
-                if (null !== PayzenEmbeddedCustomerTokenQuery::create()->findOneByCustomerId($customerId)) {
+                if (CustomerPaymentMethodQuery::create()->filterByCustomerId($customerId)->filterByPaymentModuleId($moduleId)->exists()) {
                     $event->add(
                         $this->render(
                             'payzen-embedded/one_click-token-info.html'
@@ -73,7 +84,10 @@ class FrontHookManager extends BaseHook
         $content = trim(
             $this->render(
             "payzen-embedded/customer-account.html",
-                [ 'customer_id' => $this->getSession()->getCustomerUser()->getId() ]
+                [
+                    'customer_id' => $this->getSession()->getCustomerUser()->getId(),
+                    'csrf_token' => $this->tokenProvider->assignToken(),
+                ]
             )
         );
 

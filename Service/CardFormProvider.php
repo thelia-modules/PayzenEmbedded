@@ -19,6 +19,7 @@ use PayzenEmbedded\LyraClient\LyraJavascriptClientManagementWrapper;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Thelia\Model\CustomerPaymentMethod;
 use Thelia\Model\Order;
 
 /**
@@ -35,7 +36,7 @@ use Thelia\Model\Order;
 #[Autoconfigure(public: true)]
 class CardFormProvider
 {
-    /** @var array<int, CardFormPayload> one entry per order, for the length of the request */
+    /** @var array<string, CardFormPayload> one entry per order and per stored method, for the length of the request */
     private array $payloads = [];
 
     public function __construct(
@@ -43,25 +44,36 @@ class CardFormProvider
     ) {
     }
 
-    public function forOrder(Order $order): CardFormPayload
+    /**
+     * @param CustomerPaymentMethod|null $storedMethod the card the customer chose to pay with: the form
+     *                                                 then opens on it. Without it, a new card.
+     */
+    public function forOrder(Order $order, ?CustomerPaymentMethod $storedMethod = null): CardFormPayload
     {
         // On the contract of the sale unit the order was placed on: the token, the public key and the
         // platform the client resources come from are all its.
-        return PayzenEmbedded::runForOrder($order, fn (): CardFormPayload => $this->payloadFor($order));
+        return PayzenEmbedded::runForOrder($order, fn (): CardFormPayload => $this->payloadFor($order, $storedMethod));
     }
 
-    private function payloadFor(Order $order): CardFormPayload
+    protected function createWrapper(): LyraJavascriptClientManagementWrapper
+    {
+        return new LyraJavascriptClientManagementWrapper($this->dispatcher);
+    }
+
+    private function payloadFor(Order $order, ?CustomerPaymentMethod $storedMethod): CardFormPayload
     {
         $orderId = (int) $order->getId();
+        // The same order asked once for a new card and once for a stored one is two forms.
+        $key = $orderId . '#' . (null === $storedMethod ? 'new' : (int) $storedMethod->getId());
 
-        if (isset($this->payloads[$orderId])) {
-            return $this->payloads[$orderId];
+        if (isset($this->payloads[$key])) {
+            return $this->payloads[$key];
         }
 
-        $result = (new LyraJavascriptClientManagementWrapper($this->dispatcher))->payOrder($order);
+        $result = $this->createWrapper()->payOrder($order, $storedMethod);
 
         if (true === ($result['success'] ?? false) && !empty($result['form_token'])) {
-            return $this->payloads[$orderId] = CardFormPayload::ready(
+            return $this->payloads[$key] = CardFormPayload::ready(
                 orderId: $orderId,
                 formToken: (string) $result['form_token'],
                 publicKey: (string) ($result['public_key'] ?? ''),

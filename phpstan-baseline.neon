@@ -23,3 +23,20 @@ parameters:
             message: '#^Call to an undefined static method PayzenEmbedded\\PayzenEmbedded::(deleteConfigValueForSaleUnit|setConfigValueForSaleUnit)\(\)\.$#'
             count: 3
             path: Service/SaleUnitContractSettings.php
+        # Stored payment methods and payment parts of a core newer than the published one (Thelia 3.3.0): the
+        # module implements the two interfaces and reads the payment methods and the parts through the core's own
+        # classes. Every message that names one of these symbols says it is unknown, on a core that predates them.
+        # Limited to the files that name them. No count: the published core could not be installed to count them.
+        -
+            message: '#Thelia\\(Model\\(CustomerPaymentMethod|OrderPaymentPart)(Query)?\b|Domain\\Payment\\|Module\\(BalanceChargingPaymentModuleInterface|PaymentModuleWithStoredMethodsInterface)\b)#'
+            paths:
+                - PayzenEmbedded.php
+                - Controller/FrontController.php
+                - Form/TransactionUpdateForm.php
+                - Hook/FrontHookManager.php
+                - Loop/OneClickPaymentLoop.php
+                - LyraClient/LyraJavascriptClientManagementWrapper.php
+                - LyraClient/LyraPaymentManagementWrapper.php
+                - Service/CardFormProvider.php
+                - Service/StoredMethodRecorder.php
+                - Service/StoredMethodRevoker.php
