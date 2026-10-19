@@ -57,6 +57,30 @@ final class DeferredCaptureTest extends TestCase
         self::assertSame('tx1', $result->pspReference);
     }
 
+    public function testTheCaptureIsSentOnTheContractOfTheSaleUnitOfTheOrder(): void
+    {
+        $order = $this->order();
+        $inScope = false;
+        $update = $this->createMock(LyraTransactionUpdateWrapper::class);
+        $update->expects(self::once())->method('forOrder')->with($order)->willReturnCallback(static function (Order $order, callable $work) use (&$inScope): mixed {
+            $inScope = true;
+
+            try {
+                return $work();
+            } finally {
+                $inScope = false;
+            }
+        });
+        $update->method('withOrderLock')->willReturnCallback(static fn (Order $order, callable $work): mixed => $work());
+        $update->expects(self::once())->method('sendTransactionUpdateRequest')->willReturnCallback(static function () use (&$inScope): array {
+            self::assertTrue($inScope, 'The capture is signed with the contract of the sale unit of the order.');
+
+            return ['status' => 'SUCCESS', 'answer' => ['uuid' => 'tx1']];
+        });
+
+        (new DeferredCapture($update, $this->createMock(LyraTransactionRefundWrapper::class), $this->createMock(LoggerInterface::class)))->capture($order, 40.0);
+    }
+
     public function testACaptureThePlatformRefusesIsARefusal(): void
     {
         $update = $this->updateWrapper(['status' => 'ERROR', 'answer' => ['errorCode' => 'PSP_100', 'errorMessage' => 'amount too high']]);
@@ -140,6 +164,7 @@ final class DeferredCaptureTest extends TestCase
     private function updateWrapper(array $response): LyraTransactionUpdateWrapper&\PHPUnit\Framework\MockObject\MockObject
     {
         $update = $this->createMock(LyraTransactionUpdateWrapper::class);
+        $update->method('forOrder')->willReturnCallback(static fn (Order $order, callable $work): mixed => $work());
         $update->method('withOrderLock')->willReturnCallback(static fn (Order $order, callable $work): mixed => $work());
         $update->method('sendTransactionUpdateRequest')->willReturn($response);
 

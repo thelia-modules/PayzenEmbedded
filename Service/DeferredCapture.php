@@ -53,6 +53,12 @@ final readonly class DeferredCapture
 
     public function capture(Order $order, float $amount): PaymentOperationResult
     {
+        // On the contract of the sale unit the order was placed on, as every other call about it.
+        return $this->updateWrapper->forOrder($order, fn (): PaymentOperationResult => $this->captureOnItsContract($order, $amount));
+    }
+
+    private function captureOnItsContract(Order $order, float $amount): PaymentOperationResult
+    {
         return $this->updateWrapper->withOrderLock($order, function () use ($order, $amount): PaymentOperationResult {
             try {
                 $response = $this->updateWrapper->sendTransactionUpdateRequest($order, $amount, null, false);
