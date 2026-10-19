@@ -1,4 +1,4 @@
-# 3.6.0 (unreleased)
+# 3.6.0
 
 Requires Thelia 3.3.0.
 
