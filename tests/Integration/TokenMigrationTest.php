@@ -19,6 +19,7 @@ use PayzenEmbedded\LyraClient\StoredTokenGateway;
 use PayzenEmbedded\LyraClient\TokenCancellationFailedException;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerToken;
 use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
+use PayzenEmbedded\Model\PayzenEmbeddedStoredMethodContractQuery;
 use PayzenEmbedded\PayzenEmbedded;
 use PayzenEmbedded\Service\LegacyTokenCanceller;
 use Propel\Runtime\ActiveQuery\Criteria;
@@ -129,6 +130,64 @@ final class TokenMigrationTest extends PayzenIntegrationTestCase
 
         self::assertSame([], $this->methodsOf($empty));
         self::assertCount(1, $this->methodsOf($twice));
+    }
+
+    public function testEveryCardOfTheModuleIsTiedToTheNationalContractAndAReplayKeepsTheLinkOfACardOfASaleUnit(): void
+    {
+        $customer = $this->customer();
+        $this->legacyToken($customer, 'legacy-token-hhhhhhhhhhhhhhhh');
+        $registeredBefore = (new CustomerPaymentMethod())
+            ->setCustomerId($customer->getId())
+            ->setPaymentModuleId($this->module->getId())
+            ->setToken('registered-by-a-build-with-no-link')
+            ->setLabel('Visa •••• 4242')
+            ->setIsDefault(false);
+        $registeredBefore->save($this->getPropelConnection());
+
+        $this->migrate();
+
+        $links = PayzenEmbeddedStoredMethodContractQuery::create()->find();
+        $methods = $this->methodsOf($customer);
+        self::assertCount(2, $methods, 'The migrated card and the one already kept.');
+
+        foreach ($methods as $method) {
+            $link = PayzenEmbeddedStoredMethodContractQuery::create()->findPk($method->getId());
+            self::assertNotNull($link, 'Every card of the module is linked.');
+            self::assertNull($link->getSaleUnitId(), 'The cards migrated and the ones kept are of the national contract: the old table never knew the unit.');
+        }
+
+        // A card the module registers afterwards on a sale unit keeps its link through a replay of the script.
+        $unit = $this->factory->saleUnit();
+        $ofTheUnit = (new CustomerPaymentMethod())
+            ->setCustomerId($customer->getId())
+            ->setPaymentModuleId($this->module->getId())
+            ->setToken('registered-on-a-sale-unit-contract')
+            ->setLabel('Visa •••• 1111')
+            ->setIsDefault(false);
+        $ofTheUnit->save($this->getPropelConnection());
+        \PayzenEmbedded\Service\StoredMethodContract::link($ofTheUnit, $unit->getId());
+
+        $this->migrate();
+
+        self::assertSame($unit->getId(), PayzenEmbeddedStoredMethodContractQuery::create()->findPk($ofTheUnit->getId())?->getSaleUnitId());
+        self::assertCount(\count($links) + 1, PayzenEmbeddedStoredMethodContractQuery::create()->find());
+    }
+
+    public function testACardOfAnotherModuleIsNotLinked(): void
+    {
+        $customer = $this->customer();
+        $other = ModuleQuery::create()->filterByCode('PayzenEmbedded', Criteria::NOT_EQUAL)->findOne() ?? self::fail('No other module.');
+        $foreign = (new CustomerPaymentMethod())
+            ->setCustomerId($customer->getId())
+            ->setPaymentModuleId($other->getId())
+            ->setToken('another-provider-token')
+            ->setLabel('Amex •••• 0005')
+            ->setIsDefault(false);
+        $foreign->save($this->getPropelConnection());
+
+        $this->migrate();
+
+        self::assertNull(PayzenEmbeddedStoredMethodContractQuery::create()->findPk($foreign->getId()));
     }
 
     public function testAMigratedCardLeavesTheOldTableAndTheTableStaysInPlace(): void

@@ -3,6 +3,7 @@
 # It "suspends judgement" for fkey relationships until are tables are set.
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP TABLE IF EXISTS `payzen_embedded_stored_method_contract`;
 DROP TABLE IF EXISTS `payzen_embedded_customer_token`;
 DROP TABLE IF EXISTS `payzen_embedded_transaction_history`;
 

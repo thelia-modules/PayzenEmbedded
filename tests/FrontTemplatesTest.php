@@ -38,6 +38,36 @@ final class FrontTemplatesTest extends TestCase
     }
 
     /**
+     * The notice of the checkout told the customer that the payment was made at once, with no step of their own: the
+     * form now opens on the saved card, the customer confirms there, and the bank may ask for a 3-D Secure challenge.
+     */
+    public function testTheNoticeOfTheCheckoutDescribesTheFormThatOpensOnTheSavedCard(): void
+    {
+        $template = (string) file_get_contents(self::DIRECTORY . 'one_click-token-info.html');
+
+        self::assertStringNotContainsString('immediately', $template);
+        self::assertStringNotContainsString('Next Step', $template);
+        self::assertStringContainsString('the payment form opens on that card', $template);
+        self::assertStringContainsString('you confirm the payment there', $template);
+        self::assertStringContainsString('authenticate', $template, 'The 3-D Secure challenge is announced.');
+    }
+
+    public function testEveryTextOfTheNoticeIsTranslatedIntoFrench(): void
+    {
+        $template = (string) file_get_contents(self::DIRECTORY . 'one_click-token-info.html');
+        $french = require __DIR__ . '/../I18n/frontOffice/default/fr_FR.php';
+
+        self::assertSame(3, preg_match_all("/\\{intl l='((?:[^'\\\\]|\\\\.)*)'/", $template, $texts), 'The three texts of the notice.');
+
+        foreach ($texts[1] as $text) {
+            self::assertArrayHasKey($text, $french, 'Not translated: ' . $text);
+            self::assertNotSame('', $french[$text]);
+        }
+
+        self::assertStringNotContainsString('immédiatement', implode(' ', $french), 'The French no longer promises an immediate payment.');
+    }
+
+    /**
      * The account page renders account.additional outside of any form: the cards are forgotten by a POST with the
      * token of the session.
      */

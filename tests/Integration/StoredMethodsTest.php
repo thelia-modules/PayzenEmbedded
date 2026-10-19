@@ -20,6 +20,7 @@ use PayzenEmbedded\LyraClient\StoredTokenGateway;
 use PayzenEmbedded\LyraClient\TokenCancellationFailedException;
 use PayzenEmbedded\PayzenEmbedded;
 use PayzenEmbedded\Service\CardFormProvider;
+use PayzenEmbedded\Service\StoredMethodContract;
 use PayzenEmbedded\Service\StoredMethodRevoker;
 use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
@@ -27,6 +28,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Thelia\Domain\Payment\CustomerPaymentMethodService;
 use Thelia\Domain\Payment\Enum\OrderPaymentPartState;
 use Thelia\Domain\Payment\Exception\StoredMethodRefusedException;
+use Thelia\Domain\Payment\StoredPaymentMethodPayment;
 use Thelia\Model\Customer;
 use Thelia\Model\CustomerPaymentMethod;
 use Thelia\Model\CustomerPaymentMethodQuery;
@@ -272,6 +274,8 @@ final class StoredMethodsTest extends PayzenIntegrationTestCase
             ->setLabel('Visa •••• 4242')
             ->setIsDefault(true);
         $method->save($this->getPropelConnection());
+        // A card is tied to the contract it was registered on: the national one here, as the update links the cards it migrates.
+        StoredMethodContract::link($method, null);
 
         return $method;
     }
@@ -281,10 +285,10 @@ final class StoredMethodsTest extends PayzenIntegrationTestCase
      */
     private function moduleServing(RecordingLyraClient $client): PayzenEmbedded
     {
-        $provider = new class($this->dispatcher(), $client) extends CardFormProvider {
-            public function __construct(EventDispatcherInterface $dispatcher, private readonly RecordingLyraClient $client)
+        $provider = new class($this->dispatcher(), $this->getService(StoredPaymentMethodPayment::class), $client) extends CardFormProvider {
+            public function __construct(EventDispatcherInterface $dispatcher, StoredPaymentMethodPayment $storedPayment, private readonly RecordingLyraClient $client)
             {
-                parent::__construct($dispatcher);
+                parent::__construct($dispatcher, $storedPayment);
             }
 
             protected function createWrapper(): \PayzenEmbedded\LyraClient\LyraJavascriptClientManagementWrapper

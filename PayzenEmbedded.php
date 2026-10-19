@@ -16,6 +16,7 @@ use PayzenEmbedded\Command\CancelLegacyTokensCommand;
 use PayzenEmbedded\Service\CardFormProvider;
 use PayzenEmbedded\LyraClient\LyraTokenGateway;
 use PayzenEmbedded\Service\LegacyTokenCanceller;
+use PayzenEmbedded\Service\StoredMethodContract;
 use PayzenEmbedded\Service\StoredMethodRevoker;
 use Propel\Runtime\Connection\ConnectionInterface;
 use Symfony\Component\Finder\Finder;
@@ -156,6 +157,11 @@ class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPay
         if ((int) $method->getCustomerId() !== (int) $order->getCustomerId() || (int) $method->getPaymentModuleId() !== self::getModuleId()) {
             throw new \InvalidArgumentException('This stored payment method cannot pay this order.');
         }
+
+        // The token is good on the PayZen contract it was registered on, the one of a sale unit: another sale unit's
+        // order would be sent to a contract that does not know it. The checkout does not offer such a card (see
+        // StoredMethodsOfTheSaleUnitListener), this is the refusal for one that still reaches the payment.
+        StoredMethodContract::refuseUnlessUsableForOrder($method, $order);
 
         return self::runForOrder($order, fn (): ?Response => $this->payOnContractOf($order, $method));
     }

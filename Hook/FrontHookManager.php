@@ -17,12 +17,13 @@
 namespace PayzenEmbedded\Hook;
 
 use PayzenEmbedded\PayzenEmbedded;
+use PayzenEmbedded\Service\StoredMethodContract;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Thelia\Core\Event\Hook\HookRenderBlockEvent;
 use Thelia\Core\Event\Hook\HookRenderEvent;
 use Thelia\Core\Hook\BaseHook;
 use Thelia\Core\Template\Parser\ParserResolver;
-use Thelia\Model\CustomerPaymentMethodQuery;
+use Thelia\Domain\SaleUnit\Config\SaleUnitConfigScope;
 use Thelia\Tools\TokenProvider;
 
 class FrontHookManager extends BaseHook
@@ -65,10 +66,12 @@ class FrontHookManager extends BaseHook
             $moduleId = intval($event->getArgument('module'));
 
             if ($moduleId === PayzenEmbedded::getModuleId()) {
-                // Check if the customer has a registered one click payment
+                // Check if the customer has a saved card that can pay here: a card is good on the PayZen contract of the
+                // sale unit it was registered on, the one of the request here.
                 $customerId = $this->getSession()->getCustomerUser()->getId();
+                $saleUnitId = PayzenEmbedded::supportsSaleUnits() ? SaleUnitConfigScope::current() : null;
 
-                if (CustomerPaymentMethodQuery::create()->filterByCustomerId($customerId)->filterByPaymentModuleId($moduleId)->exists()) {
+                if (StoredMethodContract::customerHasACardFor((int) $customerId, $moduleId, $saleUnitId)) {
                     $event->add(
                         $this->render(
                             'payzen-embedded/one_click-token-info.html'

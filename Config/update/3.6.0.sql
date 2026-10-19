@@ -20,6 +20,15 @@
 -- Nothing here writes a token anywhere but into customer_payment_method: it is read by a SELECT and
 -- never appears as a literal in a statement.
 
+-- First, before any data is written: the statement below, when it runs, is DDL and commits.
+-- The table is created only when it is missing, by a statement prepared only then (a replay runs no DDL, which
+-- would also commit a transaction of the caller, as the core guards its own scripts).
+SET @create_table := (SELECT COUNT(*) = 0 FROM `information_schema`.`TABLES` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = 'payzen_embedded_stored_method_contract');
+SET @statement := IF(@create_table, 'CREATE TABLE `payzen_embedded_stored_method_contract` (`customer_payment_method_id` INTEGER NOT NULL, `sale_unit_id` INTEGER, PRIMARY KEY (`customer_payment_method_id`), CONSTRAINT `fk_payzen_embedded_stored_method_contract_method` FOREIGN KEY (`customer_payment_method_id`) REFERENCES `customer_payment_method` (`id`) ON UPDATE RESTRICT ON DELETE CASCADE) ENGINE=InnoDB', 'DO 0');
+PREPARE create_table_statement FROM @statement;
+EXECUTE create_table_statement;
+DEALLOCATE PREPARE create_table_statement;
+
 INSERT INTO `customer_payment_method` (`customer_id`, `payment_module_id`, `token`, `label`, `expires_at`, `is_default`, `created_at`, `updated_at`)
 SELECT `legacy`.`customer_id`, `payzen`.`id`, `legacy`.`payment_token`, 'PayZen card', NULL, 0, NOW(), NOW()
 FROM (
@@ -66,3 +75,21 @@ WHERE `legacy`.`payment_token` IS NULL
         WHERE `kept`.`customer_id` = `legacy`.`customer_id`
             AND BINARY `kept`.`token` = BINARY `legacy`.`payment_token`
     );
+
+-- The contract each card was registered on. PayZen creates a token on the contract of the sale unit the payment
+-- is made on, and the token is only good there: the card is offered, paid with and cancelled on that sale unit
+-- only. sale_unit_id is NULL for the national contract. A card with no row here is unusable (see the Readme).
+--
+-- Every card of this module the shop holds is linked to the NATIONAL contract (NULL): the migrated ones and any
+-- registered by a build that did not link them. The old table never knew the sale unit a card was registered on, and
+-- 3.5.0 already paid on the contract of a sale unit. A card that was registered on a sale unit's own contract (a shop
+-- that sets contracts per sale unit) is therefore tied to the wrong contract: it is offered on national orders only,
+-- where PayZen refuses it, and cancelling it on the national contract is refused too, so it stays kept until it is
+-- cancelled from the PayZen back office. A shop with no sale unit contract is not affected.
+--
+-- Replayable: a card already linked keeps its link.
+
+INSERT IGNORE INTO `payzen_embedded_stored_method_contract` (`customer_payment_method_id`, `sale_unit_id`)
+SELECT `method`.`id`, NULL
+FROM `customer_payment_method` AS `method`
+INNER JOIN `module` AS `payzen` ON `payzen`.`id` = `method`.`payment_module_id` AND `payzen`.`code` = 'PayzenEmbedded';

@@ -30,6 +30,8 @@ use Thelia\Model\Order;
  *
  * The token comes back on the transaction the shopper registered the card with. It goes to the
  * core's service and nowhere else: never into a log, a message or an exception of the module.
+ *
+ * The card is tied to the PayZen contract it was registered on (the sale unit of the order), see StoredMethodContract.
  */
 class StoredMethodRecorder
 {
@@ -73,7 +75,11 @@ class StoredMethodRecorder
         $card = StoredMethodLabel::fromAnswer($answer);
 
         try {
-            $this->storedMethods->register($customer, $module, $token, $card->label, $card->expiresAt);
+            $method = $this->storedMethods->register($customer, $module, $token, $card->label, $card->expiresAt);
+            // The token is good on the contract of the sale unit of this order, and on no other: the card is tied
+            // to it, so that it is offered, paid with and cancelled there only. A card already kept keeps the link
+            // it has. A card whose link could not be written pays nowhere until a payment links it again.
+            StoredMethodContract::link($method, StoredMethodContract::saleUnitOfOrder($order));
         } catch (GuestCannotStorePaymentMethodException | StoredMethodsNotSupportedException $notKept) {
             Tlog::getInstance()->addInfo(sprintf('PayZen card of order %s not kept as a payment method: %s.', $order->getRef(), $notKept::class));
         }

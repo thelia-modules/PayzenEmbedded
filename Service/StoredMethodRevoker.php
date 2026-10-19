@@ -25,6 +25,9 @@ use Thelia\Model\CustomerPaymentMethod;
 /**
  * Has PayZen forget a card the shop is about to drop.
  *
+ * The card is cancelled on the contract of the sale unit it was registered on (StoredMethodContract), the national
+ * contract for a national card.
+ *
  * A card PayZen did not cancel is kept by the shop, which says so to the customer (the core's own
  * words): they ask again later, rather than believing a card is gone that PayZen still holds.
  */
@@ -46,7 +49,12 @@ class StoredMethodRevoker
         }
 
         try {
-            $this->gateway->cancel((string) $method->getToken());
+            // On the contract the card was registered on: PayZen knows the token on that one only, whatever sale unit
+            // the request that forgets it resolved.
+            PayzenEmbedded::runForSaleUnit(
+                StoredMethodContract::saleUnitToCancelOn($method),
+                fn () => $this->gateway->cancel((string) $method->getToken())
+            );
         } catch (TokenCancellationFailedException $failure) {
             // What the platform said goes to the reason only, the core writes it nowhere.
             throw new StoredMethodRefusedException($failure->reason);

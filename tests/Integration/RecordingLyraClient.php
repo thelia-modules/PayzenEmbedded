@@ -26,12 +26,16 @@ final class RecordingLyraClient extends LyraJavascriptClientManagementWrapper
     /** @var array{string, array<string, mixed>}|null the last call: the target and what was sent */
     public ?array $sent = null;
 
+    /** @var int the number of calls to the platform, whatever they were */
+    public int $calls = 0;
+
     /** @var array<string, mixed>|\Throwable|null what the platform answers: a form token when null */
     public array|\Throwable|null $answer = null;
 
     public function post($target, $array)
     {
         $this->sent = [$target, $array];
+        ++$this->calls;
 
         if ($this->answer instanceof \Throwable) {
             throw $this->answer;

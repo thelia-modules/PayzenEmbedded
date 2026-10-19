@@ -25,12 +25,17 @@ final class RecordingTokenGateway implements StoredTokenGateway
     /** @var list<string> */
     public array $cancelled = [];
 
+    /** @var list<int|null> the sale unit whose contract was in scope at each cancellation, null being the national one */
+    public array $contractsOfTheCancellations = [];
+
     public function __construct(private readonly ?\Throwable $failure = null)
     {
     }
 
     public function cancel(string $token): void
     {
+        $this->contractsOfTheCancellations[] = \Thelia\Domain\SaleUnit\Config\SaleUnitConfigScope::current();
+
         if (null !== $this->failure) {
             throw $this->failure;
         }

@@ -43,7 +43,8 @@ est relue à chaque affichage de la page de configuration.
 Le module supporte le paiement en un clic (ou paiement par alias / token). Cette option reste compatible avec
 le SmartForm et ses portefeuilles. Lors de chaque paiement, vos clients ont
 la possibilité d'enregistrer leurs informations de carte bancaire. Lors des achats suivants, ils n'auront alors plus
-besoin d'indiquer ces informations : un clic suffit à payer leur commande.
+besoin de les saisir : le formulaire de paiement s'ouvre sur la carte enregistrée, le client y confirme le paiement
+(la banque peut demander une authentification 3-D Secure).
 Les informations de paiement sont enregistrées par PayZen, et ne sont jamais stockées ou manipulées par le module, une
 certification PCI-DSS n'est pas nécessaire.
 
@@ -51,7 +52,26 @@ Les clients peuvent demander à tout moment la suppression des informations de p
 client, ou au moment de payer leur commande.
 
 Avec le formulaire SmartForm, l'enregistrement de la carte n'est pas proposé : PayZen retire Apple Pay et Google Pay
-d'un formulaire qui demande un enregistrement. Un client qui a déjà enregistré sa carte continue de payer en un clic.
+d'un formulaire qui demande un enregistrement. Un client qui a déjà enregistré sa carte continue de payer avec elle.
+
+Le formulaire s'ouvre sur la carte que le client a choisie sur son panier, quel que soit le moyen par lequel il est demandé :
+la page de paiement du module, ou un thème qui affiche les champs de carte dans sa propre étape (`CardFormProvider::forOrder()`
+sans carte la lit sur le panier de la commande). Une carte non choisie n'est jamais envoyée. Le plafond horaire de paiements
+avec une carte enregistrée est dépensé par le cœur au moment de payer, une fois par paiement : ouvrir le formulaire ne dépense
+rien, et un client qui a dépensé son plafond reçoit un formulaire de carte neuve.
+
+### Une carte, un contrat
+
+PayZen crée le jeton sur le contrat de l'unité de vente de la commande payée, et il n'est valable que sur ce contrat. Chaque
+carte est donc rattachée à l'unité de vente de la commande qui l'a enregistrée (table `payzen_embedded_stored_method_contract`,
+`sale_unit_id` vide pour le contrat national) : elle n'est proposée au checkout, utilisée pour payer et annulée (`Token/Cancel`)
+que sur ce contrat, et jamais sur un autre, même quand une unité sans contrat propre lit le contrat national. Une carte
+nationale ne paie que les commandes nationales. Une carte d'une autre unité est retirée des cartes proposées au checkout, et
+refusée (422) si elle arrive tout de même au paiement. Une carte sans rattachement (écriture échouée) ne paie nulle part et
+s'annule sur le contrat national. La mise à jour 3.6.0 rattache au contrat national toutes les cartes du module, celles de
+l'ancienne table comprises : l'ancienne table ne retenait pas l'unité de vente. Une carte enregistrée en 3.5.0 sur le
+contrat propre d'une unité est donc mal rattachée : PayZen la refuse sur le contrat national, le client l'oublie et la
+saisit à nouveau (l'annulation est refusée aussi, la carte reste jusqu'à son annulation depuis le back-office PayZen).
 
 ### Après la mise à jour vers 3.6.0
 
@@ -252,7 +272,8 @@ by the module. PCI-DSS certification is not required.
 
 The module supports one-click payment (or payment by alias / token). For each payment, your customers can
 register their credit card information. In subsequent purchases, they will no longer have
-to enter them again: a single click is enough to pay their order.
+to type them again: the payment form opens on the registered card, the customer confirms the payment there
+(the bank may ask for a 3-D Secure authentication).
 Payment information is saved by PayZen, and is never stored or manipulated by the module, a
 PCI-DSS certification is not required.
 
@@ -260,7 +281,7 @@ Customers may request at any time the removal of the registered payment informat
 customer page, or before paying an order.
 
 With the SmartForm, the card registration is not offered: PayZen leaves Apple Pay and Google Pay out of a form that
-asks for a registration. A customer who already registered a card keeps paying in one click.
+asks for a registration. A customer who already registered a card keeps paying with it.
 
 The cards are payment methods of the shop (Thelia 3.3.0 and later): the customer chooses one at the checkout, or a
 new card, and forgets them from their account. Forgetting a card cancels it at PayZen. Nothing but the token PayZen
@@ -268,6 +289,24 @@ handed back, a label ("Visa •••• 4242") and the expiry is kept by the sh
 moved to the payment methods of the shop by the update, with a generic label.
 
 When instant means (a gift card, a credit note) paid part of an order, PayZen charges only what is left.
+
+The form opens on the card the customer chose on their cart, whichever way it is asked for: the module's payment page, or a
+theme that shows the card fields in its own step (`CardFormProvider::forOrder()` without a card reads it from the cart of the
+order). A card that was not chosen is never sent. The hourly allowance of payments with a stored card is spent by the core
+when it pays, once per payment: opening the form spends nothing, and a customer who spent the allowance gets a new card form.
+
+### One card, one contract
+
+PayZen creates the token on the contract of the sale unit of the order that is paid, and it is only good on that contract.
+Each card is therefore tied to the sale unit of the order that registered it (table `payzen_embedded_stored_method_contract`,
+`sale_unit_id` empty for the national contract): it is offered at the checkout, paid with and cancelled (`Token/Cancel`)
+on that contract only, never on another, even when a sale unit with no contract of its own reads the national one. A
+national card pays national orders only. A card of another sale unit is left out of the cards offered at the checkout, and
+refused (422) when it still reaches the payment. A card with no link (a failed write) pays nowhere and is cancelled on the
+national contract. The update to 3.6.0 ties every card of the module to the national contract, those of the old table
+included: the old table did not keep the sale unit. A card registered in 3.5.0 on the own contract of a sale unit is
+therefore tied to the wrong contract: PayZen refuses it on the national contract, the customer forgets it and enters it
+again (the cancellation is refused too, the card stays until it is cancelled from the PayZen back office).
 
 ### After the update to 3.6.0
 
