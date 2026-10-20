@@ -26,7 +26,13 @@ require \dirname(__DIR__) . '/bootstrap.php';
 $shop = __DIR__;
 
 while (!is_file($shop . '/vendor/autoload.php')) {
-    $shop = \dirname($shop);
+    $parent = \dirname($shop);
+
+    if ($parent === $shop) {
+        throw new RuntimeException('Run the tests from a shop the module is installed in: no vendor/autoload.php above ' . __DIR__);
+    }
+
+    $shop = $parent;
 }
 
 if (is_file($shop . '/tests/bootstrap.php')) {
