@@ -182,9 +182,12 @@ class BackHookManager extends BaseHook
         // The mode of the order's sale unit, as the update route reads it.
         $authorizesFirst = PayzenEmbedded::runForOrder($order, static fn (): bool => PayzenEmbedded::authorizesFirst());
         // The screen offers what its routes allow: moving what the order takes needs the capture
-        // right of Thelia, moving only the capture date of an authorization does not.
-        $canUpdate = $canAct && ($authorizesFirst || $this->securityContext->isGranted(['ADMIN'], [AdminResources::ORDER_PAYMENT_CAPTURE], [], [AccessManager::CREATE]));
-        $canRefund = $canAct;
+        // right of Thelia, moving only the capture date of an authorization does not; cancelling
+        // an authorization needs it too.
+        $mayCapture = $this->securityContext->isGranted(['ADMIN'], [AdminResources::ORDER_PAYMENT_CAPTURE], [], [AccessManager::CREATE]);
+        $canUpdate = $canAct && ($authorizesFirst || $mayCapture);
+        // As PayzenEmbedded::givingBackReleasesTheAuthorization(), on the ledger read above.
+        $canRefund = $canAct && (!($authorizesFirst && $ledger->isCancellable()) || $mayCapture);
 
         $getForm = $this->formFactory->createForm(TransactionGetForm::getName());
         $updateForm = $this->formFactory->createForm(TransactionUpdateForm::getName());

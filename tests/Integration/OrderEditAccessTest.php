@@ -16,11 +16,14 @@ declare(strict_types=1);
 namespace PayzenEmbedded\Tests\Integration;
 
 use PHPUnit\Framework\Attributes\DataProvider;
+use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistory;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Thelia\Core\Security\AccessManager;
 use Thelia\Core\Security\Resource\AdminResources;
+use Thelia\Core\Template\Parser\ParserResolver;
 use Thelia\Model\Admin;
+use Thelia\Model\Order;
 use Thelia\Model\ModuleQuery;
 use Thelia\Model\ProfileModule;
 use Thelia\Model\SaleUnitQuery;
@@ -42,6 +45,10 @@ final class OrderEditAccessTest extends WebIntegrationTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // A page rendered by an earlier test leaves its parser current, and the hooks of the next
+        // Twig page would be rendered with it: the PayZen block would be missing.
+        (new \ReflectionProperty(ParserResolver::class, 'currentParser'))->setValue(null, null);
 
         $this->injector = new AdminSessionInjector();
         $this->getService(EventDispatcherInterface::class)->addSubscriber($this->injector);
@@ -122,6 +129,88 @@ final class OrderEditAccessTest extends WebIntegrationTestCase
         }
 
         self::assertNotSame(403, $this->client->getResponse()->getStatusCode());
+    }
+
+    public function testCancellingAnAuthorizationFromTheModuleNeedsTheCaptureRight(): void
+    {
+        // Authorizing first, giving a payment the bank has not taken back cancels the
+        // authorization Thelia's journal holds: a release, under its capture right.
+        $this->administrator([
+            AdminResources::MODULE => [AccessManager::UPDATE],
+            AdminResources::ORDER => [AccessManager::VIEW, AccessManager::UPDATE],
+        ]);
+        $order = $this->authorizedOrderAtPayzen();
+
+        $this->whileAuthorizingFirst(fn () => $this->client->request('POST', '/admin/module/payzen-embedded/refund-transaction/'.$order->getId()));
+
+        self::assertSame(403, $this->client->getResponse()->getStatusCode());
+    }
+
+    /**
+     * @return iterable<string, array{array<string, list<string>>, int}>
+     */
+    public static function cancellationGrants(): iterable
+    {
+        yield 'with the capture right' => [[AdminResources::ORDER_PAYMENT_CAPTURE => [AccessManager::CREATE]], 1];
+        yield 'without it' => [[], 0];
+    }
+
+    /**
+     * @param array<string, list<string>> $extraGrants
+     */
+    #[DataProvider('cancellationGrants')]
+    public function testTheOrderSheetOffersTheCancellationOfAnAuthorizationUnderTheCaptureRight(array $extraGrants, int $expectedForms): void
+    {
+        $this->administrator([
+            AdminResources::MODULE => [AccessManager::UPDATE],
+            AdminResources::ORDER => [AccessManager::VIEW, AccessManager::UPDATE],
+        ] + $extraGrants);
+        $order = $this->authorizedOrderAtPayzen();
+
+        $crawler = $this->whileAuthorizingFirst(fn () => $this->client->request('GET', '/admin/order/update/'.$order->getId()));
+
+        self::assertSame(200, $this->client->getResponse()->getStatusCode());
+        self::assertCount(1, $crawler->filter('form[action$="/refresh-transaction/'.$order->getId().'"]'), 'The PayZen block is rendered.');
+        self::assertCount($expectedForms, $crawler->filter('form[action$="/refund-transaction/'.$order->getId().'"]'));
+    }
+
+    private function authorizedOrderAtPayzen(): Order
+    {
+        $order = $this->factory->order(null, ['paymentModuleCode' => PayzenEmbedded::getModuleCode()]);
+        $order->setTransactionRef('uuid-'.$order->getId())->save($this->getPropelConnection());
+        (new PayzenEmbeddedTransactionHistory())
+            ->setCustomerId((int) $order->getCustomerId())
+            ->setOrderId((int) $order->getId())
+            ->setUuid('uuid-'.$order->getId())
+            ->setStatus('RUNNING')
+            ->setDetailedstatus('AUTHORISED_TO_VALIDATE')
+            ->setOperationtype('DEBIT')
+            ->setAmount(10000)
+            ->setCurrencyId((int) $order->getCurrencyId())
+            ->setCreationdate(new \DateTime('-1 day'))
+            ->setFinished(false)
+            ->save($this->getPropelConnection());
+
+        return $order;
+    }
+
+    /**
+     * @template T
+     *
+     * @param callable(): T $request
+     *
+     * @return T
+     */
+    private function whileAuthorizingFirst(callable $request): mixed
+    {
+        $previous = PayzenEmbedded::getConfigValue('validation_mode', '');
+        PayzenEmbedded::setConfigValue('validation_mode', 'YES');
+
+        try {
+            return $request();
+        } finally {
+            PayzenEmbedded::setConfigValue('validation_mode', $previous);
+        }
     }
 
     /**

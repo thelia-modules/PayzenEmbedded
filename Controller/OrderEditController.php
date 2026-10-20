@@ -170,6 +170,12 @@ class OrderEditController extends BaseAdminController
 
         $this->assertReaches($orderReach, $orderId);
 
+        // Cancelling an authorization releases what Thelia's journal holds: its capture right.
+        if (PayzenEmbedded::givingBackReleasesTheAuthorization($orderReach->orderOf($orderId))
+            && null !== $response = $this->checkAuth(AdminResources::ORDER_PAYMENT_CAPTURE, [], AccessManager::CREATE)) {
+            return $response;
+        }
+
         $errorMsg = $ex = false;
         $data = [];
 

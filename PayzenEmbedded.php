@@ -12,6 +12,7 @@
 
 namespace PayzenEmbedded;
 
+use PayzenEmbedded\LyraClient\TransactionHistoryReader;
 use PayzenEmbedded\Service\CardFormProvider;
 use PayzenEmbedded\Service\DeferredCapture;
 use Propel\Runtime\Connection\ConnectionInterface;
@@ -119,6 +120,17 @@ class PayzenEmbedded extends AbstractPaymentModule implements PaymentModuleWithC
     public static function authorizesFirst(): bool
     {
         return 'YES' === self::getConfigValue('validation_mode', '');
+    }
+
+    /**
+     * Whether giving the payment of the order back would cancel its authorization: authorizing
+     * first, a payment the bank has not taken yet is cancelled in full. That releases what
+     * Thelia's journal holds, a decision Thelia leaves to its capture right.
+     */
+    public static function givingBackReleasesTheAuthorization(Order $order): bool
+    {
+        return self::runForOrder($order, static fn (): bool => self::authorizesFirst())
+            && (new TransactionHistoryReader())->ledgerOf($order)->isCancellable();
     }
 
     public function supportsDeferredCapture(): bool
