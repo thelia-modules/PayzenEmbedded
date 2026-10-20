@@ -110,6 +110,20 @@ final class DeferredCaptureTest extends TestCase
         }
     }
 
+    public function testAnAnswerOfUnknownStatusIsNoRefusal(): void
+    {
+        $update = $this->updateWrapper(['status' => 'PENDING', 'answer' => ['uuid' => 'tx1']]);
+
+        try {
+            (new DeferredCapture($update, $this->createMock(LyraTransactionRefundWrapper::class), $this->createMock(LoggerInterface::class)))->capture($this->order(), 40.0);
+            self::fail('An answer of unknown status is not a result.');
+        } catch (PaymentRefusedException) {
+            self::fail('The platform may have validated: it is not a refusal.');
+        } catch (\RuntimeException $unknown) {
+            self::assertStringContainsString('PENDING', $unknown->getMessage());
+        }
+    }
+
     public function testACaptureThePlatformAcceptedStaysAcceptedWhenRecordingItFails(): void
     {
         // The platform validated the authorization: the money will be taken, whatever failed after.

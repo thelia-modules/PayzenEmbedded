@@ -34,7 +34,7 @@ use Thelia\Model\OrderPaymentTransaction;
  *
  * The capture validates the authorization on the platform at the amount asked, through the same
  * Transaction/Update call as the capture after picking, under the same lock: the platform takes it
- * at the remittance and lets the rest go. Only an answer that is not a success is a refusal; once
+ * at the remittance and lets the rest go. Only an ERROR answer is a refusal; once
  * the platform accepted, a failure to record its answer is logged, never reported as a refusal. Its outcome comes with the notification of the capture, so the line Thelia wrote
  * stays pending until then. The release cancels the whole authorization.
  *
@@ -67,13 +67,21 @@ final readonly class DeferredCapture
                 throw new PaymentRefusedException($unreadable->getMessage(), 0, $unreadable);
             }
 
-            if ('SUCCESS' === ($response['status'] ?? null) && !isset($response['answer']['uuid'])) {
+            $status = $response['status'] ?? null;
+
+            if ('SUCCESS' === $status && !isset($response['answer']['uuid'])) {
                 // The platform may have validated: Thelia keeps the line pending until the
                 // notification says, it does not offer a second capture.
                 throw new \RuntimeException(\sprintf('PayZen answered the capture of order %s with a success that names no transaction.', (string) $order->getRef()));
             }
 
-            if ('SUCCESS' !== ($response['status'] ?? null)) {
+            if ('ERROR' !== $status && 'SUCCESS' !== $status) {
+                // An answer the client does not know is no refusal: the platform may have
+                // validated, so the line stays pending until the notification says.
+                throw new \RuntimeException(\sprintf('PayZen answered the capture of order %s with the unknown status "%s".', (string) $order->getRef(), \is_scalar($status) ? (string) $status : get_debug_type($status)));
+            }
+
+            if ('ERROR' === $status) {
                 throw PaymentRefusedException::withProviderCode(
                     \sprintf('PayZen refused the capture: %s', (string) ($response['answer']['errorMessage'] ?? 'no message')),
                     isset($response['answer']['errorCode']) ? (string) $response['answer']['errorCode'] : null,
