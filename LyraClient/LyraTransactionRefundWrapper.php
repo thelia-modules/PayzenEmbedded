@@ -268,10 +268,10 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
         // A refusal is an ERROR status with an error answer: read as the Order/Get answer is, before
         // anything in the answer is taken for a transaction.
         if (($response['status'] ?? null) !== 'SUCCESS') {
-            throw new TheliaProcessException(Translator::getInstance()->trans('Cannot refund the transaction. Error is : %message (code %code)', [
+            throw new PlatformRefusalException(Translator::getInstance()->trans('Cannot refund the transaction. Error is : %message (code %code)', [
                 '%code' => (string) ($answer['errorCode'] ?? 'undefined error code'),
                 '%message' => (string) ($answer['errorMessage'] ?? 'undefined error message'),
-            ], PayzenEmbedded::DOMAIN_NAME));
+            ], PayzenEmbedded::DOMAIN_NAME), isset($answer['errorCode']) ? (string) $answer['errorCode'] : null);
         }
 
         // The shape of this answer was taken from the documentation: keep what the platform really sends.

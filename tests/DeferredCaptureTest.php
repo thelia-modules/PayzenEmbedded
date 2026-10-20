@@ -19,6 +19,7 @@ use Lyra\Exceptions\LyraException;
 use PayzenEmbedded\LyraClient\LyraTransactionRefundWrapper;
 use PayzenEmbedded\LyraClient\LyraTransactionUpdateWrapper;
 use PayzenEmbedded\LyraClient\OrderStatusNotUpdatedException;
+use PayzenEmbedded\LyraClient\PlatformRefusalException;
 use PayzenEmbedded\LyraClient\RefundOutcome;
 use PayzenEmbedded\LyraClient\RefundOutcomeUnknownException;
 use PayzenEmbedded\LyraClient\RefundRecord;
@@ -252,6 +253,39 @@ final class DeferredCaptureTest extends TestCase
 
         (new DeferredCapture($this->createMock(LyraTransactionUpdateWrapper::class), $refund, $this->createMock(LoggerInterface::class)))
             ->refund($this->order(), 30.0, RefundReason::Other, null);
+    }
+
+    public function testARefundThePlatformRefusesCarriesTheCodeOfThePlatform(): void
+    {
+        $refund = $this->createMock(LyraTransactionRefundWrapper::class);
+        $refund->method('refundRecorded')->willThrowException(new PlatformRefusalException('The refund was refused: too late', 'PSP_096'));
+
+        try {
+            (new DeferredCapture($this->createMock(LyraTransactionUpdateWrapper::class), $refund, $this->createMock(LoggerInterface::class)))
+                ->refund($this->order(), 30.0, RefundReason::Other, null);
+            self::fail('The refusal must reach Thelia.');
+        } catch (PaymentRefusedException $refusal) {
+            self::assertSame('PSP_096', $refusal->getProviderCode(), 'The code of the platform is written on the journal line, apart from the message.');
+        }
+    }
+
+    public function testAPlatformThatCouldNotBeAskedLeavesItsAnswerToTheLog(): void
+    {
+        // The SDK words its failure with the URL it called and the raw answer: that goes to the
+        // log, the journal and the administrator read a sentence of their own.
+        $refund = $this->createMock(LyraTransactionRefundWrapper::class);
+        $refund->method('refundRecorded')->willThrowException(new LyraException('Error: call to URL https://api.payzen.eu/api-payment/V4/Order/Get failed with status 502, response <html>Bad gateway</html>'));
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())->method('error')->with(self::stringContains('Bad gateway'));
+
+        try {
+            (new DeferredCapture($this->createMock(LyraTransactionUpdateWrapper::class), $refund, $logger))->refund($this->order(), 30.0, RefundReason::Other, null);
+            self::fail('Nothing was refunded: the merchant must know.');
+        } catch (PaymentRefusedException $refusal) {
+            self::assertStringNotContainsString('https://', $refusal->getMessage());
+            self::assertStringNotContainsString('<html>', $refusal->getMessage());
+            self::assertStringContainsString('PayZen', $refusal->getMessage());
+        }
     }
 
     public function testARefundThePlatformCouldNotBeAskedAboutIsARefusal(): void

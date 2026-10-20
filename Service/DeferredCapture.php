@@ -19,6 +19,7 @@ use Lyra\Exceptions\LyraException;
 use PayzenEmbedded\LyraClient\LyraTransactionRefundWrapper;
 use PayzenEmbedded\LyraClient\LyraTransactionUpdateWrapper;
 use PayzenEmbedded\LyraClient\OrderStatusNotUpdatedException;
+use PayzenEmbedded\LyraClient\PlatformRefusalException;
 use PayzenEmbedded\LyraClient\RefundAmount;
 use PayzenEmbedded\LyraClient\RefundOutcome;
 use PayzenEmbedded\LyraClient\RefundOutcomeUnknownException;
@@ -130,10 +131,10 @@ final readonly class DeferredCapture
         } catch (RefundOutcomeUnknownException $unknown) {
             throw $unknown;
         } catch (TheliaProcessException $refusal) {
-            throw new PaymentRefusedException($refusal->getMessage(), 0, $refusal);
+            throw $this->refusalOf($refusal);
         } catch (LyraException $unreachable) {
             // Raised while listing the order's transactions, before the refund is sent: nothing moved.
-            throw new PaymentRefusedException($unreachable->getMessage(), 0, $unreachable);
+            throw $this->unreachable($order, $unreachable);
         }
 
         return $this->resultOf($record->outcome, $record->transactionUuid);
@@ -161,10 +162,10 @@ final readonly class DeferredCapture
             // line pending until the platform says.
             throw $unknown;
         } catch (TheliaProcessException $refusal) {
-            throw new PaymentRefusedException($refusal->getMessage(), 0, $refusal);
+            throw $this->refusalOf($refusal);
         } catch (LyraException $unreachable) {
             // As for a refund: the send comes after, nothing was cancelled.
-            throw new PaymentRefusedException($unreachable->getMessage(), 0, $unreachable);
+            throw $this->unreachable($order, $unreachable);
         }
 
         $reference = (string) $order->getTransactionRef();
@@ -172,5 +173,28 @@ final readonly class DeferredCapture
         return RefundOutcome::Cancelled === $outcome
             ? PaymentOperationResult::succeeded($reference)
             : PaymentOperationResult::pending($reference);
+    }
+
+    /**
+     * A refusal of the platform, with the code it answered when it named one, for the journal.
+     */
+    private function refusalOf(TheliaProcessException $refusal): PaymentRefusedException
+    {
+        return PaymentRefusedException::withProviderCode(
+            $refusal->getMessage(),
+            $refusal instanceof PlatformRefusalException ? $refusal->platformCode : null,
+            $refusal,
+        );
+    }
+
+    /**
+     * The SDK words its failure with the URL it called and the raw answer of the platform: that
+     * goes to the log only; the journal and the administrator read that nothing moved.
+     */
+    private function unreachable(Order $order, LyraException $unreachable): PaymentRefusedException
+    {
+        $this->logger->error(\sprintf('Order %s: PayZen could not list the transactions of the order: %s', (string) $order->getRef(), $unreachable->getMessage()), ['exception' => $unreachable]);
+
+        return new PaymentRefusedException(\sprintf('PayZen could not list the transactions of order %s: nothing was sent to the platform. Try again later.', (string) $order->getRef()), 0, $unreachable);
     }
 }
