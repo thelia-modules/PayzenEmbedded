@@ -124,7 +124,7 @@ final class CancellationJournalTest extends ActionIntegrationTestCase
         $process = new \ReflectionMethod(LyraTransactionRefundWrapper::class, 'processCancelOrRefundResponse');
 
         try {
-            $outcome = $process->invoke($wrapper, $order, ['status' => 'SUCCESS', 'answer' => [
+            $record = $process->invoke($wrapper, $order, ['status' => 'SUCCESS', 'answer' => [
                 'uuid' => 'credit-'.$order->getId(),
                 'status' => 'PAID',
                 'operationType' => 'CREDIT',
@@ -137,7 +137,8 @@ final class CancellationJournalTest extends ActionIntegrationTestCase
             $dispatcher->removeListener(PayzenEmbedded::TRANSACTION_REPORTED_EVENT, $busy);
         }
 
-        self::assertSame(RefundOutcome::PartiallyRefunded, $outcome);
+        self::assertSame(RefundOutcome::PartiallyRefunded, $record->outcome);
+        self::assertSame('credit-'.$order->getId(), $record->transactionUuid);
     }
 
     public function testACancellationReadOnARefreshIsWrittenBeforeTheOrderIsCancelled(): void
