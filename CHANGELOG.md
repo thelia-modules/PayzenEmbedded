@@ -6,7 +6,10 @@
 - Cancelling the order releases the authorization at PayZen (`Transaction/CancelOrRefund`). An authorization cancelled or expired at PayZen, and a refused payment with the bank's code and message, are written to the journal. Notifications and history refreshes write the journal once: a replay writes nothing twice.
 - On the order page, the module's update form only sets the capture date when the module authorizes first; the amount and the validation are no longer taken from it, even from a request built by hand.
 - With automatic validation, nothing changes.
-- The order sheet routes of the module (`update-transaction`, `refund-transaction`, `refresh-transaction`) answer 404 for an order of a sale unit the administrator is restricted away from, and the update of a transaction needs Thelia's capture right (`admin.order.payment-capture`) on top of the module and order rights.
+- The order sheet routes of the module (`update-transaction`, `refund-transaction`, `refresh-transaction`) answer 404 for an order of a sale unit the administrator is restricted away from. With automatic validation, the update of a transaction moves what the order takes and needs Thelia's capture right (`admin.order.payment-capture`) on top of the module and order rights; authorizing first, it only sets the capture date and does not. The order page offers the update form to the administrators the route lets through.
+- The validation mode is read on the sale unit the order was placed on, on the order page and in the update route alike.
+- A capture PayZen answers with a status other than `SUCCESS` or `ERROR` stays pending until the notification: only `ERROR` is a refusal.
+- The cancel link of the payment page leaves an order PayZen paid or authorized as it is and sends the customer to the confirmation page; a visitor who is not signed in is sent to the login page, and a customer following the link of another customer's order gets a 403, where both got a server error.
 
 # 3.5.0
 
