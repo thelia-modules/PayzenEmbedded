@@ -19,6 +19,7 @@ use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Validator\Constraints\Callback;
 use Symfony\Component\Validator\Constraints\GreaterThan;
+use Symfony\Component\Validator\Constraints\GreaterThanOrEqual;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Context\ExecutionContextInterface;
 use Thelia\Form\BaseForm;
@@ -77,7 +78,9 @@ class TransactionUpdateForm extends BaseForm
                 'capture_date',
                 DateType::class,
                 [
-                    'constraints' => [new NotBlank()],
+                    // A date already gone would let the authorization lapse without its capture:
+                    // a release, which is not this form's to make.
+                    'constraints' => [new NotBlank(), new GreaterThanOrEqual('today')],
                     'required' => true,
                     'data' => new \DateTime(),
                     'label' => $this->trans('Transaction capture date'),
