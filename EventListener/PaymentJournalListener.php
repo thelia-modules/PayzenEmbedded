@@ -35,7 +35,8 @@ use Thelia\Model\OrderPaymentTransactionQuery;
 
 /**
  * Writes to Thelia's payment journal what the platform reported, when the module authorizes first
- * and captures later; see PaymentJournalPlanner for what is written.
+ * and captures later, or the journal holds an authorization of the order from such a time; see
+ * PaymentJournalPlanner for what is written.
  *
  * Once the platform confirms a capture of less than the authorization, the rest is written as
  * released: the platform takes a single capture per authorization and lets the rest go.
@@ -61,13 +62,15 @@ final readonly class PaymentJournalListener implements EventSubscriberInterface
 
     public function onTransactionReported(TransactionReportedEvent $event): void
     {
-        if (!PayzenEmbedded::authorizesFirst()) {
-            return;
-        }
-
         $order = $event->getOrder();
         $answer = $event->getAnswer();
         $authorization = OrderPaymentTransactionQuery::create()->findLatestSucceededAuthorization((int) $order->getId());
+
+        // An order authorized while the module authorized first keeps writing its journal once the
+        // mode changed: its capture, its release or its lapse are still to come.
+        if (!PayzenEmbedded::authorizesFirst() && null === $authorization) {
+            return;
+        }
 
         $steps = PaymentJournalPlanner::for(
             TransactionOutcome::fromAnswer($answer),

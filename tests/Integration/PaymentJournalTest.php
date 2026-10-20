@@ -136,6 +136,17 @@ final class PaymentJournalTest extends ActionIntegrationTestCase
         self::assertCount(0, OrderPaymentTransactionQuery::create()->findJournal((int) $order->getId()));
     }
 
+    public function testAnOrderAuthorizedBeforeTheModeChangedStillGetsItsCapture(): void
+    {
+        $order = $this->authorizedOrder();
+        PayzenEmbedded::setConfigValue('validation_mode', 'NO');
+
+        $this->report($order, ['uuid' => 'tx1', 'status' => 'PAID', 'detailedStatus' => 'CAPTURED', 'amount' => 12000]);
+
+        self::assertSame('120.000000', $this->totals->forOrder((int) $order->getId())->captured);
+        self::assertSame('0.000000', $this->totals->forOrder((int) $order->getId())->remainingToCapture);
+    }
+
     public function testASecondCaptureIsRefusedBeforeThePlatformIsCalled(): void
     {
         // A second validation would set the amount of the transaction anew, lowering the first.
