@@ -60,6 +60,16 @@ final readonly class DeferredCapture
     private function captureOnItsContract(Order $order, float $amount): PaymentOperationResult
     {
         return $this->updateWrapper->withOrderLock($order, function () use ($order, $amount): PaymentOperationResult {
+            $currencyCode = strtoupper((string) $order->getCurrency()->getCode());
+            $asked = RefundAmount::fromAmount($amount, $currencyCode);
+            $held = $this->updateWrapper->heldAmountOf($order);
+
+            // The update would be cut to what the platform holds and take less than Thelia writes:
+            // the cent of an older rounding aside, the capture is refused before anything is sent.
+            if (null !== $asked && null !== $held && $held > 0 && $asked - $held > 1) {
+                throw new PaymentRefusedException(\sprintf('PayZen holds %s for this order, less than the %s asked.', RefundAmount::format($held, $currencyCode), RefundAmount::format($asked, $currencyCode)));
+            }
+
             try {
                 $response = $this->updateWrapper->sendTransactionUpdateRequest($order, $amount, null, false);
             } catch (TheliaProcessException $unreadable) {

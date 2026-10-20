@@ -65,6 +65,15 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
     }
 
     /**
+     * What the platform holds for the debit the order stands on, in the smallest unit: null when
+     * the history does not know it.
+     */
+    public function heldAmountOf(Order $order): ?int
+    {
+        return (new TransactionHistoryReader())->heldAmountOf($order);
+    }
+
+    /**
      * Build the Transaction/Update parameters, and call te service.
      *
      * @param Order $order the order to process
@@ -105,7 +114,7 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
         // authorisation taken before 3.4.0 truncated a legacy total to the cent below, where the
         // total is now rounded, and a capture one cent above the authorisation would be refused.
         if (null !== $minorAmount && !\is_string($amount)) {
-            $capped = RefundAmount::cappedTo($minorAmount, (new TransactionHistoryReader())->heldAmountOf($order));
+            $capped = RefundAmount::cappedTo($minorAmount, $this->heldAmountOf($order));
 
             // The cent of the older rounding is expected; more is money the shop will not take, said out loud.
             if ($minorAmount - $capped > 1) {

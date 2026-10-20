@@ -124,6 +124,29 @@ final class DeferredCaptureTest extends TestCase
         }
     }
 
+    public function testACaptureAboveWhatThePlatformHoldsIsRefusedBeforeAnythingIsSent(): void
+    {
+        // Cut to what the platform holds, the capture would take less than Thelia writes.
+        $update = $this->updateWrapper(['status' => 'SUCCESS', 'answer' => ['uuid' => 'tx1']]);
+        $update->method('heldAmountOf')->willReturn(8000);
+        $update->expects(self::never())->method('sendTransactionUpdateRequest');
+
+        $this->expectException(PaymentRefusedException::class);
+        $this->expectExceptionMessage('80.00');
+
+        (new DeferredCapture($update, $this->createMock(LyraTransactionRefundWrapper::class), $this->createMock(LoggerInterface::class)))->capture($this->order(), 100.0);
+    }
+
+    public function testTheCentOfAnOlderRoundingIsStillCaptured(): void
+    {
+        $update = $this->updateWrapper(['status' => 'SUCCESS', 'answer' => ['uuid' => 'tx1']]);
+        $update->method('heldAmountOf')->willReturn(9999);
+
+        $result = (new DeferredCapture($update, $this->createMock(LyraTransactionRefundWrapper::class), $this->createMock(LoggerInterface::class)))->capture($this->order(), 100.0);
+
+        self::assertSame(PaymentTransactionState::PENDING, $result->state);
+    }
+
     public function testACaptureThePlatformAcceptedStaysAcceptedWhenRecordingItFails(): void
     {
         // The platform validated the authorization: the money will be taken, whatever failed after.
