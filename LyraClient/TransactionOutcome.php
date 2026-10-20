@@ -156,6 +156,11 @@ final readonly class TransactionOutcome
         return self::STATUS_PAID === $this->status;
     }
 
+    public function isUnpaid(): bool
+    {
+        return self::STATUS_UNPAID === $this->status;
+    }
+
     public function isRunning(): bool
     {
         return self::STATUS_RUNNING === $this->status;
