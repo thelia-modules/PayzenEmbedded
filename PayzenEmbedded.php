@@ -133,6 +133,16 @@ class PayzenEmbedded extends AbstractPaymentModule implements PaymentModuleWithC
             && (new TransactionHistoryReader())->ledgerOf($order)->isCancellable();
     }
 
+    /** Whether Thelia's payment journal holds the capture of the order, taken. */
+    public static function journalHoldsTheCapture(Order $order): bool
+    {
+        return OrderPaymentTransactionQuery::create()
+            ->filterByOrderId((int) $order->getId())
+            ->filterByType(PaymentTransactionType::CAPTURE->value)
+            ->filterByState(PaymentTransactionState::SUCCEEDED->value)
+            ->exists();
+    }
+
     public function supportsDeferredCapture(): bool
     {
         return self::authorizesFirst();

@@ -92,7 +92,8 @@ class OrderEditController extends BaseAdminController
                 $request = TransactionUpdateRequest::from(
                     $data,
                     $authorizesFirst,
-                    RefundAmount::format((new TransactionHistoryReader())->heldAmountOf($order) ?? RefundAmount::fromMajor((string) $order->getTotalAmount(), $currencyCode), $currencyCode)
+                    RefundAmount::format((new TransactionHistoryReader())->heldAmountOf($order) ?? RefundAmount::fromMajor((string) $order->getTotalAmount(), $currencyCode), $currencyCode),
+                    PayzenEmbedded::journalHoldsTheCapture($order)
                 );
 
                 $event = (new TransactionUpdateEvent($orderId))

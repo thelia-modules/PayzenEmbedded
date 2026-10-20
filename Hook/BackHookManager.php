@@ -214,6 +214,8 @@ class BackHookManager extends BaseHook
                 'can_refund' => $canRefund,
                 // Authorizing first, the capture is Thelia's: the form only moves its date.
                 'authorizes_first' => $authorizesFirst,
+                // Taken at once, the amount is the journal's once it holds the capture.
+                'amount_locked' => !$authorizesFirst && PayzenEmbedded::journalHoldsTheCapture($order),
                 'currency_symbol' => $order->getCurrency()?->getSymbol() ?? '',
                 'get_form' => $getForm->createView()->getView(),
                 'update_form' => $updateForm->createView()->getView(),

@@ -22,6 +22,7 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Thelia\Core\Security\AccessManager;
 use Thelia\Core\Security\Resource\AdminResources;
 use Thelia\Core\Template\Parser\ParserResolver;
+use Thelia\Domain\Payment\Service\PaymentTransactionRecorder;
 use Thelia\Model\Admin;
 use Thelia\Model\Order;
 use Thelia\Model\ModuleQuery;
@@ -172,6 +173,56 @@ final class OrderEditAccessTest extends WebIntegrationTestCase
         self::assertSame(200, $this->client->getResponse()->getStatusCode());
         self::assertCount(1, $crawler->filter('form[action$="/refresh-transaction/'.$order->getId().'"]'), 'The PayZen block is rendered.');
         self::assertCount($expectedForms, $crawler->filter('form[action$="/refund-transaction/'.$order->getId().'"]'));
+    }
+
+    /**
+     * @return iterable<string, array{bool, string}>
+     */
+    public static function journals(): iterable
+    {
+        yield 'the journal holds the capture' => [true, 'hidden'];
+        yield 'it does not' => [false, 'text'];
+    }
+
+    #[DataProvider('journals')]
+    public function testTakingThePaymentAtOnceTheAmountIsTheJournalsOnceItHoldsTheCapture(bool $captureInTheJournal, string $amountInput): void
+    {
+        $this->administrator([
+            AdminResources::MODULE => [AccessManager::UPDATE],
+            AdminResources::ORDER => [AccessManager::VIEW, AccessManager::UPDATE],
+            AdminResources::ORDER_PAYMENT_CAPTURE => [AccessManager::CREATE],
+        ]);
+        $order = $this->factory->order(null, ['paymentModuleCode' => PayzenEmbedded::getModuleCode()]);
+        $uuid = 'uuid-'.$order->getId();
+        $order->setTransactionRef($uuid)->save($this->getPropelConnection());
+        (new PayzenEmbeddedTransactionHistory())
+            ->setCustomerId((int) $order->getCustomerId())
+            ->setOrderId((int) $order->getId())
+            ->setUuid($uuid)
+            ->setStatus('PAID')
+            ->setDetailedstatus('AUTHORISED')
+            ->setOperationtype('DEBIT')
+            ->setAmount(10000)
+            ->setCurrencyId((int) $order->getCurrencyId())
+            ->setCreationdate(new \DateTime('-1 day'))
+            ->setFinished(false)
+            ->save($this->getPropelConnection());
+
+        if ($captureInTheJournal) {
+            $this->getService(PaymentTransactionRecorder::class)->recordCapture($order, 100, $uuid, moduleCode: PayzenEmbedded::getModuleCode());
+        }
+
+        $previous = PayzenEmbedded::getConfigValue('validation_mode', '');
+        PayzenEmbedded::setConfigValue('validation_mode', 'NO');
+
+        try {
+            $crawler = $this->client->request('GET', '/admin/order/update/'.$order->getId());
+        } finally {
+            PayzenEmbedded::setConfigValue('validation_mode', $previous);
+        }
+
+        self::assertSame(200, $this->client->getResponse()->getStatusCode());
+        self::assertCount(1, $crawler->filter('form[action$="/update-transaction/'.$order->getId().'"] input[name$="[amount]"][type="'.$amountInput.'"]'));
     }
 
     private function authorizedOrderAtPayzen(): Order

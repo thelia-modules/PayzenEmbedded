@@ -12,6 +12,7 @@
 - Authorizing first, cancelling the payment from the module's form on the order page releases the authorization: it needs Thelia's capture right, and the form is only offered with it. The capture date of the update form can no longer be set in the past.
 - A cancelled or lapsed authorization, notified by the platform or cancelled from the order page, is written to the journal before the order is cancelled: the cancellation no longer asks the platform to release it a second time, which failed and wrote a refused release.
 - An order authorized while the module authorized first keeps writing its journal (capture, release, lapse) once the validation mode is changed.
+- Taking the payment at once, the update form no longer lowers the amount once Thelia's payment journal holds the capture of the order: the journal would keep the total. The difference is given back with Thelia's refund, which writes it.
 - A capture PayZen answers with a status other than `SUCCESS` or `ERROR` stays pending until the notification: only `ERROR` is a refusal.
 - The cancel link of the payment page leaves an order PayZen paid or authorized as it is and sends the customer to the confirmation page; a visitor who is not signed in is sent to the login page, and a customer following the link of another customer's order gets a 403, where both got a server error.
 

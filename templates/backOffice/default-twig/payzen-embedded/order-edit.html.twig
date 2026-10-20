@@ -46,6 +46,8 @@
                     <div class="alert alert-info">
                         {% if authorizes_first %}
                             {{ 'The payment is authorized and waits for its capture, which is made from the payment card of this page. You can define here the date at which PayZen captures it otherwise.'|trans({}, _d) }}
+                        {% elseif amount_locked %}
+                            {{ 'The payment journal of Thelia holds the capture of this order: its amount can no longer be lowered here. Give the difference back with the refund of the payment card of this page. You can still define the capture date and the validation mode.'|trans({}, _d) }}
                         {% else %}
                             {{ 'You can update here the PayZen transaction related to this order. You can change the transaction amount (it can only be lowered), define the capture date (the date at which the payment is done), and the validation mode, to change manual validation to automatic validation of the transaction'|trans({}, _d) }}
                         {% endif %}
@@ -64,6 +66,10 @@
                                 <input type="hidden" name="{{ update_form.amount.vars.full_name }}" value="{{ last_transaction_amount }}">
                                 {% do update_form.amount.setRendered %}
                                 {% do update_form.automatic_validation.setRendered %}
+                            {% elseif amount_locked %}
+                                {# The amount is the journal's: the route keeps what the platform holds. #}
+                                <input type="hidden" name="{{ update_form.amount.vars.full_name }}" value="{{ last_transaction_amount }}">
+                                {% do update_form.amount.setRendered %}
                             {% else %}
                             <div class="col-md-4">
                                 {{ form_label(update_form.amount) }}

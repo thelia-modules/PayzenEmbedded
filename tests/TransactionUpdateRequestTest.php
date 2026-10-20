@@ -41,6 +41,15 @@ final class TransactionUpdateRequestTest extends TestCase
         self::assertTrue($request->manualValidation, 'Left to the validation mode: no capture.');
     }
 
+    public function testOnceTheJournalHoldsTheCaptureTheAmountIsNoLongerLowered(): void
+    {
+        // The journal would keep the total: the difference is given back with Thelia's refund.
+        $request = TransactionUpdateRequest::from(['amount' => '80.00', 'capture_date' => null, 'automatic_validation' => true], false, '120.00', true);
+
+        self::assertSame('120.00', $request->amount);
+        self::assertFalse($request->manualValidation, 'The validation is still the form\'s.');
+    }
+
     public function testTheCaptureDateIsAlwaysTheOneTyped(): void
     {
         $date = new \DateTime('2026-11-02');
