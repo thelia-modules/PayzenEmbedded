@@ -54,4 +54,11 @@ final class OrderMoveTest extends TestCase
     {
         return TransactionOutcome::fromAnswer(['uuid' => 't1', 'status' => $status, 'detailedStatus' => $detailedStatus, 'amount' => 1000]);
     }
+
+    public function testAuthorizingFirstAPaymentWaitingForItsAuthorizationToValidateDoesNotPayTheOrder(): void
+    {
+        $incoming = TransactionOutcome::fromAnswer(['uuid' => 'tx1', 'status' => 'RUNNING', 'detailedStatus' => 'WAITING_AUTHORISATION_TO_VALIDATE', 'amount' => 12000]);
+
+        self::assertSame(OrderMove::None, OrderMove::for($incoming, true));
+    }
 }

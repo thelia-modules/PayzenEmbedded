@@ -32,7 +32,8 @@ enum OrderMove
 
     public static function for(TransactionOutcome $incoming, bool $authorizeFirst): self
     {
-        if ($authorizeFirst && $incoming->isAuthorized()) {
+        // Waiting for its authorization or for its validation, the payment is not taken yet.
+        if ($authorizeFirst && ($incoming->isAuthorized() || $incoming->waitsForValidation())) {
             return self::None;
         }
 
