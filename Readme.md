@@ -77,6 +77,8 @@ alors le contrat de capture différée de Thelia (Thelia 3.3 ou plus) :
   demandée et en attente de remise, la commande ne s'annule pas (la capture partirait quand même) : elle se rembourse une
   fois la capture prise ; une autorisation annulée ou expirée chez PayZen est notée dans le journal, et une capture
   encore en attente est alors notée en échec ;
+- un paiement que PayZen n'a pas encore remis en banque ne se rembourse qu'en totalité (il est annulé) : le dialogue
+  de remboursement de Thelia propose alors le montant total seul ;
 - un paiement refusé est noté dans le journal avec le code et le message de la banque.
 
 Sur la fiche commande, le formulaire du module ne permet plus alors que de définir la date de remise en banque, et plus
@@ -297,6 +299,8 @@ capture contract (Thelia 3.3 or later):
   its remittance the order is not cancelled (the capture would go through all the same): it is refunded once the
   capture is taken; an authorization cancelled or expired at PayZen is recorded in the journal, and a capture still
   waiting is then recorded as failed;
+- a payment PayZen has not remitted yet is given back in full only (it is cancelled): Thelia's refund dialog then
+  offers the whole amount alone;
 - a refused payment is recorded in the journal with the bank's code and message.
 
 On the order page, the module's form then only sets the date of bank receipt, and no longer once a capture was asked:
