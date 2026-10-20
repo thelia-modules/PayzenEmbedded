@@ -20,6 +20,7 @@ use PayzenEmbedded\Event\TransactionUpdateEvent;
 use PayzenEmbedded\EventListener\PaymentJournalListener;
 use PayzenEmbedded\LyraClient\LyraClientWrapper;
 use PayzenEmbedded\LyraClient\TransactionOutcome;
+use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistory;
 use PayzenEmbedded\PayzenEmbedded;
 use PayzenEmbedded\Service\DeferredCapture;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
@@ -332,6 +333,31 @@ final class PaymentJournalTest extends ActionIntegrationTestCase
         $this->report($order, ['uuid' => 'credit-7', 'status' => 'PAID', 'amount' => 2000, 'operationType' => 'CREDIT']);
 
         self::assertSame('20.000000', $this->totals->forOrder((int) $order->getId())->refunded);
+    }
+
+    public function testAPaymentNotRemittedYetIsGivenBackInFullOnly(): void
+    {
+        PayzenEmbedded::setConfigValue('validation_mode', 'NO');
+        $order = $this->order();
+        $order->setTransactionRef('tx-'.$order->getId())->save($this->getPropelConnection());
+        $history = (new PayzenEmbeddedTransactionHistory())
+            ->setCustomerId((int) $order->getCustomerId())
+            ->setOrderId((int) $order->getId())
+            ->setUuid('tx-'.$order->getId())
+            ->setStatus('PAID')
+            ->setDetailedstatus('AUTHORISED')
+            ->setOperationtype('DEBIT')
+            ->setAmount(12000)
+            ->setCurrencyId((int) $order->getCurrencyId())
+            ->setCreationdate(new \DateTime('-1 hour'))
+            ->setFinished(false);
+        $history->save($this->getPropelConnection());
+
+        self::assertTrue((new PayzenEmbedded())->refundsOnlyInFull($order), 'Not remitted: cancelled whole.');
+
+        $history->setDetailedstatus('CAPTURED')->setFinished(true)->save($this->getPropelConnection());
+
+        self::assertFalse((new PayzenEmbedded())->refundsOnlyInFull($order), 'Remitted: refunded in part as well.');
     }
 
     public function testTheModuleReachesItsCaptureServiceFromTheContainer(): void

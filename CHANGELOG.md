@@ -21,7 +21,7 @@
 
 ## Refund from Thelia
 - The refund route of the module's order sheet (`refund-transaction`) needs Thelia's refund right (`admin.order.payment-refund`) on top of the module and order rights; the order page offers the refund form to the administrators who hold it.
-- The module implements `Thelia\Module\PaymentModuleWithRefundInterface`: Thelia's refund dialog and admin API give money back through PayZen (`Transaction/CancelOrRefund`, as the module's own refund form does), with the reason and the merchant's comment written beside it in the PayZen back-office. The refund is filed in Thelia's payment journal under the uuid of the transaction PayZen made it with; one PayZen still processes is settled by its notification.
+- The module implements `Thelia\Module\PaymentModuleWithRefundInterface`: Thelia's refund dialog gives money back through PayZen (`Transaction/CancelOrRefund`, as the module's own refund form does), with the reason and the merchant's comment written beside it in the PayZen back-office. The refund is filed in Thelia's payment journal under the uuid of the transaction PayZen made it with; one PayZen still processes is settled by its notification. A payment PayZen has not remitted yet can only be cancelled whole: the module says so (`PaymentModuleRefundingInFullInterface`), and Thelia's dialog offers the whole amount alone.
 - A refund made from the PayZen back-office, or refused there, is written to Thelia's payment journal by the notification, whatever the validation mode.
 - `LyraTransactionRefundWrapper::refundRecorded()` returns the outcome with that transaction; `refundTransaction()` is unchanged. `OrderStatusNotUpdatedException` carries the transaction too.
 
