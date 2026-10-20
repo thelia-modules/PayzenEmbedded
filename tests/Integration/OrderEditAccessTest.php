@@ -103,6 +103,27 @@ final class OrderEditAccessTest extends WebIntegrationTestCase
         self::assertSame(403, $this->client->getResponse()->getStatusCode());
     }
 
+    public function testMovingTheCaptureDateOfAnAuthorizationNeedsNoCaptureRight(): void
+    {
+        // Authorizing first, the form only moves the capture date: the capture itself is made
+        // from Thelia's dialog, under its right.
+        $this->administrator([
+            AdminResources::MODULE => [AccessManager::UPDATE],
+            AdminResources::ORDER => [AccessManager::VIEW, AccessManager::UPDATE],
+        ]);
+        $order = $this->factory->order(null, ['paymentModuleCode' => PayzenEmbedded::getModuleCode()]);
+        $previous = PayzenEmbedded::getConfigValue('validation_mode', '');
+        PayzenEmbedded::setConfigValue('validation_mode', 'YES');
+
+        try {
+            $this->client->request('POST', '/admin/module/payzen-embedded/update-transaction/'.$order->getId());
+        } finally {
+            PayzenEmbedded::setConfigValue('validation_mode', $previous);
+        }
+
+        self::assertNotSame(403, $this->client->getResponse()->getStatusCode());
+    }
+
     /**
      * @param array<string, list<string>> $grants
      */

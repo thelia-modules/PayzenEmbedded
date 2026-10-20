@@ -179,6 +179,12 @@ class BackHookManager extends BaseHook
         $ledger = (new TransactionHistoryReader())->ledgerOf($order);
         $currencyCode = strtoupper((string) $order->getCurrency()?->getCode());
         $canAct = $this->securityContext->isGranted(['ADMIN'], [AdminResources::MODULE, AdminResources::ORDER], ['PayzenEmbedded'], [AccessManager::UPDATE]);
+        // The mode of the order's sale unit, as the update route reads it.
+        $authorizesFirst = PayzenEmbedded::runForOrder($order, static fn (): bool => PayzenEmbedded::authorizesFirst());
+        // The screen offers what its routes allow: moving what the order takes needs the capture
+        // right of Thelia, moving only the capture date of an authorization does not.
+        $canUpdate = $canAct && ($authorizesFirst || $this->securityContext->isGranted(['ADMIN'], [AdminResources::ORDER_PAYMENT_CAPTURE], [], [AccessManager::CREATE]));
+        $canRefund = $canAct;
 
         $getForm = $this->formFactory->createForm(TransactionGetForm::getName());
         $updateForm = $this->formFactory->createForm(TransactionUpdateForm::getName());
@@ -201,8 +207,10 @@ class BackHookManager extends BaseHook
                 'can_give_back' => '' !== $reference && $ledger->maximumAmount() > 0,
                 'other_payments_left' => $ledger->otherPaymentsLeft > 0 ? RefundAmount::format($ledger->otherPaymentsLeft, $currencyCode) : null,
                 'can_act' => $canAct,
+                'can_update' => $canUpdate,
+                'can_refund' => $canRefund,
                 // Authorizing first, the capture is Thelia's: the form only moves its date.
-                'authorizes_first' => PayzenEmbedded::authorizesFirst(),
+                'authorizes_first' => $authorizesFirst,
                 'currency_symbol' => $order->getCurrency()?->getSymbol() ?? '',
                 'get_form' => $getForm->createView()->getView(),
                 'update_form' => $updateForm->createView()->getView(),

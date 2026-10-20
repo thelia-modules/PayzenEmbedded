@@ -58,17 +58,21 @@ class OrderEditController extends BaseAdminController
     #[Route('/update-transaction/{orderId}', name: 'update_transaction', requirements: ['orderId' => '\d+'], methods: 'POST')]
     public function updateTransaction(EventDispatcherInterface $dispatcher, Translator $translator, OrderReach $orderReach, int $orderId)
     {
-        // Lowering or validating a payment is an operation on the order, not only on the module,
-        // and on what the order takes: it needs the capture right of the core too.
+        // Lowering or validating a payment is an operation on the order, not only on the module.
         if (null !== $response = $this->checkAuth([AdminResources::MODULE, AdminResources::ORDER], 'PayzenEmbedded', AccessManager::UPDATE)) {
             return $response;
         }
 
-        if (null !== $response = $this->checkAuth(AdminResources::ORDER_PAYMENT_CAPTURE, [], AccessManager::CREATE)) {
+        $this->assertReaches($orderReach, $orderId);
+
+        // The mode of the sale unit the order was placed on decides what the form may do: moving
+        // what the order takes needs the capture right of the core, moving only the capture date
+        // of an authorization does not.
+        $authorizesFirst = PayzenEmbedded::runForOrder($orderReach->orderOf($orderId), static fn (): bool => PayzenEmbedded::authorizesFirst());
+
+        if (!$authorizesFirst && null !== $response = $this->checkAuth(AdminResources::ORDER_PAYMENT_CAPTURE, [], AccessManager::CREATE)) {
             return $response;
         }
-
-        $this->assertReaches($orderReach, $orderId);
 
         $errorMsg = $ex = false;
 
@@ -87,7 +91,7 @@ class OrderEditController extends BaseAdminController
                 $currencyCode = (string) $order->getCurrency()->getCode();
                 $request = TransactionUpdateRequest::from(
                     $data,
-                    PayzenEmbedded::authorizesFirst(),
+                    $authorizesFirst,
                     RefundAmount::format((new TransactionHistoryReader())->heldAmountOf($order) ?? RefundAmount::fromMajor((string) $order->getTotalAmount(), $currencyCode), $currencyCode)
                 );
 

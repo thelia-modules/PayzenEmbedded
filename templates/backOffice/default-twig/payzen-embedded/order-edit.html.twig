@@ -7,8 +7,8 @@
         <div class="card-body">
             {# An operation's outcome is shown above its form; a form the outcome took away (a refund in full, a capture) leaves it here. #}
             {% set shown_forms = {
-                'update': transactions|length > 0 and not finished and can_act,
-                'refund': transactions|length > 0 and can_give_back and can_act,
+                'update': transactions|length > 0 and not finished and can_update,
+                'refund': transactions|length > 0 and can_give_back and can_refund,
                 'refresh': can_act,
             } %}
             {% for form, form_messages in messages|default({}) %}
@@ -40,7 +40,7 @@
                     </table>
                 </div>
 
-                {% if not finished and can_act %}
+                {% if not finished and can_update %}
                     <hr>
                     <h3 class="h6">{{ 'Update PayZen transaction'|trans({}, _d) }}</h3>
                     <div class="alert alert-info">
@@ -106,11 +106,11 @@
                     {{ form_end(update_form) }}
                 {% endif %}
 
-                {% if other_payments_left and can_act %}
+                {% if other_payments_left and can_refund %}
                     <div class="alert alert-warning">{{ 'Another payment of this order, %amount, was taken by PayZen and is not refunded: refund it from the PayZen back-office. The order is not set refunded while it is held.'|trans({'%amount': other_payments_left ~ ' ' ~ currency_symbol}, _d) }}</div>
                 {% endif %}
 
-                {% if can_give_back and can_act %}
+                {% if can_give_back and can_refund %}
                     <hr>
                     <h3 class="h6">{{ 'Cancel or refund the payment'|trans({}, _d) }}</h3>
                     <div class="alert alert-info">
