@@ -35,7 +35,9 @@ use PayzenEmbedded\LyraClient\LyraClientWrapper;
 use PayzenEmbedded\LyraClient\LyraTransactionGetWrapper;
 use PayzenEmbedded\PayzenEmbedded;
 use PayzenEmbedded\Service\OrderEditMessages;
+use PayzenEmbedded\Service\OrderReach;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Thelia\Controller\Admin\BaseAdminController;
 use Thelia\Core\Security\AccessManager;
 use Thelia\Core\Security\Resource\AdminResources;
@@ -54,12 +56,19 @@ use Symfony\Component\Routing\Attribute\Route;
 class OrderEditController extends BaseAdminController
 {
     #[Route('/update-transaction/{orderId}', name: 'update_transaction', requirements: ['orderId' => '\d+'], methods: 'POST')]
-    public function updateTransaction(EventDispatcherInterface $dispatcher, Translator $translator, int $orderId)
+    public function updateTransaction(EventDispatcherInterface $dispatcher, Translator $translator, OrderReach $orderReach, int $orderId)
     {
-        // Lowering or validating a payment is an operation on the order, not only on the module.
+        // Lowering or validating a payment is an operation on the order, not only on the module,
+        // and on what the order takes: it needs the capture right of the core too.
         if (null !== $response = $this->checkAuth([AdminResources::MODULE, AdminResources::ORDER], 'PayzenEmbedded', AccessManager::UPDATE)) {
             return $response;
         }
+
+        if (null !== $response = $this->checkAuth(AdminResources::ORDER_PAYMENT_CAPTURE, [], AccessManager::CREATE)) {
+            return $response;
+        }
+
+        $this->assertReaches($orderReach, $orderId);
 
         $errorMsg = $ex = false;
 
@@ -148,12 +157,14 @@ class OrderEditController extends BaseAdminController
     }
 
     #[Route('/refund-transaction/{orderId}', name: 'refund_transaction', requirements: ['orderId' => '\d+'], methods: 'POST')]
-    public function refundTransaction(EventDispatcherInterface $dispatcher, Translator $translator, int $orderId)
+    public function refundTransaction(EventDispatcherInterface $dispatcher, Translator $translator, OrderReach $orderReach, int $orderId)
     {
         // Giving money back is an operation on the order, not only on the module.
         if (null !== $response = $this->checkAuth([AdminResources::MODULE, AdminResources::ORDER], 'PayzenEmbedded', AccessManager::UPDATE)) {
             return $response;
         }
+
+        $this->assertReaches($orderReach, $orderId);
 
         $errorMsg = $ex = false;
         $data = [];
@@ -321,11 +332,13 @@ class OrderEditController extends BaseAdminController
     }
 
     #[Route('/refresh-transaction/{orderId}', name: 'refresh_transaction', requirements: ['orderId' => '\d+'], methods: 'POST')]
-    public function refreshTransaction(Translator $translator, LyraTransactionGetWrapper $lyraClient, int $orderId)
+    public function refreshTransaction(Translator $translator, LyraTransactionGetWrapper $lyraClient, OrderReach $orderReach, int $orderId)
     {
         if (null !== $response = $this->checkAuth([AdminResources::MODULE, AdminResources::ORDER], 'PayzenEmbedded', AccessManager::UPDATE)) {
             return $response;
         }
+
+        $this->assertReaches($orderReach, $orderId);
 
         $errorMsg = $ex = false;
 
@@ -393,5 +406,16 @@ class OrderEditController extends BaseAdminController
         }
 
         return $this->generateRedirect(URL::getInstance()->absoluteUrl("admin/order/update/$orderId") . '#payzen-embedded');
+    }
+
+    /**
+     * An order of a sale unit the administrator is restricted away from is no order of theirs:
+     * it answers 404, as the order sheet does, before anything is asked of PayZen.
+     */
+    private function assertReaches(OrderReach $orderReach, int $orderId): void
+    {
+        if (null === $orderReach->orderOf($orderId)) {
+            throw new NotFoundHttpException();
+        }
     }
 }
