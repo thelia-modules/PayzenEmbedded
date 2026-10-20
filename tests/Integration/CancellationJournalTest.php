@@ -18,12 +18,15 @@ namespace PayzenEmbedded\Tests\Integration;
 use Lyra\Exceptions\LyraException;
 use PayzenEmbedded\LyraClient\LyraPaymentManagementWrapper;
 use PayzenEmbedded\LyraClient\LyraTransactionRefundWrapper;
+use PayzenEmbedded\LyraClient\RefundOutcome;
 use PayzenEmbedded\LyraClient\TransactionOutcome;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistory;
+use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistoryQuery;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Lock\LockFactory;
 use Thelia\Domain\Payment\Enum\PaymentTransactionType;
+use Thelia\Domain\Payment\Exception\PaymentJournalBusyException;
 use Thelia\Domain\Payment\Service\PaymentTransactionRecorder;
 use Thelia\Model\Module;
 use Thelia\Model\ModuleQuery;
@@ -80,6 +83,37 @@ final class CancellationJournalTest extends ActionIntegrationTestCase
         $wrapper->withOrderLock($order, fn () => $process->invoke($wrapper, $order, ['status' => 'SUCCESS', 'answer' => $this->cancelled($order)]));
 
         $this->assertReleasedOnce($order);
+    }
+
+    public function testARefundTheJournalCannotWriteYetIsStillARefund(): void
+    {
+        // The journal learns it from the platform's notification: the money moved all the same.
+        $order = $this->authorizedOrder();
+        $history = PayzenEmbeddedTransactionHistoryQuery::create()->findOneByUuid($order->getTransactionRef());
+        $history->setStatus('PAID')->setDetailedstatus('CAPTURED')->setFinished(true)->save($this->getPropelConnection());
+        $dispatcher = $this->getService(EventDispatcherInterface::class);
+        $busy = static function (): never {
+            throw new PaymentJournalBusyException('Another worker holds the journal.');
+        };
+        $dispatcher->addListener(PayzenEmbedded::TRANSACTION_REPORTED_EVENT, $busy, 255);
+        $wrapper = new LyraTransactionRefundWrapper($dispatcher, $this->lockFactory);
+        $process = new \ReflectionMethod(LyraTransactionRefundWrapper::class, 'processCancelOrRefundResponse');
+
+        try {
+            $outcome = $process->invoke($wrapper, $order, ['status' => 'SUCCESS', 'answer' => [
+                'uuid' => 'credit-'.$order->getId(),
+                'status' => 'PAID',
+                'operationType' => 'CREDIT',
+                'amount' => 4000,
+                'currency' => 'EUR',
+                'creationDate' => (new \DateTimeImmutable('-1 minute'))->format(\DATE_ATOM),
+                'transactionDetails' => ['parentTransactionUuid' => $order->getTransactionRef()],
+            ]]);
+        } finally {
+            $dispatcher->removeListener(PayzenEmbedded::TRANSACTION_REPORTED_EVENT, $busy);
+        }
+
+        self::assertSame(RefundOutcome::PartiallyRefunded, $outcome);
     }
 
     private function assertReleasedOnce(Order $order): void

@@ -283,8 +283,14 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
 
         $this->updateTransactionHistory($resolution->answer, $order, $admin, $debitUuid);
         // Thelia's journal learns it before the order moves: a cancellation that found the
-        // authorization still held would release it a second time, from under this lock.
-        $this->reportTransaction($order, $resolution->answer);
+        // authorization still held would release it a second time, from under this lock. The money
+        // moved whatever the journal answers: a journal busy past the wait learns it from the
+        // platform's notification, and the refund is not reported as failed.
+        try {
+            $this->reportTransaction($order, $resolution->answer);
+        } catch (\Throwable $journalFailure) {
+            $this->log->addError(sprintf('Order %s: PayZen answered the refund, but the payment journal could not write it yet: %s', $order->getRef(), $journalFailure->getMessage()));
+        }
 
         $ledgerAfter = (new TransactionHistoryReader())->ledgerOf($order);
         $outcome = $resolution->outcome($ledgerAfter);
