@@ -32,6 +32,11 @@ use Thelia\Model\ModuleImageQuery;
 use Thelia\Domain\Payment\DTO\PaymentOperationResult;
 use Thelia\Model\Order;
 use Thelia\Model\OrderPaymentTransaction;
+use Thelia\Model\OrderPaymentTransactionQuery;
+use Thelia\Domain\Payment\Exception\PaymentRefusedException;
+use Thelia\Domain\Payment\Enum\PaymentTransactionType;
+use Thelia\Domain\Payment\Enum\PaymentTransactionState;
+use Propel\Runtime\ActiveQuery\Criteria;
 use Thelia\Module\AbstractPaymentModule;
 use Thelia\Module\BaseModule;
 use Thelia\Module\PaymentModuleWithCaptureInterface;
@@ -123,12 +128,38 @@ class PayzenEmbedded extends AbstractPaymentModule implements PaymentModuleWithC
 
     public function capture(Order $order, float $amount, OrderPaymentTransaction $transaction): PaymentOperationResult
     {
+        // PayZen takes a single capture per authorization: validating it again would set the
+        // amount of the transaction anew, lowering what the first capture took.
+        if (self::journalHoldsACaptureBesides($order, $transaction)) {
+            throw new PaymentRefusedException('PayZen takes a single capture per authorization, and one was already asked for this order: the rest of the authorization is released with it.');
+        }
+
         return $this->getContainer()->get(DeferredCapture::class)->capture($order, $amount);
     }
 
     public function voidAuthorization(Order $order, OrderPaymentTransaction $transaction): PaymentOperationResult
     {
+        // Once a capture was asked, the platform lets the rest of the authorization go with it:
+        // cancelling the transaction would cancel that capture too.
+        if (self::journalHoldsACaptureBesides($order, $transaction)) {
+            return PaymentOperationResult::succeeded((string) $order->getTransactionRef());
+        }
+
         return $this->getContainer()->get(DeferredCapture::class)->release($order, $transaction);
+    }
+
+    /**
+     * Whether the journal holds a capture of the order, waiting for its answer or taken, other
+     * than the line being written.
+     */
+    private static function journalHoldsACaptureBesides(Order $order, OrderPaymentTransaction $transaction): bool
+    {
+        return OrderPaymentTransactionQuery::create()
+            ->filterByOrderId((int) $order->getId())
+            ->filterByType(PaymentTransactionType::CAPTURE->value)
+            ->filterByState([PaymentTransactionState::PENDING->value, PaymentTransactionState::SUCCEEDED->value], Criteria::IN)
+            ->filterById((int) $transaction->getId(), Criteria::NOT_EQUAL)
+            ->exists();
     }
 
     public function pay(Order $order): ?Response

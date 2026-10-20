@@ -21,6 +21,8 @@ use PayzenEmbedded\PayzenEmbedded;
 use PayzenEmbedded\Service\DeferredCapture;
 use Thelia\Domain\Payment\Enum\PaymentTransactionState;
 use Thelia\Domain\Payment\Enum\PaymentTransactionType;
+use Thelia\Domain\Payment\Exception\PaymentException;
+use Thelia\Domain\Payment\Service\PaymentCaptureService;
 use Thelia\Domain\Payment\Service\PaymentTransactionRecorder;
 use Thelia\Domain\Payment\Service\PaymentTransactionTotalsReader;
 use Thelia\Model\Module;
@@ -132,6 +134,39 @@ final class PaymentJournalTest extends ActionIntegrationTestCase
         $this->report($order, ['uuid' => 'tx1', 'status' => 'RUNNING', 'detailedStatus' => 'AUTHORISED', 'amount' => 12000]);
 
         self::assertCount(0, OrderPaymentTransactionQuery::create()->findJournal((int) $order->getId()));
+    }
+
+    public function testASecondCaptureIsRefusedBeforeThePlatformIsCalled(): void
+    {
+        // A second validation would set the amount of the transaction anew, lowering the first.
+        $order = $this->authorizedOrder();
+        $this->recorder->recordCapture($order, 40, 'tx1', PaymentTransactionState::PENDING, moduleCode: PayzenEmbedded::getModuleCode());
+
+        try {
+            $this->getService(PaymentCaptureService::class)->capture($order, 20.0);
+            self::fail('The second capture is refused.');
+        } catch (PaymentException $refused) {
+            self::assertStringContainsString('single capture', $refused->getMessage());
+        }
+
+        $captures = OrderPaymentTransactionQuery::create()->filterByOrderId((int) $order->getId())->filterByType(PaymentTransactionType::CAPTURE->value)->orderById()->find();
+        self::assertCount(2, $captures);
+        self::assertTrue($captures[0]->isPending(), 'The first capture still waits for the platform.');
+        self::assertTrue($captures[1]->isFailed());
+    }
+
+    public function testReleasingOnceACaptureWasAskedCancelsNothingAtThePlatform(): void
+    {
+        // Cancelling the transaction would cancel the capture: the platform lets the rest go with it.
+        $order = $this->authorizedOrder();
+        $order->setTransactionRef('tx1')->save($this->getPropelConnection());
+        $this->recorder->recordCapture($order, 40, 'tx1', PaymentTransactionState::PENDING, moduleCode: PayzenEmbedded::getModuleCode());
+
+        $void = $this->getService(PaymentCaptureService::class)->voidAuthorization($order);
+
+        self::assertTrue($void->isSucceeded());
+        self::assertSame('80.000000', $void->getAmount());
+        self::assertSame('0.000000', $this->totals->forOrder((int) $order->getId())->remainingToCapture);
     }
 
     public function testTheModuleReachesItsCaptureServiceFromTheContainer(): void
