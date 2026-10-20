@@ -169,6 +169,11 @@ class OrderEditController extends BaseAdminController
             return $response;
         }
 
+        // Giving money back is a right of its own in the core, distinct from editing orders.
+        if (null !== $response = $this->checkAuth(AdminResources::ORDER_PAYMENT_REFUND, [], AccessManager::CREATE)) {
+            return $response;
+        }
+
         $this->assertReaches($orderReach, $orderId);
 
         // Cancelling an authorization releases what Thelia's journal holds: its capture right.

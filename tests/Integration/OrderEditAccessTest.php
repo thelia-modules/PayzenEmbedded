@@ -89,6 +89,7 @@ final class OrderEditAccessTest extends WebIntegrationTestCase
             AdminResources::MODULE => [AccessManager::UPDATE],
             AdminResources::ORDER => [AccessManager::VIEW, AccessManager::UPDATE],
             AdminResources::ORDER_PAYMENT_CAPTURE => [AccessManager::CREATE],
+            AdminResources::ORDER_PAYMENT_REFUND => [AccessManager::CREATE],
         ]);
         $this->factory->adminSaleUnit($admin, $north);
         $order = $this->factory->order(null, ['paymentModuleCode' => PayzenEmbedded::getModuleCode()]);
@@ -133,6 +134,19 @@ final class OrderEditAccessTest extends WebIntegrationTestCase
         self::assertNotSame(403, $this->client->getResponse()->getStatusCode());
     }
 
+    public function testRefundingATransactionNeedsTheRefundRight(): void
+    {
+        $this->administrator([
+            AdminResources::MODULE => [AccessManager::UPDATE],
+            AdminResources::ORDER => [AccessManager::VIEW, AccessManager::UPDATE],
+        ]);
+        $order = $this->factory->order(null, ['paymentModuleCode' => PayzenEmbedded::getModuleCode()]);
+
+        $this->client->request('POST', '/admin/module/payzen-embedded/refund-transaction/'.$order->getId());
+
+        self::assertSame(403, $this->client->getResponse()->getStatusCode());
+    }
+
     public function testCancellingAnAuthorizationFromTheModuleNeedsTheCaptureRight(): void
     {
         // Authorizing first, giving a payment the bank has not taken back cancels the
@@ -140,6 +154,7 @@ final class OrderEditAccessTest extends WebIntegrationTestCase
         $this->administrator([
             AdminResources::MODULE => [AccessManager::UPDATE],
             AdminResources::ORDER => [AccessManager::VIEW, AccessManager::UPDATE],
+            AdminResources::ORDER_PAYMENT_REFUND => [AccessManager::CREATE],
         ]);
         $order = $this->authorizedOrderAtPayzen();
 
@@ -166,6 +181,7 @@ final class OrderEditAccessTest extends WebIntegrationTestCase
         $this->administrator([
             AdminResources::MODULE => [AccessManager::UPDATE],
             AdminResources::ORDER => [AccessManager::VIEW, AccessManager::UPDATE],
+            AdminResources::ORDER_PAYMENT_REFUND => [AccessManager::CREATE],
         ] + $extraGrants);
         $order = $this->authorizedOrderAtPayzen();
 
