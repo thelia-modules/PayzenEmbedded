@@ -68,11 +68,10 @@ final readonly class DeferredCapture
             }
 
             if ('SUCCESS' !== ($response['status'] ?? null) || !isset($response['answer']['uuid'])) {
-                throw new PaymentRefusedException(\sprintf(
-                    'PayZen refused the capture: %s (code %s)',
-                    (string) ($response['answer']['errorMessage'] ?? 'no message'),
-                    (string) ($response['answer']['errorCode'] ?? 'none'),
-                ));
+                throw PaymentRefusedException::withProviderCode(
+                    \sprintf('PayZen refused the capture: %s', (string) ($response['answer']['errorMessage'] ?? 'no message')),
+                    isset($response['answer']['errorCode']) ? (string) $response['answer']['errorCode'] : null,
+                );
             }
 
             // The platform validated the authorization: the money is taken at the remittance,

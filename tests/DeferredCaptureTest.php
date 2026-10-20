@@ -85,10 +85,13 @@ final class DeferredCaptureTest extends TestCase
     {
         $update = $this->updateWrapper(['status' => 'ERROR', 'answer' => ['errorCode' => 'PSP_100', 'errorMessage' => 'amount too high']]);
 
-        $this->expectException(PaymentRefusedException::class);
-        $this->expectExceptionMessage('amount too high');
-
-        (new DeferredCapture($update, $this->createMock(LyraTransactionRefundWrapper::class), $this->createMock(LoggerInterface::class)))->capture($this->order(), 40.0);
+        try {
+            (new DeferredCapture($update, $this->createMock(LyraTransactionRefundWrapper::class), $this->createMock(LoggerInterface::class)))->capture($this->order(), 40.0);
+            self::fail('The refusal must reach Thelia.');
+        } catch (PaymentRefusedException $refusal) {
+            self::assertStringContainsString('amount too high', $refusal->getMessage());
+            self::assertSame('PSP_100', $refusal->getProviderCode(), 'The code of the platform is written on the journal line, apart from the message.');
+        }
     }
 
     public function testACaptureThePlatformAcceptedStaysAcceptedWhenRecordingItFails(): void
