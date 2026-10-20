@@ -182,15 +182,17 @@ class BackHookManager extends BaseHook
         // The mode the order was paid in, as the update route reads it.
         $authorizesFirst = PayzenEmbedded::authorizesFirstFor($order);
         // The screen offers what its routes allow: moving what the order takes needs the capture
-        // right of Thelia, moving only the capture date of an authorization does not; cancelling
-        // an authorization needs it too.
+        // right of Thelia, moving only the capture date of an authorization does not; giving
+        // money back needs its refund right, and cancelling an authorization the capture one too.
         $mayCapture = $this->securityContext->isGranted(['ADMIN'], [AdminResources::ORDER_PAYMENT_CAPTURE], [], [AccessManager::CREATE]);
         // Authorizing first, the form only moves the capture date, which a capture asked already set.
         $canUpdate = $canAct && ($authorizesFirst ? !PayzenEmbedded::journalHoldsACapture($order) : $mayCapture);
         // As PayzenEmbedded::givingBackReleasesTheAuthorization(), on the ledger read above.
         // Cancelling also needs no capture asked meanwhile, which the cancellation would take with it.
         $cancels = $authorizesFirst && $ledger->isCancellable();
-        $canRefund = $canAct && (!$cancels || ($mayCapture && !PayzenEmbedded::journalHoldsACapture($order)));
+        $canRefund = $canAct
+            && $this->securityContext->isGranted(['ADMIN'], [AdminResources::ORDER_PAYMENT_REFUND], [], [AccessManager::CREATE])
+            && (!$cancels || ($mayCapture && !PayzenEmbedded::journalHoldsACapture($order)));
 
         $getForm = $this->formFactory->createForm(TransactionGetForm::getName());
         $updateForm = $this->formFactory->createForm(TransactionUpdateForm::getName());

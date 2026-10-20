@@ -339,6 +339,47 @@ final class OrderEditAccessTest extends WebIntegrationTestCase
     }
 
     /**
+     * @return iterable<string, array{array<string, list<string>>, int}>
+     */
+    public static function refundGrants(): iterable
+    {
+        yield 'with the refund right' => [[AdminResources::ORDER_PAYMENT_REFUND => [AccessManager::CREATE]], 1];
+        yield 'without it' => [[], 0];
+    }
+
+    /**
+     * @param array<string, list<string>> $extraGrants
+     */
+    #[DataProvider('refundGrants')]
+    public function testTheOrderSheetOffersTheRefundToTheAdministratorsTheRouteLetsThrough(array $extraGrants, int $expectedForms): void
+    {
+        $this->administrator([
+            AdminResources::MODULE => [AccessManager::UPDATE],
+            AdminResources::ORDER => [AccessManager::VIEW, AccessManager::UPDATE],
+        ] + $extraGrants);
+        $order = $this->factory->order(null, ['paymentModuleCode' => PayzenEmbedded::getModuleCode()]);
+        $order->setTransactionRef('uuid-'.$order->getId())->save($this->getPropelConnection());
+        (new PayzenEmbeddedTransactionHistory())
+            ->setCustomerId((int) $order->getCustomerId())
+            ->setOrderId((int) $order->getId())
+            ->setUuid('uuid-'.$order->getId())
+            ->setStatus('PAID')
+            ->setDetailedstatus('CAPTURED')
+            ->setOperationtype('DEBIT')
+            ->setAmount(10000)
+            ->setCurrencyId((int) $order->getCurrencyId())
+            ->setCreationdate(new \DateTime('-1 day'))
+            ->setFinished(true)
+            ->save($this->getPropelConnection());
+
+        $crawler = $this->client->request('GET', '/admin/order/update/'.$order->getId());
+
+        self::assertSame(200, $this->client->getResponse()->getStatusCode());
+        self::assertCount(1, $crawler->filter('form[action$="/refresh-transaction/'.$order->getId().'"]'), 'The PayZen block is rendered.');
+        self::assertCount($expectedForms, $crawler->filter('form[action$="/refund-transaction/'.$order->getId().'"]'));
+    }
+
+    /**
      * @param array<string, list<string>> $grants
      */
     private function administrator(array $grants): Admin
