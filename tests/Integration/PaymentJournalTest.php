@@ -33,8 +33,8 @@ use Thelia\Test\ActionIntegrationTestCase;
 
 /**
  * What the platform reports, written to Thelia's payment journal when the shop authorizes first,
- * and how the order follows. Runs with the shop's test configuration, which boots Thelia:
- *     vendor/bin/phpunit -c phpunit.xml.dist local/modules/PayzenEmbedded/tests/Integration
+ * and how the order follows. Boots Thelia on the shop's test database, see phpunit.integration.xml.dist:
+ *     vendor/bin/phpunit -c local/modules/PayzenEmbedded/phpunit.integration.xml.dist
  */
 final class PaymentJournalTest extends ActionIntegrationTestCase
 {
