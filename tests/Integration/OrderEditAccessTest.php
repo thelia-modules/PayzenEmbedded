@@ -80,6 +80,24 @@ final class OrderEditAccessTest extends WebIntegrationTestCase
         yield 'refresh' => ['refresh-transaction'];
     }
 
+    public function testAnOrderOfAnotherSaleUnitIsOutOfReachBeforeTheRefundRightIsAsked(): void
+    {
+        // 404, not 403: the administrator learns nothing of an order outside their sale units.
+        $north = $this->factory->saleUnit();
+        $south = $this->factory->saleUnit();
+        $admin = $this->administrator([
+            AdminResources::MODULE => [AccessManager::UPDATE],
+            AdminResources::ORDER => [AccessManager::VIEW, AccessManager::UPDATE],
+        ]);
+        $this->factory->adminSaleUnit($admin, $north);
+        $order = $this->factory->order(null, ['paymentModuleCode' => PayzenEmbedded::getModuleCode()]);
+        $order->setSaleUnitId($south->getId())->save($this->getPropelConnection());
+
+        $this->client->request('POST', '/admin/module/payzen-embedded/refund-transaction/'.$order->getId());
+
+        self::assertSame(404, $this->client->getResponse()->getStatusCode());
+    }
+
     #[DataProvider('routes')]
     public function testAnOrderOfAnotherSaleUnitIsOutOfReach(string $route): void
     {

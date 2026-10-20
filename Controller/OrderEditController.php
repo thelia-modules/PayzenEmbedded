@@ -169,12 +169,13 @@ class OrderEditController extends BaseAdminController
             return $response;
         }
 
+        // An order out of the administrator's sale units answers 404 before any right of its own.
+        $this->assertReaches($orderReach, $orderId);
+
         // Giving money back is a right of its own in the core, distinct from editing orders.
         if (null !== $response = $this->checkAuth(AdminResources::ORDER_PAYMENT_REFUND, [], AccessManager::CREATE)) {
             return $response;
         }
-
-        $this->assertReaches($orderReach, $orderId);
 
         // Cancelling an authorization releases what Thelia's journal holds: its capture right.
         if (PayzenEmbedded::givingBackReleasesTheAuthorization($orderReach->orderOf($orderId))
