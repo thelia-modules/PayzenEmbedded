@@ -70,9 +70,10 @@ final readonly class PaymentJournalListener implements EventSubscriberInterface
         $answer = $event->getAnswer();
         $authorization = OrderPaymentTransactionQuery::create()->findLatestSucceededAuthorization((int) $order->getId());
 
-        // An order authorized while the module authorized first keeps writing its journal once the
-        // mode changed: its capture, its release or its lapse are still to come.
-        if (!PayzenEmbedded::authorizesFirst() && null === $authorization) {
+        // Read on the order and the transaction, see PayzenEmbedded::authorizesFirstFor(): an order
+        // authorized first keeps writing its journal once the mode changed, its capture, release or
+        // lapse still to come, and a payment taken at once is left to Thelia whatever the mode became.
+        if (!PayzenEmbedded::authorizesFirstFor($order, TransactionOutcome::fromAnswer($answer))) {
             return;
         }
 

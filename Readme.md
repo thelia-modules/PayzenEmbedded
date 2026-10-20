@@ -73,13 +73,21 @@ alors le contrat de capture différée de Thelia (Thelia 3.3 ou plus) :
   paiements ») ou par l'API d'administration de Thelia. PayZen ne prend qu'une capture par autorisation : capturer
   moins que le montant autorisé libère le reste, que le journal note comme annulé ;
 - la capture est confirmée par la notification de PayZen, qui fait passer la commande en « Payée » ;
-- annuler la commande libère l'autorisation chez PayZen ; une autorisation annulée ou expirée chez PayZen est notée dans
-  le journal ;
+- annuler la commande libère l'autorisation chez PayZen tant qu'aucune capture n'est demandée ; une fois la capture
+  demandée et en attente de remise, la commande ne s'annule pas (la capture partirait quand même) : elle se rembourse une
+  fois la capture prise ; une autorisation annulée ou expirée chez PayZen est notée dans le journal, et une capture
+  encore en attente est alors notée en échec ;
 - un paiement refusé est noté dans le journal avec le code et le message de la banque.
 
-Sur la fiche commande, le formulaire du module ne permet plus alors que de définir la date de remise en banque : le
-montant et la validation passent par la capture de Thelia. L'évènement de mise à jour des transactions, utilisé par
-les modules hôtes (débit à l'expédition), fonctionne comme avant.
+Sur la fiche commande, le formulaire du module ne permet plus alors que de définir la date de remise en banque, et plus
+du tout une fois une capture demandée : le montant et la validation passent par la capture de Thelia. L'évènement de
+mise à jour des transactions, utilisé par les modules hôtes (débit à l'expédition), passe lui aussi par la capture de
+Thelia quand il demande la validation (`manualValidation` à false) : le journal l'écrit, le droit « Capture des
+paiements » est demandé à l'administrateur qui agit, et une seconde capture répond `PAYMENT_STATUS_ERROR`. Sans
+validation, il ne fait que déplacer la date de capture.
+
+Une commande garde le mode dans lequel elle a été payée, lu sur son journal et sur la transaction : une commande
+autorisée d'abord se capture et se libère depuis Thelia même après un changement du mode de validation.
 
 Avec une validation automatique, rien ne change : la commande est payée dès l'autorisation, et Thelia écrit une ligne
 de capture dans son journal.
@@ -275,18 +283,21 @@ capture contract (Thelia 3.3 or later):
   through Thelia's admin API. PayZen takes a single capture per authorization: capturing less than the authorized
   amount releases the rest, which the journal records as released;
 - the capture is confirmed by PayZen's notification, which moves the order to "Paid";
-- cancelling the order releases the authorization at PayZen; an authorization cancelled or expired at PayZen is
-  recorded in the journal;
+- cancelling the order releases the authorization at PayZen as long as no capture was asked; once a capture waits for
+  its remittance the order is not cancelled (the capture would go through all the same): it is refunded once the
+  capture is taken; an authorization cancelled or expired at PayZen is recorded in the journal, and a capture still
+  waiting is then recorded as failed;
 - a refused payment is recorded in the journal with the bank's code and message.
 
-On the order page, the module's form then only sets the date of bank receipt: the amount and the validation go
-through Thelia's capture. The transaction update event, used by host modules (capture after shipping), goes through
-Thelia's capture too when it asks to validate (`manualValidation` false): the journal records it, and PayZen takes a
-single capture per authorization, so a second one answers `PAYMENT_STATUS_ERROR`. Without validation it only moves
-the capture date.
+On the order page, the module's form then only sets the date of bank receipt, and no longer once a capture was asked:
+the amount and the validation go through Thelia's capture. The transaction update event, used by host modules
+(capture after shipping), goes through Thelia's capture too when it asks to validate (`manualValidation` false): the
+journal records it, the administrator acting needs the "Order payment capture" right, and PayZen takes a single
+capture per authorization, so a second one answers `PAYMENT_STATUS_ERROR`. Without validation it only moves the
+capture date.
 
-An order keeps the mode it was paid in: an order authorized first is captured and released from Thelia even after the
-validation mode is changed.
+An order keeps the mode it was paid in, read on its journal and on the transaction: an order authorized first is
+captured and released from Thelia even after the validation mode is changed.
 
 With automatic validation, nothing changes: the order is paid on the authorization, and Thelia writes a capture line
 in its journal.

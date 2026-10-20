@@ -156,6 +156,12 @@ final readonly class TransactionOutcome
         return self::STATUS_PAID === $this->status;
     }
 
+    /** Whether the transaction waits for its validation: created with manual validation. */
+    public function waitsForValidation(): bool
+    {
+        return \in_array($this->detailedStatus, ['AUTHORISED_TO_VALIDATE', 'WAITING_AUTHORISATION_TO_VALIDATE'], true);
+    }
+
     public function isUnpaid(): bool
     {
         return self::STATUS_UNPAID === $this->status;

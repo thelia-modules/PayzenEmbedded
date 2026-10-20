@@ -156,4 +156,5 @@ return array(
     'Web Services end point' => 'Adresse du Web Service',
     'Written on the refund in the PayZen back-office.' => 'Inscrit sur le remboursement dans le Back Office PayZen.',
     'You canceled the payment' => 'Vous avez annulé le paiement',
+    'A capture of this payment was asked from Thelia: cancelling the payment would cancel that capture too. Refund it once PayZen has remitted it.' => 'Une capture de ce paiement a été demandée depuis Thelia : annuler le paiement annulerait aussi cette capture. Remboursez-le une fois remis en banque par PayZen.',
 );

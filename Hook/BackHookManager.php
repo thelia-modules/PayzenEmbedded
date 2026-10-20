@@ -185,7 +185,8 @@ class BackHookManager extends BaseHook
         // right of Thelia, moving only the capture date of an authorization does not; cancelling
         // an authorization needs it too.
         $mayCapture = $this->securityContext->isGranted(['ADMIN'], [AdminResources::ORDER_PAYMENT_CAPTURE], [], [AccessManager::CREATE]);
-        $canUpdate = $canAct && ($authorizesFirst || $mayCapture);
+        // Authorizing first, the form only moves the capture date, which a capture asked already set.
+        $canUpdate = $canAct && ($authorizesFirst ? !PayzenEmbedded::journalHoldsACapture($order) : $mayCapture);
         // As PayzenEmbedded::givingBackReleasesTheAuthorization(), on the ledger read above.
         // Cancelling also needs no capture asked meanwhile, which the cancellation would take with it.
         $cancels = $authorizesFirst && $ledger->isCancellable();

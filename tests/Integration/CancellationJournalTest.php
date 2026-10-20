@@ -160,6 +160,33 @@ final class CancellationJournalTest extends ActionIntegrationTestCase
         $this->assertReleasedOnce($order);
     }
 
+    public function testAPaymentWaitingForItsValidationIsNotPaidOnceTheModeChanged(): void
+    {
+        // Its first notification comes after the switch to taking the payment at once: the
+        // transaction itself says it waits for its validation, and the order waits for its capture.
+        PayzenEmbedded::setConfigValue('validation_mode', 'NO');
+        $order = $this->factory->order(null, ['postage' => 120, 'paymentModuleCode' => PayzenEmbedded::getModuleCode()]);
+        $wrapper = new LyraPaymentManagementWrapper($this->getService(EventDispatcherInterface::class), $this->lockFactory);
+
+        $wrapper->processPaymentResponse([
+            'orderDetails' => ['orderId' => $order->getRef(), 'mode' => PayzenEmbedded::platformMode()],
+            'transactions' => [[
+                'uuid' => 'tx-'.$order->getId(),
+                'status' => 'RUNNING',
+                'detailedStatus' => 'AUTHORISED_TO_VALIDATE',
+                'operationType' => 'DEBIT',
+                'amount' => 12000,
+                'currency' => 'EUR',
+                'creationDate' => (new \DateTimeImmutable('-1 minute'))->format(\DATE_ATOM),
+                'metadata' => [TransactionOutcome::SHOP_MARKER_KEY => PayzenEmbedded::shopMarker()],
+            ]],
+        ]);
+
+        $order->reload();
+        self::assertSame(OrderStatus::CODE_AWAITING_CAPTURE, (string) $order->getOrderStatus()->getCode());
+        self::assertNotContains(OrderStatus::CODE_PAID, $this->statusesMovedTo);
+    }
+
     private function assertReleasedOnce(Order $order): void
     {
         self::assertNotContains(OrderStatus::CODE_NOT_PAID, $this->statusesMovedTo, 'The module cancels the order: it does not go through not paid first.');

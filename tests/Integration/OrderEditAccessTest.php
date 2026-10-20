@@ -248,6 +248,23 @@ final class OrderEditAccessTest extends WebIntegrationTestCase
         self::assertSame(403, $this->client->getResponse()->getStatusCode());
     }
 
+    public function testAuthorizingFirstTheSheetOffersNoDateChangeOnceACaptureWasAsked(): void
+    {
+        $this->administrator([
+            AdminResources::MODULE => [AccessManager::UPDATE],
+            AdminResources::ORDER => [AccessManager::VIEW, AccessManager::UPDATE],
+        ]);
+        $order = $this->authorizedOrderAtPayzen();
+        $recorder = $this->getService(PaymentTransactionRecorder::class);
+        $recorder->recordAuthorization($order, 100, 'uuid-'.$order->getId(), moduleCode: PayzenEmbedded::getModuleCode());
+        $recorder->recordCapture($order, 40, 'uuid-'.$order->getId(), PaymentTransactionState::PENDING, moduleCode: PayzenEmbedded::getModuleCode());
+
+        $crawler = $this->whileAuthorizingFirst(fn () => $this->client->request('GET', '/admin/order/update/'.$order->getId()));
+
+        self::assertCount(1, $crawler->filter('form[action$="/refresh-transaction/'.$order->getId().'"]'), 'The PayZen block is rendered.');
+        self::assertCount(0, $crawler->filter('form[action$="/update-transaction/'.$order->getId().'"]'));
+    }
+
     public function testTheOrderSheetOffersNoCancellationThatWouldCancelACaptureAsked(): void
     {
         $this->administrator([

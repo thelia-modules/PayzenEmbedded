@@ -22,6 +22,11 @@ use PayzenEmbedded\LyraClient\LyraClientWrapper;
 use PayzenEmbedded\PayzenEmbedded;
 use PayzenEmbedded\Service\DeferredCapture;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Thelia\Core\Security\SecurityContext;
+use Thelia\Core\Security\Resource\AdminResources;
+use Thelia\Core\Security\AccessManager;
+use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\HttpFoundation\Request;
 use Thelia\Domain\Payment\Enum\PaymentTransactionState;
 use Thelia\Domain\Payment\Enum\PaymentTransactionType;
 use Thelia\Domain\Payment\Exception\PaymentException;
@@ -218,6 +223,65 @@ final class PaymentJournalTest extends ActionIntegrationTestCase
 
         self::assertSame(LyraClientWrapper::PAYMENT_STATUS_ERROR, $event->getPaymentStatus());
         self::assertSame(1, OrderPaymentTransactionQuery::create()->filterByOrderId((int) $order->getId())->filterByType(PaymentTransactionType::CAPTURE->value)->count());
+    }
+
+    public function testATransactionWaitingForItsValidationIsHeldEvenOnceTheModeChanged(): void
+    {
+        // The first notification of a payment made authorizing first comes after the switch.
+        PayzenEmbedded::setConfigValue('validation_mode', 'NO');
+        $order = $this->order();
+
+        $this->report($order, ['uuid' => 'tx1', 'status' => 'RUNNING', 'detailedStatus' => 'AUTHORISED_TO_VALIDATE', 'amount' => 12000]);
+
+        self::assertSame('120.000000', $this->totals->forOrder((int) $order->getId())->authorized);
+        self::assertTrue(PayzenEmbedded::authorizesFirstFor($order));
+    }
+
+    public function testAnOrderWhoseFirstAuthorizationWasRefusedStaysAuthorizedFirst(): void
+    {
+        $order = $this->order();
+        $this->report($order, ['uuid' => 'tx1', 'status' => 'UNPAID', 'detailedStatus' => 'REFUSED', 'amount' => 12000, 'errorCode' => 'PSP_100']);
+        PayzenEmbedded::setConfigValue('validation_mode', 'NO');
+
+        self::assertTrue(PayzenEmbedded::authorizesFirstFor($order), 'The second attempt is written to the journal too.');
+    }
+
+    public function testAPaymentTakenAtOnceStaysSoOnceTheModeChanged(): void
+    {
+        PayzenEmbedded::setConfigValue('validation_mode', 'NO');
+        $order = $this->order();
+        $this->recorder->recordCapture($order, 120, 'tx1', moduleCode: PayzenEmbedded::getModuleCode());
+        PayzenEmbedded::setConfigValue('validation_mode', 'YES');
+
+        self::assertFalse(PayzenEmbedded::authorizesFirstFor($order));
+    }
+
+    public function testTheCaptureAskedByAHostModuleNeedsTheCaptureRightOfTheAdministratorActing(): void
+    {
+        $order = $this->authorizedOrder();
+        // Nothing may reach the platform: a call would fail at once on this address.
+        $endpoint = PayzenEmbedded::getConfigValue('webservice_endpoint', '');
+        PayzenEmbedded::setConfigValue('webservice_endpoint', 'http://127.0.0.1:9');
+        $requestStack = $this->getService(RequestStack::class);
+        $shopRequest = $requestStack->pop();
+        $adminRequest = Request::create('/admin/order/update/'.$order->getId());
+        $adminRequest->setSession($shopRequest->getSession());
+        $requestStack->push($adminRequest);
+        $securityContext = $this->getService(SecurityContext::class);
+        $securityContext->setAdminUser($this->factory->restrictedAdmin([AdminResources::ORDER => [AccessManager::VIEW, AccessManager::UPDATE]]));
+        $event = (new TransactionUpdateEvent((int) $order->getId()))->setAmount('120')->setManualValidation(false);
+
+        try {
+            $this->getService(EventDispatcherInterface::class)->dispatch($event, PayzenEmbedded::TRANSACTION_UPDATE_EVENT);
+        } finally {
+            $securityContext->clearAdminUser();
+            $requestStack->pop();
+            $requestStack->push($shopRequest);
+            PayzenEmbedded::setConfigValue('webservice_endpoint', $endpoint);
+        }
+
+        self::assertSame(LyraClientWrapper::PAYMENT_STATUS_ERROR, $event->getPaymentStatus());
+        self::assertSame(0, OrderPaymentTransactionQuery::create()->filterByOrderId((int) $order->getId())->filterByType(PaymentTransactionType::CAPTURE->value)->count());
     }
 
     public function testTheModuleReachesItsCaptureServiceFromTheContainer(): void

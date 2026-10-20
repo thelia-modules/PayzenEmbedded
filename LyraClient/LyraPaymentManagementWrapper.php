@@ -470,8 +470,9 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
     {
         $status = self::PAYMENT_STATUS_NOT_PAID;
         // Authorizing first, an authorization not captured yet leaves the order to Thelia's payment
-        // journal, which holds it for its capture; see OrderMove.
-        $move = OrderMove::for($incoming, PayzenEmbedded::authorizesFirst());
+        // journal, which holds it for its capture; see OrderMove. Read on the order and the
+        // transaction, not on the configuration, which may have changed since the payment.
+        $move = OrderMove::for($incoming, PayzenEmbedded::authorizesFirstFor($order, $incoming));
 
         // Store the transaction ID
         $event = new OrderEvent($order);

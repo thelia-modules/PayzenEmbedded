@@ -13,6 +13,7 @@
 namespace PayzenEmbedded;
 
 use PayzenEmbedded\LyraClient\TransactionHistoryReader;
+use PayzenEmbedded\LyraClient\TransactionOutcome;
 use PayzenEmbedded\Service\CardFormProvider;
 use PayzenEmbedded\Service\DeferredCapture;
 use Propel\Runtime\Connection\ConnectionInterface;
@@ -135,12 +136,20 @@ class PayzenEmbedded extends AbstractPaymentModule implements PaymentModuleCaptu
 
     /**
      * Whether the module authorized the order first, its capture being Thelia's: read on the
-     * order's journal, which keeps what was done whatever the configuration became since. An
-     * order without a journal reads the configuration of its sale unit.
+     * order's journal, which keeps what was done whatever the configuration became since, then
+     * on the transaction the platform reports, when it waits for its validation. An order with
+     * neither reads the configuration of its sale unit.
      */
-    public static function authorizesFirstFor(Order $order): bool
+    public static function authorizesFirstFor(Order $order, ?TransactionOutcome $incoming = null): bool
     {
-        if (null !== OrderPaymentTransactionQuery::create()->findLatestSucceededAuthorization((int) $order->getId())) {
+        // An authorization line, refused ones included: a second attempt follows a first refused one.
+        if (OrderPaymentTransactionQuery::create()->filterByOrderId((int) $order->getId())->filterByType(PaymentTransactionType::AUTHORIZATION->value)->exists()) {
+            return true;
+        }
+
+        // A transaction waiting for its validation was created authorizing first, whatever the
+        // configuration became before its first notification.
+        if (null !== $incoming && $incoming->waitsForValidation()) {
             return true;
         }
 
