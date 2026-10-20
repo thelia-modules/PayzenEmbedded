@@ -16,9 +16,12 @@ declare(strict_types=1);
 namespace PayzenEmbedded\Tests\Integration;
 
 use PayzenEmbedded\Event\TransactionReportedEvent;
+use PayzenEmbedded\Event\TransactionUpdateEvent;
 use PayzenEmbedded\EventListener\PaymentJournalListener;
+use PayzenEmbedded\LyraClient\LyraClientWrapper;
 use PayzenEmbedded\PayzenEmbedded;
 use PayzenEmbedded\Service\DeferredCapture;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Thelia\Domain\Payment\Enum\PaymentTransactionState;
 use Thelia\Domain\Payment\Enum\PaymentTransactionType;
 use Thelia\Domain\Payment\Exception\PaymentException;
@@ -160,10 +163,11 @@ final class PaymentJournalTest extends ActionIntegrationTestCase
             self::assertStringContainsString('single capture', $refused->getMessage());
         }
 
+        // Thelia reads nothing left to capture and refuses before writing a line; the module would
+        // refuse it too, see PayzenEmbedded::capture().
         $captures = OrderPaymentTransactionQuery::create()->filterByOrderId((int) $order->getId())->filterByType(PaymentTransactionType::CAPTURE->value)->orderById()->find();
-        self::assertCount(2, $captures);
+        self::assertCount(1, $captures);
         self::assertTrue($captures[0]->isPending(), 'The first capture still waits for the platform.');
-        self::assertTrue($captures[1]->isFailed());
     }
 
     public function testReleasingOnceACaptureWasAskedCancelsNothingAtThePlatform(): void
@@ -178,6 +182,42 @@ final class PaymentJournalTest extends ActionIntegrationTestCase
         self::assertTrue($void->isSucceeded());
         self::assertSame('80.000000', $void->getAmount());
         self::assertSame('0.000000', $this->totals->forOrder((int) $order->getId())->remainingToCapture);
+    }
+
+    public function testTheliaReadsNothingLeftToCaptureOnceACaptureWasAsked(): void
+    {
+        // PayZen takes a single capture: the order page and the admin API offer no other.
+        $order = $this->authorizedOrder();
+        $this->recorder->recordCapture($order, 40, 'tx1', PaymentTransactionState::PENDING, moduleCode: PayzenEmbedded::getModuleCode());
+
+        self::assertSame('0.000000', $this->getService(PaymentCaptureService::class)->leftToCapture($order));
+    }
+
+    public function testACaptureWaitingForItsRemittanceFailsWhenThePlatformCancelsTheTransaction(): void
+    {
+        $order = $this->authorizedOrder();
+        $capture = $this->recorder->recordCapture($order, 40, 'tx1', PaymentTransactionState::PENDING, moduleCode: PayzenEmbedded::getModuleCode());
+
+        $this->report($order, ['uuid' => 'tx1', 'status' => 'UNPAID', 'detailedStatus' => 'CANCELLED', 'amount' => 12000]);
+
+        $capture->reload();
+        self::assertTrue($capture->isFailed(), 'No capture waits for ever.');
+        self::assertSame(PaymentJournalListener::ERROR_CODE_ENDED_AT_PLATFORM, $capture->getErrorCode());
+        self::assertSame('120.000000', $this->totals->forOrder((int) $order->getId())->voided);
+    }
+
+    public function testAHostModuleValidatingAnAuthorizationCapturesThroughThelia(): void
+    {
+        // The capture after shipping goes through Thelia's capture and its rules: here the single
+        // capture already asked, so nothing reaches the platform.
+        $order = $this->authorizedOrder();
+        $this->recorder->recordCapture($order, 40, 'tx1', PaymentTransactionState::PENDING, moduleCode: PayzenEmbedded::getModuleCode());
+        $event = (new TransactionUpdateEvent((int) $order->getId()))->setAmount('20')->setManualValidation(false);
+
+        $this->getService(EventDispatcherInterface::class)->dispatch($event, PayzenEmbedded::TRANSACTION_UPDATE_EVENT);
+
+        self::assertSame(LyraClientWrapper::PAYMENT_STATUS_ERROR, $event->getPaymentStatus());
+        self::assertSame(1, OrderPaymentTransactionQuery::create()->filterByOrderId((int) $order->getId())->filterByType(PaymentTransactionType::CAPTURE->value)->count());
     }
 
     public function testTheModuleReachesItsCaptureServiceFromTheContainer(): void

@@ -40,9 +40,10 @@ use Thelia\Domain\Payment\Enum\PaymentTransactionState;
 use Propel\Runtime\ActiveQuery\Criteria;
 use Thelia\Module\AbstractPaymentModule;
 use Thelia\Module\BaseModule;
-use Thelia\Module\PaymentModuleWithCaptureInterface;
+use Thelia\Module\PaymentModuleCancellingOnReleaseInterface;
+use Thelia\Module\PaymentModuleCapturingOnceInterface;
 
-class PayzenEmbedded extends AbstractPaymentModule implements PaymentModuleWithCaptureInterface
+class PayzenEmbedded extends AbstractPaymentModule implements PaymentModuleCapturingOnceInterface, PaymentModuleCancellingOnReleaseInterface
 {
     /** @var string */
     const DOMAIN_NAME = 'payzenembedded';
@@ -129,8 +130,35 @@ class PayzenEmbedded extends AbstractPaymentModule implements PaymentModuleWithC
      */
     public static function givingBackReleasesTheAuthorization(Order $order): bool
     {
-        return self::runForOrder($order, static fn (): bool => self::authorizesFirst())
-            && (new TransactionHistoryReader())->ledgerOf($order)->isCancellable();
+        return self::authorizesFirstFor($order) && (new TransactionHistoryReader())->ledgerOf($order)->isCancellable();
+    }
+
+    /**
+     * Whether the module authorized the order first, its capture being Thelia's: read on the
+     * order's journal, which keeps what was done whatever the configuration became since. An
+     * order without a journal reads the configuration of its sale unit.
+     */
+    public static function authorizesFirstFor(Order $order): bool
+    {
+        if (null !== OrderPaymentTransactionQuery::create()->findLatestSucceededAuthorization((int) $order->getId())) {
+            return true;
+        }
+
+        if (OrderPaymentTransactionQuery::create()->filterByOrderId((int) $order->getId())->exists()) {
+            return false;
+        }
+
+        return self::runForOrder($order, static fn (): bool => self::authorizesFirst());
+    }
+
+    /** Whether Thelia's payment journal holds a capture of the order, waiting for its answer or taken. */
+    public static function journalHoldsACapture(Order $order): bool
+    {
+        return OrderPaymentTransactionQuery::create()
+            ->filterByOrderId((int) $order->getId())
+            ->filterByType(PaymentTransactionType::CAPTURE->value)
+            ->filterByState([PaymentTransactionState::PENDING->value, PaymentTransactionState::SUCCEEDED->value], Criteria::IN)
+            ->exists();
     }
 
     /** Whether Thelia's payment journal holds the capture of the order, taken. */
@@ -141,6 +169,18 @@ class PayzenEmbedded extends AbstractPaymentModule implements PaymentModuleWithC
             ->filterByType(PaymentTransactionType::CAPTURE->value)
             ->filterByState(PaymentTransactionState::SUCCEEDED->value)
             ->exists();
+    }
+
+    /** PayZen takes a single capture per authorization, and lets the rest go with it. */
+    public function capturesOnce(): bool
+    {
+        return true;
+    }
+
+    /** A transaction cancelled or lapsed at PayZen cancels its order, from the notification. */
+    public function cancelsOrderOnRelease(): bool
+    {
+        return true;
     }
 
     public function supportsDeferredCapture(): bool

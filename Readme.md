@@ -280,8 +280,13 @@ capture contract (Thelia 3.3 or later):
 - a refused payment is recorded in the journal with the bank's code and message.
 
 On the order page, the module's form then only sets the date of bank receipt: the amount and the validation go
-through Thelia's capture. The transaction update event, used by host modules (capture after shipping), works as
-before.
+through Thelia's capture. The transaction update event, used by host modules (capture after shipping), goes through
+Thelia's capture too when it asks to validate (`manualValidation` false): the journal records it, and PayZen takes a
+single capture per authorization, so a second one answers `PAYMENT_STATUS_ERROR`. Without validation it only moves
+the capture date.
+
+An order keeps the mode it was paid in: an order authorized first is captured and released from Thelia even after the
+validation mode is changed.
 
 With automatic validation, nothing changes: the order is paid on the authorization, and Thelia writes a capture line
 in its journal.

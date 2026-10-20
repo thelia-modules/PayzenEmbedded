@@ -22,6 +22,7 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Thelia\Core\Security\AccessManager;
 use Thelia\Core\Security\Resource\AdminResources;
 use Thelia\Core\Template\Parser\ParserResolver;
+use Thelia\Domain\Payment\Enum\PaymentTransactionState;
 use Thelia\Domain\Payment\Service\PaymentTransactionRecorder;
 use Thelia\Model\Admin;
 use Thelia\Model\Order;
@@ -223,6 +224,46 @@ final class OrderEditAccessTest extends WebIntegrationTestCase
 
         self::assertSame(200, $this->client->getResponse()->getStatusCode());
         self::assertCount(1, $crawler->filter('form[action$="/update-transaction/'.$order->getId().'"] input[name$="[amount]"][type="'.$amountInput.'"]'));
+    }
+
+    public function testAnOrderAuthorizedFirstStaysSoOnceTheModeChanged(): void
+    {
+        // The journal holds the authorization: cancelling it is a release, whatever the
+        // configuration became since.
+        $this->administrator([
+            AdminResources::MODULE => [AccessManager::UPDATE],
+            AdminResources::ORDER => [AccessManager::VIEW, AccessManager::UPDATE],
+        ]);
+        $order = $this->authorizedOrderAtPayzen();
+        $this->getService(PaymentTransactionRecorder::class)->recordAuthorization($order, 100, 'uuid-'.$order->getId(), moduleCode: PayzenEmbedded::getModuleCode());
+        $previous = PayzenEmbedded::getConfigValue('validation_mode', '');
+        PayzenEmbedded::setConfigValue('validation_mode', 'NO');
+
+        try {
+            $this->client->request('POST', '/admin/module/payzen-embedded/refund-transaction/'.$order->getId());
+        } finally {
+            PayzenEmbedded::setConfigValue('validation_mode', $previous);
+        }
+
+        self::assertSame(403, $this->client->getResponse()->getStatusCode());
+    }
+
+    public function testTheOrderSheetOffersNoCancellationThatWouldCancelACaptureAsked(): void
+    {
+        $this->administrator([
+            AdminResources::MODULE => [AccessManager::UPDATE],
+            AdminResources::ORDER => [AccessManager::VIEW, AccessManager::UPDATE],
+            AdminResources::ORDER_PAYMENT_CAPTURE => [AccessManager::CREATE],
+        ]);
+        $order = $this->authorizedOrderAtPayzen();
+        $recorder = $this->getService(PaymentTransactionRecorder::class);
+        $recorder->recordAuthorization($order, 100, 'uuid-'.$order->getId(), moduleCode: PayzenEmbedded::getModuleCode());
+        $recorder->recordCapture($order, 40, 'uuid-'.$order->getId(), PaymentTransactionState::PENDING, moduleCode: PayzenEmbedded::getModuleCode());
+
+        $crawler = $this->whileAuthorizingFirst(fn () => $this->client->request('GET', '/admin/order/update/'.$order->getId()));
+
+        self::assertCount(1, $crawler->filter('form[action$="/refresh-transaction/'.$order->getId().'"]'), 'The PayZen block is rendered.');
+        self::assertCount(0, $crawler->filter('form[action$="/refund-transaction/'.$order->getId().'"]'));
     }
 
     private function authorizedOrderAtPayzen(): Order

@@ -145,8 +145,15 @@ class LyraTransactionGetWrapper extends LyraPaymentManagementWrapper
             $orderTransaction = $response['answer']['uuid'];
 
             if (null !== $order = $this->getOrderByTransaction($orderTransaction)) {
-                $paymentStatus = $this->processOrderStatus($order, $response['answer']);
-                $this->reportTransaction($order, $response['answer']);
+                // As for a notification: a cancelled or lapsed transaction reaches Thelia's journal before
+                // the order is cancelled, which would otherwise ask the platform to release it again.
+                if (TransactionOutcome::fromAnswer($response['answer'])->isUnpaid()) {
+                    $this->reportTransaction($order, $response['answer']);
+                    $paymentStatus = $this->processOrderStatus($order, $response['answer']);
+                } else {
+                    $paymentStatus = $this->processOrderStatus($order, $response['answer']);
+                    $this->reportTransaction($order, $response['answer']);
+                }
             }
         } else {
             throw new TheliaProcessException(

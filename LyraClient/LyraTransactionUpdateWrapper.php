@@ -169,9 +169,19 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
                 // the shop's own call is then recorded as the platform's word, as its listing is,
                 // where the arbiter left the transaction alone (an amount lowered on a payment
                 // waiting for its capture).
-                $paymentStatus = $this->processOrderStatus($order, $response['answer']);
-                $this->updateTransactionHistory($response['answer'], $order);
-                $this->reportTransaction($order, $response['answer']);
+                // A cancelled or lapsed transaction reaches Thelia's journal before the order is cancelled,
+                // as for a notification.
+                // The history after the order, as below: written first, it would show the transaction
+                // applied, and the order would not be moved.
+                if (TransactionOutcome::fromAnswer($response['answer'])->isUnpaid()) {
+                    $this->reportTransaction($order, $response['answer']);
+                    $paymentStatus = $this->processOrderStatus($order, $response['answer']);
+                    $this->updateTransactionHistory($response['answer'], $order);
+                } else {
+                    $paymentStatus = $this->processOrderStatus($order, $response['answer']);
+                    $this->updateTransactionHistory($response['answer'], $order);
+                    $this->reportTransaction($order, $response['answer']);
+                }
 
                 $this->log->info(Translator::getInstance()->trans("PayZen response for order %ref processing teminated.", ['%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
             }

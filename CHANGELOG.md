@@ -13,6 +13,11 @@
 - A cancelled or lapsed authorization, notified by the platform or cancelled from the order page, is written to the journal before the order is cancelled: the cancellation no longer asks the platform to release it a second time, which failed and wrote a refused release.
 - An order authorized while the module authorized first keeps writing its journal (capture, release, lapse) once the validation mode is changed.
 - Taking the payment at once, the update form no longer lowers the amount once Thelia's payment journal holds the capture of the order: the journal would keep the total. The difference is given back with Thelia's refund, which writes it.
+- The module implements Thelia's `PaymentModuleCapturingOnceInterface`: once a capture is asked, Thelia's capture dialog, the admin API and the cancellation rights read nothing left to capture. It implements `PaymentModuleCancellingOnReleaseInterface` too: a transaction cancelled or lapsed at PayZen cancels the order once, no longer through not paid first.
+- An order keeps the mode it was paid in, read on its journal: authorized first, it is captured and released from Thelia, and its cancellation from the module's form needs the capture right, whatever the validation mode became since.
+- The module's form no longer cancels a payment whose capture was asked from Thelia (it would cancel the capture too): the capture is refunded once remitted. A capture still waiting for its remittance when PayZen cancels the transaction is written as failed, so the release covers the whole authorization.
+- A cancelled or lapsed transaction read on a history refresh or answered to an update reaches the journal before the order is cancelled, as a notification does.
+- Authorizing first, the transaction update event asking to validate captures through Thelia (journal, single capture); without validation it only moves the capture date.
 - A capture PayZen answers with a status other than `SUCCESS` or `ERROR` stays pending until the notification: only `ERROR` is a refusal.
 - The cancel link of the payment page leaves an order PayZen paid or authorized as it is and sends the customer to the confirmation page; a visitor who is not signed in is sent to the login page, and a customer following the link of another customer's order gets a 403, where both got a server error.
 

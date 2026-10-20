@@ -179,15 +179,17 @@ class BackHookManager extends BaseHook
         $ledger = (new TransactionHistoryReader())->ledgerOf($order);
         $currencyCode = strtoupper((string) $order->getCurrency()?->getCode());
         $canAct = $this->securityContext->isGranted(['ADMIN'], [AdminResources::MODULE, AdminResources::ORDER], ['PayzenEmbedded'], [AccessManager::UPDATE]);
-        // The mode of the order's sale unit, as the update route reads it.
-        $authorizesFirst = PayzenEmbedded::runForOrder($order, static fn (): bool => PayzenEmbedded::authorizesFirst());
+        // The mode the order was paid in, as the update route reads it.
+        $authorizesFirst = PayzenEmbedded::authorizesFirstFor($order);
         // The screen offers what its routes allow: moving what the order takes needs the capture
         // right of Thelia, moving only the capture date of an authorization does not; cancelling
         // an authorization needs it too.
         $mayCapture = $this->securityContext->isGranted(['ADMIN'], [AdminResources::ORDER_PAYMENT_CAPTURE], [], [AccessManager::CREATE]);
         $canUpdate = $canAct && ($authorizesFirst || $mayCapture);
         // As PayzenEmbedded::givingBackReleasesTheAuthorization(), on the ledger read above.
-        $canRefund = $canAct && (!($authorizesFirst && $ledger->isCancellable()) || $mayCapture);
+        // Cancelling also needs no capture asked meanwhile, which the cancellation would take with it.
+        $cancels = $authorizesFirst && $ledger->isCancellable();
+        $canRefund = $canAct && (!$cancels || ($mayCapture && !PayzenEmbedded::journalHoldsACapture($order)));
 
         $getForm = $this->formFactory->createForm(TransactionGetForm::getName());
         $updateForm = $this->formFactory->createForm(TransactionUpdateForm::getName());

@@ -17,7 +17,9 @@ namespace PayzenEmbedded\Tests\Integration;
 
 use Lyra\Exceptions\LyraException;
 use PayzenEmbedded\LyraClient\LyraPaymentManagementWrapper;
+use PayzenEmbedded\LyraClient\LyraTransactionGetWrapper;
 use PayzenEmbedded\LyraClient\LyraTransactionRefundWrapper;
+use PayzenEmbedded\LyraClient\LyraTransactionUpdateWrapper;
 use PayzenEmbedded\LyraClient\RefundOutcome;
 use PayzenEmbedded\LyraClient\TransactionOutcome;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistory;
@@ -25,6 +27,8 @@ use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistoryQuery;
 use PayzenEmbedded\PayzenEmbedded;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Lock\LockFactory;
+use Thelia\Core\Event\Order\OrderEvent;
+use Thelia\Core\Event\TheliaEvents;
 use Thelia\Domain\Payment\Enum\PaymentTransactionType;
 use Thelia\Domain\Payment\Exception\PaymentJournalBusyException;
 use Thelia\Domain\Payment\Service\PaymentTransactionRecorder;
@@ -33,6 +37,7 @@ use Thelia\Model\ModuleQuery;
 use Thelia\Model\Order;
 use Thelia\Model\OrderPaymentTransactionQuery;
 use Thelia\Model\OrderStatus;
+use Thelia\Model\OrderStatusQuery;
 use Thelia\Module\BaseModule;
 use Thelia\Test\ActionIntegrationTestCase;
 
@@ -47,6 +52,11 @@ final class CancellationJournalTest extends ActionIntegrationTestCase
 {
     private LockFactory $lockFactory;
 
+    /** @var list<string> the statuses the order was moved to during the test */
+    private array $statusesMovedTo = [];
+
+    private \Closure $statusListener;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -59,6 +69,20 @@ final class CancellationJournalTest extends ActionIntegrationTestCase
         $this->registerTheModule();
         PayzenEmbedded::setConfigValue('validation_mode', 'YES');
         $this->lockFactory = $this->getService(LockFactory::class);
+        $this->statusesMovedTo = [];
+        $this->statusListener = function (OrderEvent $event): void {
+            $this->statusesMovedTo[] = (string) OrderStatusQuery::create()->findPk($event->getStatus())?->getCode();
+        };
+        $this->getService(EventDispatcherInterface::class)->addListener(TheliaEvents::ORDER_UPDATE_STATUS, $this->statusListener, 255);
+    }
+
+    protected function tearDown(): void
+    {
+        if (isset($this->statusListener)) {
+            $this->getService(EventDispatcherInterface::class)->removeListener(TheliaEvents::ORDER_UPDATE_STATUS, $this->statusListener);
+        }
+
+        parent::tearDown();
     }
 
     public function testACancellationNotifiedByThePlatformIsWrittenBeforeTheOrderIsCancelled(): void
@@ -116,8 +140,30 @@ final class CancellationJournalTest extends ActionIntegrationTestCase
         self::assertSame(RefundOutcome::PartiallyRefunded, $outcome);
     }
 
+    public function testACancellationReadOnARefreshIsWrittenBeforeTheOrderIsCancelled(): void
+    {
+        $order = $this->authorizedOrder();
+        $wrapper = new LyraTransactionGetWrapper($this->getService(EventDispatcherInterface::class), $this->lockFactory);
+
+        $wrapper->withOrderLock($order, fn () => $wrapper->processTransactionGetResponse(['status' => 'SUCCESS', 'answer' => $this->cancelled($order)]));
+
+        $this->assertReleasedOnce($order);
+    }
+
+    public function testACancellationAnsweredToAnUpdateIsWrittenBeforeTheOrderIsCancelled(): void
+    {
+        $order = $this->authorizedOrder();
+        $wrapper = new LyraTransactionUpdateWrapper($this->getService(EventDispatcherInterface::class), $this->lockFactory);
+
+        $wrapper->withOrderLock($order, fn () => $wrapper->processTransactionUpdateResponse(['status' => 'SUCCESS', 'answer' => $this->cancelled($order)]));
+
+        $this->assertReleasedOnce($order);
+    }
+
     private function assertReleasedOnce(Order $order): void
     {
+        self::assertNotContains(OrderStatus::CODE_NOT_PAID, $this->statusesMovedTo, 'The module cancels the order: it does not go through not paid first.');
+
         $voids = OrderPaymentTransactionQuery::create()->filterByOrderId((int) $order->getId())->filterByType(PaymentTransactionType::VOID->value)->find();
         self::assertCount(1, $voids, 'The release is written once, from the platform\'s word.');
         self::assertTrue($voids[0]->isSucceeded());

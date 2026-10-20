@@ -68,7 +68,7 @@ class OrderEditController extends BaseAdminController
         // The mode of the sale unit the order was placed on decides what the form may do: moving
         // what the order takes needs the capture right of the core, moving only the capture date
         // of an authorization does not.
-        $authorizesFirst = PayzenEmbedded::runForOrder($orderReach->orderOf($orderId), static fn (): bool => PayzenEmbedded::authorizesFirst());
+        $authorizesFirst = PayzenEmbedded::authorizesFirstFor($orderReach->orderOf($orderId));
 
         if (!$authorizesFirst && null !== $response = $this->checkAuth(AdminResources::ORDER_PAYMENT_CAPTURE, [], AccessManager::CREATE)) {
             return $response;
@@ -194,6 +194,12 @@ class OrderEditController extends BaseAdminController
             // The route names the order; the form field only has to agree with it.
             if ((int) $data['order_id'] !== $orderId) {
                 throw new TheliaProcessException($translator->trans('The order of the form does not match the order of the page.', [], PayzenEmbedded::DOMAIN_NAME));
+            }
+
+            // Cancelling the transaction would cancel the capture Thelia asked for too, and leave
+            // its journal line waiting for ever: the capture is remitted first, then refunded.
+            if (PayzenEmbedded::givingBackReleasesTheAuthorization($order) && PayzenEmbedded::journalHoldsACapture($order)) {
+                throw new TheliaProcessException($translator->trans('A capture of this payment was asked from Thelia: cancelling the payment would cancel that capture too. Refund it once PayZen has remitted it.', [], PayzenEmbedded::DOMAIN_NAME));
             }
 
             $currencyCode = strtoupper($order->getCurrency()->getCode());
