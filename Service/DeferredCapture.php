@@ -67,7 +67,13 @@ final readonly class DeferredCapture
                 throw new PaymentRefusedException($unreadable->getMessage(), 0, $unreadable);
             }
 
-            if ('SUCCESS' !== ($response['status'] ?? null) || !isset($response['answer']['uuid'])) {
+            if ('SUCCESS' === ($response['status'] ?? null) && !isset($response['answer']['uuid'])) {
+                // The platform may have validated: Thelia keeps the line pending until the
+                // notification says, it does not offer a second capture.
+                throw new \RuntimeException(\sprintf('PayZen answered the capture of order %s with a success that names no transaction.', (string) $order->getRef()));
+            }
+
+            if ('SUCCESS' !== ($response['status'] ?? null)) {
                 throw PaymentRefusedException::withProviderCode(
                     \sprintf('PayZen refused the capture: %s', (string) ($response['answer']['errorMessage'] ?? 'no message')),
                     isset($response['answer']['errorCode']) ? (string) $response['answer']['errorCode'] : null,

@@ -94,6 +94,22 @@ final class DeferredCaptureTest extends TestCase
         }
     }
 
+    public function testASuccessWithoutTheTransactionIsNoRefusal(): void
+    {
+        // The platform said SUCCESS: it may have validated. Without the transaction it names,
+        // Thelia keeps the line pending until the notification, it never reads it as refused.
+        $update = $this->updateWrapper(['status' => 'SUCCESS', 'answer' => []]);
+
+        try {
+            (new DeferredCapture($update, $this->createMock(LyraTransactionRefundWrapper::class), $this->createMock(LoggerInterface::class)))->capture($this->order(), 40.0);
+            self::fail('An answer without its transaction is not a result.');
+        } catch (PaymentRefusedException) {
+            self::fail('A success is not a refusal.');
+        } catch (\RuntimeException $unknown) {
+            self::assertStringContainsString('PayZen', $unknown->getMessage());
+        }
+    }
+
     public function testACaptureThePlatformAcceptedStaysAcceptedWhenRecordingItFails(): void
     {
         // The platform validated the authorization: the money will be taken, whatever failed after.
