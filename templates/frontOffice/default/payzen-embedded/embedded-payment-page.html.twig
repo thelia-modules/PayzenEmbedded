@@ -5,8 +5,8 @@
     {{ 'Payment'|trans({}, 'payzenembedded.fo.default') }}
 {% endblock %}
 
-{# The theme draws the checkout steps, this page being the payment one. #}
-{% set current = 3 %}
+{# The theme draws the checkout steps, this page being the payment one: named by its code, which does not move with the shop's step order. #}
+{% set current = 'payment' %}
 
 {% block checkoutSummary %}{% endblock %}
 
