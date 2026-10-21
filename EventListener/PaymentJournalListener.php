@@ -16,6 +16,7 @@ declare(strict_types=1);
 namespace PayzenEmbedded\EventListener;
 
 use PayzenEmbedded\Event\TransactionReportedEvent;
+use Propel\Runtime\ActiveQuery\Criteria;
 use PayzenEmbedded\LyraClient\JournalMovement;
 use PayzenEmbedded\LyraClient\JournalStep;
 use PayzenEmbedded\LyraClient\PaymentJournalPlanner;
@@ -119,7 +120,11 @@ final readonly class PaymentJournalListener implements EventSubscriberInterface
             ->filterByOrderId((int) $order->getId())
             ->filterByType(PaymentTransactionType::CAPTURE->value)
             ->filterByState(PaymentTransactionState::PENDING->value)
+            // Under the transaction's reference, or without one: a call that got no answer
+            // leaves its line with no reference, and the platform ended that transaction too.
             ->filterByPspReference($uuid)
+            ->_or()
+            ->filterByPspReference(null, Criteria::ISNULL)
             ->find();
 
         foreach ($pendingCaptures as $capture) {

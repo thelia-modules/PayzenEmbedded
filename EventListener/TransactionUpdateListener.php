@@ -115,7 +115,7 @@ final readonly class TransactionUpdateListener implements EventSubscriberInterfa
         $administrator = $this->actorResolver->actingAdministrator(PayzenEmbedded::getModuleCode());
 
         if (null !== $administrator && !$this->securityContext->isUserGranted(['ADMIN'], [AdminResources::ORDER_PAYMENT_CAPTURE], [], [AccessManager::CREATE], $administrator)) {
-            Tlog::getInstance()->error(sprintf('Order %s: the capture asked through the transaction update event was refused, %s has not the right to capture payments.', $order->getRef(), $administrator->getUsername()));
+            Tlog::getInstance()->error(sprintf('Order %s: the capture asked through the transaction update event was refused, administrator #%d has not the right to capture payments.', $order->getRef(), $administrator->getId()));
 
             return LyraClientWrapper::PAYMENT_STATUS_ERROR;
         }

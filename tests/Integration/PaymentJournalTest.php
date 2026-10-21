@@ -19,6 +19,7 @@ use PayzenEmbedded\Event\TransactionReportedEvent;
 use PayzenEmbedded\Event\TransactionUpdateEvent;
 use PayzenEmbedded\EventListener\PaymentJournalListener;
 use PayzenEmbedded\LyraClient\LyraClientWrapper;
+use PayzenEmbedded\LyraClient\TransactionOutcome;
 use PayzenEmbedded\PayzenEmbedded;
 use PayzenEmbedded\Service\DeferredCapture;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
@@ -209,6 +210,29 @@ final class PaymentJournalTest extends ActionIntegrationTestCase
         self::assertTrue($capture->isFailed(), 'No capture waits for ever.');
         self::assertSame(PaymentJournalListener::ERROR_CODE_ENDED_AT_PLATFORM, $capture->getErrorCode());
         self::assertSame('120.000000', $this->totals->forOrder((int) $order->getId())->voided);
+    }
+
+    public function testACaptureThatGotNoAnswerFailsTooWhenThePlatformCancelsTheTransaction(): void
+    {
+        // The call got no answer: the line waits without the reference PayZen would have given it.
+        $order = $this->authorizedOrder();
+        $capture = $this->recorder->recordCapture($order, 40, null, PaymentTransactionState::PENDING, moduleCode: PayzenEmbedded::getModuleCode());
+
+        $this->report($order, ['uuid' => 'tx1', 'status' => 'UNPAID', 'detailedStatus' => 'CANCELLED', 'amount' => 12000]);
+
+        $capture->reload();
+        self::assertTrue($capture->isFailed());
+        self::assertSame('120.000000', $this->totals->forOrder((int) $order->getId())->voided);
+    }
+
+    public function testADebitAlreadyAuthorizedWasTakenAtOnceWhateverTheModeBecame(): void
+    {
+        // Paid at once, its first notification comes after the switch to authorizing first.
+        $order = $this->order();
+        $incoming = TransactionOutcome::fromAnswer(['uuid' => 'tx1', 'status' => 'PAID', 'detailedStatus' => 'AUTHORISED', 'amount' => 12000]);
+
+        self::assertFalse(PayzenEmbedded::authorizesFirstFor($order, $incoming));
+        self::assertTrue(PayzenEmbedded::authorizesFirstFor($order), 'Without the transaction, the configuration decides.');
     }
 
     public function testAHostModuleValidatingAnAuthorizationCapturesThroughThelia(): void

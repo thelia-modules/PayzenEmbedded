@@ -157,6 +157,12 @@ class PayzenEmbedded extends AbstractPaymentModule implements PaymentModuleCaptu
             return false;
         }
 
+        // A debit already authorized without waiting for its validation, or captured, was taken
+        // at once, whatever the configuration became before its first notification.
+        if (null !== $incoming && !$incoming->isCredit() && ($incoming->isAuthorized() || $incoming->isCaptured())) {
+            return false;
+        }
+
         return self::runForOrder($order, static fn (): bool => self::authorizesFirst());
     }
 

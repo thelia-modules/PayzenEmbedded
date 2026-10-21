@@ -89,8 +89,13 @@ validation, il ne fait que déplacer la date de capture.
 Une commande garde le mode dans lequel elle a été payée, lu sur son journal et sur la transaction : une commande
 autorisée d'abord se capture et se libère depuis Thelia même après un changement du mode de validation.
 
-Avec une validation automatique, rien ne change : la commande est payée dès l'autorisation, et Thelia écrit une ligne
-de capture dans son journal.
+Avec une validation automatique, la commande est toujours payée dès l'autorisation, et Thelia écrit une ligne
+de capture dans son journal. Le formulaire de mise à jour ne baisse plus le montant une fois cette capture au journal :
+la différence se rembourse depuis Thelia.
+
+Un module hôte qui demande la validation par l'évènement de mise à jour hors du back-office (tâche planifiée, route
+à lui) vérifie lui-même le droit « Capture des paiements » : sans administrateur dans la requête `/admin`, le module ne
+peut pas le demander.
 
 ### Evènement de mise à jour des transactions
 
@@ -299,8 +304,13 @@ capture date.
 An order keeps the mode it was paid in, read on its journal and on the transaction: an order authorized first is
 captured and released from Thelia even after the validation mode is changed.
 
-With automatic validation, nothing changes: the order is paid on the authorization, and Thelia writes a capture line
-in its journal.
+With automatic validation, the order is still paid on the authorization, and Thelia writes a capture line
+in its journal. The update form no longer lowers the amount once that capture is in the journal: the difference is
+given back from Thelia.
+
+A host module asking for the validation through the update event outside the back office (a scheduled task, a route
+of its own) checks the "Order payment capture" right itself: without an administrator in an `/admin` request, the
+module cannot ask for it.
 
 ### Transaction update event
 
