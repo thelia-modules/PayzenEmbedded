@@ -28,8 +28,8 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Thelia\Core\Event\Order\OrderEvent;
 use Thelia\Core\Event\TheliaEvents;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Thelia\Core\HttpFoundation\Session\Session;
-use Thelia\Core\Security\Exception\AuthorizationException;
 use Thelia\Core\Security\SecurityContext;
 use Thelia\Core\Translation\Translator;
 use Thelia\Model\Customer;
@@ -162,12 +162,25 @@ class FrontController extends BasePaymentModuleController
         Translator $translator,
         $orderId
     ){
+        // A visitor who is not signed in is sent to the login page, and back here afterwards.
+        $this->checkAuth();
+
         // Cancel the order and redirect to failure page.
         if (null !== $order = $this->getOrder($orderId)) {
             /** @var Customer $customer */
             $customer = $securityContext->getCustomerUser();
 
             if ($order->getCustomerId() === $customer->getId()) {
+                // The link stays in the browser history: once the payment went through, or was
+                // authorized, following it again leaves the order as it is.
+                if ($order->isPaymentSecured()) {
+                    $this->getLog()->addWarning(
+                        "Payment cancelation of order ref. " . $order->getRef() . " ignored: its payment went through."
+                    );
+
+                    $this->redirectToSuccessPage($orderId);
+                }
+
                 $this->getLog()->addInfo(
                     $translator->trans(
                         "Processing cancelation of payment for order ref. %ref",
@@ -175,15 +188,17 @@ class FrontController extends BasePaymentModuleController
                     )
                 );
 
-                $event = (new OrderEvent($order))
-                    ->setStatus(OrderStatusQuery::getCancelledStatus()->getId());
+                if (!$order->isCancelled(false)) {
+                    $event = (new OrderEvent($order))
+                        ->setStatus(OrderStatusQuery::getCancelledStatus()->getId());
 
-                $dispatcher->dispatch($event,TheliaEvents::ORDER_UPDATE_STATUS);
+                    $dispatcher->dispatch($event, TheliaEvents::ORDER_UPDATE_STATUS);
+                }
 
             } else {
                 $this->getLog()->addError($translator->trans($customer->getRef() . " is not allowed to cancel order " . $order->getRef(), [], PayzenEmbedded::DOMAIN_NAME));
 
-                throw new AuthorizationException("Forbidden");
+                throw new AccessDeniedHttpException("Forbidden");
             }
         }
 

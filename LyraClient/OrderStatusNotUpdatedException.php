@@ -28,6 +28,8 @@ final class OrderStatusNotUpdatedException extends TheliaProcessException
         public readonly RefundOutcome $outcome,
         string $message,
         ?\Throwable $previous = null,
+        /** The transaction the platform created for the refund, or cancelled. */
+        public readonly ?string $transactionUuid = null,
     ) {
         parent::__construct($message, 0, null, $previous);
     }

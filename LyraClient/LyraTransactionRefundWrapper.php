@@ -55,12 +55,26 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
      */
     public function refundTransaction(Order $order, int $amount, ?string $comment = null, ?Admin $admin = null, ?int $expectedRefundedAmount = null): RefundOutcome
     {
-        // On the contract of the sale unit the order was placed on: the platform is asked with its
-        // keys, and the refund in doubt is looked up where it was written.
-        return $this->forOrder($order, fn (): RefundOutcome => $this->refundOnItsContract($order, $amount, $comment, $admin, $expectedRefundedAmount));
+        return $this->refundRecorded($order, $amount, $comment, $admin, $expectedRefundedAmount)->outcome;
     }
 
-    private function refundOnItsContract(Order $order, int $amount, ?string $comment, ?Admin $admin, ?int $expectedRefundedAmount): RefundOutcome
+    /**
+     * The same refund, with the transaction the platform created for it (or the one it
+     * cancelled): what Thelia's payment journal files the refund under.
+     *
+     * @throws LyraException                   when the platform cannot list the order's transactions
+     * @throws TheliaProcessException          when the amount cannot be refunded, or the platform refused
+     * @throws RefundOutcomeUnknownException   when the platform did not answer, or its answer could not be recorded
+     * @throws OrderStatusNotUpdatedException when the money moved but the order could not follow
+     */
+    public function refundRecorded(Order $order, int $amount, ?string $comment = null, ?Admin $admin = null, ?int $expectedRefundedAmount = null): RefundRecord
+    {
+        // On the contract of the sale unit the order was placed on: the platform is asked with its
+        // keys, and the refund in doubt is looked up where it was written.
+        return $this->forOrder($order, fn (): RefundRecord => $this->refundOnItsContract($order, $amount, $comment, $admin, $expectedRefundedAmount));
+    }
+
+    private function refundOnItsContract(Order $order, int $amount, ?string $comment, ?Admin $admin, ?int $expectedRefundedAmount): RefundRecord
     {
         if (PayzenEmbedded::getModuleId() !== (int) $order->getPaymentModuleId()) {
             throw new TheliaProcessException(
@@ -247,17 +261,17 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
      * @throws TheliaProcessException when the platform refused, or answered something unexpected
      * @throws OrderStatusNotUpdatedException when the refund is recorded but the order could not follow
      */
-    private function processCancelOrRefundResponse(Order $order, array $response, ?Admin $admin = null): RefundOutcome
+    private function processCancelOrRefundResponse(Order $order, array $response, ?Admin $admin = null): RefundRecord
     {
         $answer = \is_array($response['answer'] ?? null) ? $response['answer'] : [];
 
         // A refusal is an ERROR status with an error answer: read as the Order/Get answer is, before
         // anything in the answer is taken for a transaction.
         if (($response['status'] ?? null) !== 'SUCCESS') {
-            throw new TheliaProcessException(Translator::getInstance()->trans('Cannot refund the transaction. Error is : %message (code %code)', [
+            throw new PlatformRefusalException(Translator::getInstance()->trans('Cannot refund the transaction. Error is : %message (code %code)', [
                 '%code' => (string) ($answer['errorCode'] ?? 'undefined error code'),
                 '%message' => (string) ($answer['errorMessage'] ?? 'undefined error message'),
-            ], PayzenEmbedded::DOMAIN_NAME));
+            ], PayzenEmbedded::DOMAIN_NAME), isset($answer['errorCode']) ? (string) $answer['errorCode'] : null);
         }
 
         // The shape of this answer was taken from the documentation: keep what the platform really sends.
@@ -282,6 +296,15 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
         );
 
         $this->updateTransactionHistory($resolution->answer, $order, $admin, $debitUuid);
+        // Thelia's journal learns it before the order moves: a cancellation that found the
+        // authorization still held would release it a second time, from under this lock. The money
+        // moved whatever the journal answers: a journal busy past the wait learns it from the
+        // platform's notification, and the refund is not reported as failed.
+        try {
+            $this->reportTransaction($order, $resolution->answer);
+        } catch (\Throwable $journalFailure) {
+            $this->log->addError(sprintf('Order %s: PayZen answered the refund, but the payment journal could not write it yet: %s', $order->getRef(), $journalFailure->getMessage()));
+        }
 
         $ledgerAfter = (new TransactionHistoryReader())->ledgerOf($order);
         $outcome = $resolution->outcome($ledgerAfter);
@@ -308,8 +331,10 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
             RefundOutcome::PartiallyRefunded, RefundOutcome::Pending => null,
         };
 
+        $record = new RefundRecord($outcome, $resolution->transaction->uuid);
+
         if (null === $newStatus) {
-            return $outcome;
+            return $record;
         }
 
         try {
@@ -321,10 +346,11 @@ class LyraTransactionRefundWrapper extends LyraPaymentManagementWrapper
             throw new OrderStatusNotUpdatedException(
                 $outcome,
                 Translator::getInstance()->trans('The refund was made, but the order status could not be updated: check the order.', [], PayzenEmbedded::DOMAIN_NAME),
-                $exception
+                $exception,
+                $record->transactionUuid
             );
         }
 
-        return $outcome;
+        return $record;
     }
 }
