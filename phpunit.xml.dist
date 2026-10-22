@@ -14,6 +14,8 @@
     <testsuites>
         <testsuite name="PayzenEmbedded">
             <directory>tests</directory>
+            <!-- These boot Thelia: phpunit.integration.xml.dist runs them. -->
+            <exclude>tests/Integration</exclude>
         </testsuite>
     </testsuites>
 </phpunit>

@@ -27,13 +27,17 @@ use PayzenEmbedded\LyraClient\OrderStatusNotUpdatedException;
 use PayzenEmbedded\LyraClient\RefundAmount;
 use PayzenEmbedded\LyraClient\RefundOutcome;
 use PayzenEmbedded\LyraClient\RefundOutcomeUnknownException;
+use PayzenEmbedded\LyraClient\TransactionHistoryReader;
+use PayzenEmbedded\LyraClient\TransactionUpdateRequest;
 use Thelia\Exception\TheliaProcessException;
 use Thelia\Log\Tlog;
 use PayzenEmbedded\LyraClient\LyraClientWrapper;
 use PayzenEmbedded\LyraClient\LyraTransactionGetWrapper;
 use PayzenEmbedded\PayzenEmbedded;
 use PayzenEmbedded\Service\OrderEditMessages;
+use PayzenEmbedded\Service\OrderReach;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Thelia\Controller\Admin\BaseAdminController;
 use Thelia\Core\Security\AccessManager;
 use Thelia\Core\Security\Resource\AdminResources;
@@ -52,10 +56,21 @@ use Symfony\Component\Routing\Attribute\Route;
 class OrderEditController extends BaseAdminController
 {
     #[Route('/update-transaction/{orderId}', name: 'update_transaction', requirements: ['orderId' => '\d+'], methods: 'POST')]
-    public function updateTransaction(EventDispatcherInterface $dispatcher, Translator $translator, int $orderId)
+    public function updateTransaction(EventDispatcherInterface $dispatcher, Translator $translator, OrderReach $orderReach, int $orderId)
     {
         // Lowering or validating a payment is an operation on the order, not only on the module.
         if (null !== $response = $this->checkAuth([AdminResources::MODULE, AdminResources::ORDER], 'PayzenEmbedded', AccessManager::UPDATE)) {
+            return $response;
+        }
+
+        $this->assertReaches($orderReach, $orderId);
+
+        // The mode of the sale unit the order was placed on decides what the form may do: moving
+        // what the order takes needs the capture right of the core, moving only the capture date
+        // of an authorization does not.
+        $authorizesFirst = PayzenEmbedded::authorizesFirstFor($orderReach->orderOf($orderId));
+
+        if (!$authorizesFirst && null !== $response = $this->checkAuth(AdminResources::ORDER_PAYMENT_CAPTURE, [], AccessManager::CREATE)) {
             return $response;
         }
 
@@ -72,10 +87,19 @@ class OrderEditController extends BaseAdminController
             $data = $form->getData();
 
             if (null !== $order = OrderQuery::create()->findPk($orderId)) {
+                // Authorizing first, the form only moves the capture date, see TransactionUpdateRequest.
+                $currencyCode = (string) $order->getCurrency()->getCode();
+                $request = TransactionUpdateRequest::from(
+                    $data,
+                    $authorizesFirst,
+                    RefundAmount::format((new TransactionHistoryReader())->heldAmountOf($order) ?? RefundAmount::fromMajor((string) $order->getTotalAmount(), $currencyCode), $currencyCode),
+                    PayzenEmbedded::journalHoldsTheCapture($order)
+                );
+
                 $event = (new TransactionUpdateEvent($orderId))
-                    ->setAmount($data['amount'])
-                    ->setExpectedCaptureDate($data['capture_date'])
-                    ->setManualValidation(! $data['automatic_validation']);
+                    ->setAmount($request->amount)
+                    ->setExpectedCaptureDate($request->captureDate)
+                    ->setManualValidation($request->manualValidation);
 
                 $dispatcher->dispatch($event, PayzenEmbedded::TRANSACTION_UPDATE_EVENT);
 
@@ -138,10 +162,18 @@ class OrderEditController extends BaseAdminController
     }
 
     #[Route('/refund-transaction/{orderId}', name: 'refund_transaction', requirements: ['orderId' => '\d+'], methods: 'POST')]
-    public function refundTransaction(EventDispatcherInterface $dispatcher, Translator $translator, int $orderId)
+    public function refundTransaction(EventDispatcherInterface $dispatcher, Translator $translator, OrderReach $orderReach, int $orderId)
     {
         // Giving money back is an operation on the order, not only on the module.
         if (null !== $response = $this->checkAuth([AdminResources::MODULE, AdminResources::ORDER], 'PayzenEmbedded', AccessManager::UPDATE)) {
+            return $response;
+        }
+
+        $this->assertReaches($orderReach, $orderId);
+
+        // Cancelling an authorization releases what Thelia's journal holds: its capture right.
+        if (PayzenEmbedded::givingBackReleasesTheAuthorization($orderReach->orderOf($orderId))
+            && null !== $response = $this->checkAuth(AdminResources::ORDER_PAYMENT_CAPTURE, [], AccessManager::CREATE)) {
             return $response;
         }
 
@@ -162,6 +194,12 @@ class OrderEditController extends BaseAdminController
             // The route names the order; the form field only has to agree with it.
             if ((int) $data['order_id'] !== $orderId) {
                 throw new TheliaProcessException($translator->trans('The order of the form does not match the order of the page.', [], PayzenEmbedded::DOMAIN_NAME));
+            }
+
+            // Cancelling the transaction would cancel the capture Thelia asked for too, and leave
+            // its journal line waiting for ever: the capture is remitted first, then refunded.
+            if (PayzenEmbedded::givingBackReleasesTheAuthorization($order) && PayzenEmbedded::journalHoldsACapture($order)) {
+                throw new TheliaProcessException($translator->trans('A capture of this payment was asked from Thelia: cancelling the payment would cancel that capture too. Refund it once PayZen has remitted it.', [], PayzenEmbedded::DOMAIN_NAME));
             }
 
             $currencyCode = strtoupper($order->getCurrency()->getCode());
@@ -311,11 +349,13 @@ class OrderEditController extends BaseAdminController
     }
 
     #[Route('/refresh-transaction/{orderId}', name: 'refresh_transaction', requirements: ['orderId' => '\d+'], methods: 'POST')]
-    public function refreshTransaction(Translator $translator, LyraTransactionGetWrapper $lyraClient, int $orderId)
+    public function refreshTransaction(Translator $translator, LyraTransactionGetWrapper $lyraClient, OrderReach $orderReach, int $orderId)
     {
         if (null !== $response = $this->checkAuth([AdminResources::MODULE, AdminResources::ORDER], 'PayzenEmbedded', AccessManager::UPDATE)) {
             return $response;
         }
+
+        $this->assertReaches($orderReach, $orderId);
 
         $errorMsg = $ex = false;
 
@@ -383,5 +423,16 @@ class OrderEditController extends BaseAdminController
         }
 
         return $this->generateRedirect(URL::getInstance()->absoluteUrl("admin/order/update/$orderId") . '#payzen-embedded');
+    }
+
+    /**
+     * An order of a sale unit the administrator is restricted away from is no order of theirs:
+     * it answers 404, as the order sheet does, before anything is asked of PayZen.
+     */
+    private function assertReaches(OrderReach $orderReach, int $orderId): void
+    {
+        if (null === $orderReach->orderOf($orderId)) {
+            throw new NotFoundHttpException();
+        }
     }
 }

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    The tests of tests/Integration boot Thelia on the shop's test database. Run them from
+    the shop the module is installed in, once its test database is prepared (php bin/test-prepare):
+        vendor/bin/phpunit -c local/modules/PayzenEmbedded/phpunit.integration.xml.dist
+    The module CI runs this file after phpunit.xml.dist.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/11.5/phpunit.xsd"
+         bootstrap="tests/Integration/bootstrap.php"
+         colors="true"
+         failOnRisky="true"
+         failOnWarning="true">
+    <php>
+        <!-- What the shop's own test configuration sets for a kernel test. -->
+        <server name="KERNEL_CLASS" value="App\Kernel"/>
+        <server name="APP_ENV" value="test" force="true"/>
+        <server name="APP_DEBUG" value="0" force="true"/>
+        <server name="SHELL_VERBOSITY" value="-1"/>
+        <env name="MAILER_DSN" value="null://null"/>
+        <env name="LOCK_DSN" value="flock"/>
+    </php>
+    <testsuites>
+        <testsuite name="PayzenEmbedded integration">
+            <directory>tests/Integration</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>

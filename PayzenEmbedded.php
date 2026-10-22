@@ -12,7 +12,10 @@
 
 namespace PayzenEmbedded;
 
+use PayzenEmbedded\LyraClient\TransactionHistoryReader;
+use PayzenEmbedded\LyraClient\TransactionOutcome;
 use PayzenEmbedded\Service\CardFormProvider;
+use PayzenEmbedded\Service\DeferredCapture;
 use Propel\Runtime\Connection\ConnectionInterface;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ServicesConfigurator;
@@ -28,11 +31,20 @@ use Thelia\Model\LangQuery;
 use Thelia\Model\Message;
 use Thelia\Model\MessageQuery;
 use Thelia\Model\ModuleImageQuery;
+use Thelia\Domain\Payment\DTO\PaymentOperationResult;
 use Thelia\Model\Order;
+use Thelia\Model\OrderPaymentTransaction;
+use Thelia\Model\OrderPaymentTransactionQuery;
+use Thelia\Domain\Payment\Exception\PaymentRefusedException;
+use Thelia\Domain\Payment\Enum\PaymentTransactionType;
+use Thelia\Domain\Payment\Enum\PaymentTransactionState;
+use Propel\Runtime\ActiveQuery\Criteria;
 use Thelia\Module\AbstractPaymentModule;
 use Thelia\Module\BaseModule;
+use Thelia\Module\PaymentModuleCancellingOnReleaseInterface;
+use Thelia\Module\PaymentModuleCapturingOnceInterface;
 
-class PayzenEmbedded extends AbstractPaymentModule
+class PayzenEmbedded extends AbstractPaymentModule implements PaymentModuleCapturingOnceInterface, PaymentModuleCancellingOnReleaseInterface
 {
     /** @var string */
     const DOMAIN_NAME = 'payzenembedded';
@@ -45,6 +57,9 @@ class PayzenEmbedded extends AbstractPaymentModule
 
     /** The transaction refund event identifier, see Event\TransactionRefundEvent */
     const TRANSACTION_REFUND_EVENT = "payzenembedded.transaction_refund_event";
+
+    /** A transaction the platform reported was recorded, see Event\TransactionReportedEvent */
+    const TRANSACTION_REPORTED_EVENT = "payzenembedded.transaction_reported_event";
 
     /** Payment form types, see the form_type configuration variable */
     const FORM_TYPE_CARD = 'CARD';
@@ -98,6 +113,130 @@ class PayzenEmbedded extends AbstractPaymentModule
         }
 
         return SaleUnitConfigScope::runFor($saleUnitId, $callback);
+    }
+
+    /**
+     * Whether the shop authorizes first and captures later: the validation mode is manual, so the
+     * platform holds the amount until the shop validates it, from Thelia's capture dialog.
+     */
+    public static function authorizesFirst(): bool
+    {
+        return 'YES' === self::getConfigValue('validation_mode', '');
+    }
+
+    /**
+     * Whether giving the payment of the order back would cancel its authorization: authorizing
+     * first, a payment the bank has not taken yet is cancelled in full. That releases what
+     * Thelia's journal holds, a decision Thelia leaves to its capture right.
+     */
+    public static function givingBackReleasesTheAuthorization(Order $order): bool
+    {
+        return self::authorizesFirstFor($order) && (new TransactionHistoryReader())->ledgerOf($order)->isCancellable();
+    }
+
+    /**
+     * Whether the module authorized the order first, its capture being Thelia's: read on the
+     * order's journal, which keeps what was done whatever the configuration became since, then
+     * on the transaction the platform reports, when it waits for its validation. An order with
+     * neither reads the configuration of its sale unit.
+     */
+    public static function authorizesFirstFor(Order $order, ?TransactionOutcome $incoming = null): bool
+    {
+        // An authorization line, refused ones included: a second attempt follows a first refused one.
+        if (OrderPaymentTransactionQuery::create()->filterByOrderId((int) $order->getId())->filterByType(PaymentTransactionType::AUTHORIZATION->value)->exists()) {
+            return true;
+        }
+
+        // A transaction waiting for its validation was created authorizing first, whatever the
+        // configuration became before its first notification.
+        if (null !== $incoming && $incoming->waitsForValidation()) {
+            return true;
+        }
+
+        if (OrderPaymentTransactionQuery::create()->filterByOrderId((int) $order->getId())->exists()) {
+            return false;
+        }
+
+        // A debit already authorized without waiting for its validation, or captured, was taken
+        // at once, whatever the configuration became before its first notification.
+        if (null !== $incoming && !$incoming->isCredit() && ($incoming->isAuthorized() || $incoming->isCaptured())) {
+            return false;
+        }
+
+        return self::runForOrder($order, static fn (): bool => self::authorizesFirst());
+    }
+
+    /** Whether Thelia's payment journal holds a capture of the order, waiting for its answer or taken. */
+    public static function journalHoldsACapture(Order $order): bool
+    {
+        return OrderPaymentTransactionQuery::create()
+            ->filterByOrderId((int) $order->getId())
+            ->filterByType(PaymentTransactionType::CAPTURE->value)
+            ->filterByState([PaymentTransactionState::PENDING->value, PaymentTransactionState::SUCCEEDED->value], Criteria::IN)
+            ->exists();
+    }
+
+    /** Whether Thelia's payment journal holds the capture of the order, taken. */
+    public static function journalHoldsTheCapture(Order $order): bool
+    {
+        return OrderPaymentTransactionQuery::create()
+            ->filterByOrderId((int) $order->getId())
+            ->filterByType(PaymentTransactionType::CAPTURE->value)
+            ->filterByState(PaymentTransactionState::SUCCEEDED->value)
+            ->exists();
+    }
+
+    /** PayZen takes a single capture per authorization, and lets the rest go with it. */
+    public function capturesOnce(): bool
+    {
+        return true;
+    }
+
+    /** A transaction cancelled or lapsed at PayZen cancels its order, from the notification. */
+    public function cancelsOrderOnRelease(): bool
+    {
+        return true;
+    }
+
+    public function supportsDeferredCapture(): bool
+    {
+        return self::authorizesFirst();
+    }
+
+    public function capture(Order $order, float $amount, OrderPaymentTransaction $transaction): PaymentOperationResult
+    {
+        // PayZen takes a single capture per authorization: validating it again would set the
+        // amount of the transaction anew, lowering what the first capture took.
+        if (self::journalHoldsACaptureBesides($order, $transaction)) {
+            throw new PaymentRefusedException('PayZen takes a single capture per authorization, and one was already asked for this order: the rest of the authorization is released with it.');
+        }
+
+        return $this->getContainer()->get(DeferredCapture::class)->capture($order, $amount);
+    }
+
+    public function voidAuthorization(Order $order, OrderPaymentTransaction $transaction): PaymentOperationResult
+    {
+        // Once a capture was asked, the platform lets the rest of the authorization go with it:
+        // cancelling the transaction would cancel that capture too.
+        if (self::journalHoldsACaptureBesides($order, $transaction)) {
+            return PaymentOperationResult::succeeded((string) $order->getTransactionRef());
+        }
+
+        return $this->getContainer()->get(DeferredCapture::class)->release($order, $transaction);
+    }
+
+    /**
+     * Whether the journal holds a capture of the order, waiting for its answer or taken, other
+     * than the line being written.
+     */
+    private static function journalHoldsACaptureBesides(Order $order, OrderPaymentTransaction $transaction): bool
+    {
+        return OrderPaymentTransactionQuery::create()
+            ->filterByOrderId((int) $order->getId())
+            ->filterByType(PaymentTransactionType::CAPTURE->value)
+            ->filterByState([PaymentTransactionState::PENDING->value, PaymentTransactionState::SUCCEEDED->value], Criteria::IN)
+            ->filterById((int) $transaction->getId(), Criteria::NOT_EQUAL)
+            ->exists();
     }
 
     public function pay(Order $order): ?Response
