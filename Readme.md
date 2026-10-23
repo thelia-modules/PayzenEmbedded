@@ -69,9 +69,13 @@ que sur ce contrat, et jamais sur un autre, même quand une unité sans contrat 
 nationale ne paie que les commandes nationales. Une carte d'une autre unité est retirée des cartes proposées au checkout, et
 refusée (422) si elle arrive tout de même au paiement. Une carte sans rattachement (écriture échouée) ne paie nulle part et
 s'annule sur le contrat national. La mise à jour 3.6.0 rattache au contrat national toutes les cartes du module, celles de
-l'ancienne table comprises : l'ancienne table ne retenait pas l'unité de vente. Une carte enregistrée en 3.5.0 sur le
-contrat propre d'une unité est donc mal rattachée : PayZen la refuse sur le contrat national, le client l'oublie et la
-saisit à nouveau (l'annulation est refusée aussi, la carte reste jusqu'à son annulation depuis le back-office PayZen).
+l'ancienne table comprises : l'ancienne table ne retenait pas l'unité de vente.
+
+**Limite : une carte = un contrat.** Une carte enregistrée avant 3.6.0 sur le contrat propre d'une unité de vente est donc
+mal rattachée : PayZen ne connaît pas son jeton sur le contrat national et la refuse. Le client doit la saisir de nouveau.
+Quand un client oublie l'ancienne, une annulation refusée par PayZen est suivie d'une lecture du jeton (`Token/Get`) : jeton
+déjà annulé (date d'annulation), la carte est retirée de la boutique ; dans tout autre cas, un jeton inconnu compris, elle reste jusqu'à son annulation depuis
+le back-office PayZen.
 
 ### Après la mise à jour vers 3.6.0
 
@@ -304,9 +308,13 @@ on that contract only, never on another, even when a sale unit with no contract 
 national card pays national orders only. A card of another sale unit is left out of the cards offered at the checkout, and
 refused (422) when it still reaches the payment. A card with no link (a failed write) pays nowhere and is cancelled on the
 national contract. The update to 3.6.0 ties every card of the module to the national contract, those of the old table
-included: the old table did not keep the sale unit. A card registered in 3.5.0 on the own contract of a sale unit is
-therefore tied to the wrong contract: PayZen refuses it on the national contract, the customer forgets it and enters it
-again (the cancellation is refused too, the card stays until it is cancelled from the PayZen back office).
+included: the old table did not keep the sale unit.
+
+**Limit: one card, one contract.** A card registered before 3.6.0 on the own contract of a sale unit is therefore tied to
+the wrong contract: PayZen does not know its token on the national contract and refuses it. The customer has to enter the
+card again. When a customer forgets the old one, a cancellation PayZen refuses is followed by a read of the token
+(`Token/Get`): a token already cancelled (a cancellation date) is dropped from the shop; in any other case, an unknown token included, the card stays until
+it is cancelled from the PayZen back office.
 
 ### After the update to 3.6.0
 
