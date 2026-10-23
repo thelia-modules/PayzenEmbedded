@@ -265,6 +265,33 @@ final class StoredMethodsTest extends PayzenIntegrationTestCase
         }
     }
 
+    public function testAnAlreadyCancelledAliasIsCancelledWithoutReadingIt(): void
+    {
+        $client = $this->scriptedGateway([
+            'V4/Token/Cancel' => ['status' => 'ERROR', 'answer' => ['errorCode' => 'PSP_1047']],
+        ]);
+
+        $client->cancel(self::TOKEN);
+
+        self::assertSame(['V4/Token/Cancel'], array_column($client->sent, 0));
+    }
+
+    public function testAnAliasNotFoundIsReadAndStaysRefusedWhenTheReadDoesNotProveItCancelled(): void
+    {
+        $client = $this->scriptedGateway([
+            'V4/Token/Cancel' => ['status' => 'ERROR', 'answer' => ['errorCode' => 'PSP_1048']],
+            'V4/Token/Get' => ['status' => 'SUCCESS', 'answer' => ['paymentMethodToken' => self::TOKEN, 'cancellationDate' => null]],
+        ]);
+
+        try {
+            $client->cancel(self::TOKEN);
+            self::fail('An alias not found is not proven cancelled.');
+        } catch (TokenCancellationFailedException $failure) {
+            self::assertSame('PSP_1048', $failure->reason);
+            self::assertSame(['V4/Token/Cancel', 'V4/Token/Get'], array_column($client->sent, 0));
+        }
+    }
+
     public function testACancellationDateOfAnotherTokenProvesNothing(): void
     {
         $client = $this->scriptedGateway([

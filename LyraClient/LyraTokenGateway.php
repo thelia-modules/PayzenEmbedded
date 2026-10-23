@@ -18,16 +18,25 @@ namespace PayzenEmbedded\LyraClient;
 /**
  * The platform side of StoredTokenGateway: Token/Cancel, on the contract in scope.
  *
- * A token the platform refuses to cancel is read again (Token/Get): one it says it already cancelled (a cancellation
- * date) is gone, which is what the shop wanted, so the cancellation succeeded. Any other case, an unknown token
- * included, or a read that fails, is the refusal of the cancellation: the shape of the platform's answer for an unknown
- * token is not established, and dropping a card the platform still holds is not worth a guess.
+ * PSP_1047 ("Alias already cancelled") is a success at once: the platform itself says the token is gone.
+ *
+ * Any other refusal is followed by a read of the token (Token/Get): one it says it already cancelled (a cancellation
+ * date) is gone, which is what the shop wanted, so the cancellation succeeded. Any other case, or a read that fails,
+ * is the refusal of the cancellation. "Not found" (PSP_1048, PSP_030), "invalid" (PSP_1049, PSP_031) and PSP_558
+ * (alias status not compatible with the operation) stay refusals: a token unknown on this contract may exist on
+ * another one (a card is tied to one contract), and dropping it from the shop would leave an active card at PayZen.
  */
 class LyraTokenGateway extends LyraClientWrapper implements StoredTokenGateway
 {
     public const CONNECTION_TIMEOUT = 5;
 
     public const TIMEOUT = 10;
+
+    /**
+     * "Alias already cancelled", from the PSP error codes page of the Lyra documentation (docs.lyra.com, REST V4.0,
+     * errors_psp). The page of Token/Cancel does not list the codes it returns; this one says the alias is cancelled.
+     */
+    public const ALREADY_CANCELLED = 'PSP_1047';
 
     public function cancel(string $token): void
     {
@@ -45,7 +54,7 @@ class LyraTokenGateway extends LyraClientWrapper implements StoredTokenGateway
         }
 
         if ('SUCCESS' !== ($response['status'] ?? null)) {
-            if ($this->isGone($token)) {
+            if (self::ALREADY_CANCELLED === ($response['answer']['errorCode'] ?? null) || $this->isGone($token)) {
                 return;
             }
 

@@ -73,9 +73,11 @@ l'ancienne table comprises : l'ancienne table ne retenait pas l'unité de vente.
 
 **Limite : une carte = un contrat.** Une carte enregistrée avant 3.6.0 sur le contrat propre d'une unité de vente est donc
 mal rattachée : PayZen ne connaît pas son jeton sur le contrat national et la refuse. Le client doit la saisir de nouveau.
-Quand un client oublie l'ancienne, une annulation refusée par PayZen est suivie d'une lecture du jeton (`Token/Get`) : jeton
-déjà annulé (date d'annulation), la carte est retirée de la boutique ; dans tout autre cas, un jeton inconnu compris, elle reste jusqu'à son annulation depuis
-le back-office PayZen.
+Quand un client oublie l'ancienne, un refus `PSP_1047` (« Alias déjà annulé ») vaut succès : la carte est retirée de la
+boutique. Tout autre refus est suivi d'une lecture du jeton (`Token/Get`) : jeton déjà annulé (date d'annulation), la carte
+est retirée ; dans tout autre cas, un jeton introuvable ou invalide compris (`PSP_1048`, `PSP_030`, `PSP_1049`, `PSP_031`,
+`PSP_558`), elle reste jusqu'à son annulation depuis le back-office PayZen : un alias inconnu sur ce contrat peut exister
+sur un autre.
 
 ### Après la mise à jour vers 3.6.0
 
@@ -312,9 +314,11 @@ included: the old table did not keep the sale unit.
 
 **Limit: one card, one contract.** A card registered before 3.6.0 on the own contract of a sale unit is therefore tied to
 the wrong contract: PayZen does not know its token on the national contract and refuses it. The customer has to enter the
-card again. When a customer forgets the old one, a cancellation PayZen refuses is followed by a read of the token
-(`Token/Get`): a token already cancelled (a cancellation date) is dropped from the shop; in any other case, an unknown token included, the card stays until
-it is cancelled from the PayZen back office.
+card again. When a customer forgets the old one, a refusal with `PSP_1047` ("Alias already cancelled") counts as a success:
+the card is dropped from the shop. Any other refusal is followed by a read of the token (`Token/Get`): a token already
+cancelled (a cancellation date) is dropped; in any other case, a token not found or invalid included (`PSP_1048`,
+`PSP_030`, `PSP_1049`, `PSP_031`, `PSP_558`), the card stays until it is cancelled from the PayZen back office: an alias
+unknown on this contract may exist on another one.
 
 ### After the update to 3.6.0
 
