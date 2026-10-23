@@ -231,6 +231,142 @@ final class StoredMethodsTest extends PayzenIntegrationTestCase
         }
     }
 
+    public function testATokenThePlatformRefusesToCancelBecauseItIsAlreadyCancelledIsCancelled(): void
+    {
+        $client = $this->scriptedGateway([
+            'V4/Token/Cancel' => ['status' => 'ERROR', 'answer' => ['errorCode' => 'PSP_ANY']],
+            'V4/Token/Get' => ['status' => 'SUCCESS', 'answer' => ['paymentMethodToken' => self::TOKEN, 'cancellationDate' => '2026-10-01T10:00:00+00:00']],
+        ]);
+
+        $client->cancel(self::TOKEN);
+
+        self::assertSame(['V4/Token/Cancel', 'V4/Token/Get'], array_column($client->sent, 0));
+        self::assertSame(['paymentMethodToken' => self::TOKEN], $client->sent[1][1]);
+    }
+
+    /**
+     * Only a cancellation date proves the token gone. What the platform answers for a token it does not know is not
+     * established (the shape of the answer, the PSP code to come): whichever way it looks, the refusal stands, since
+     * a card dropped by the shop while the platform still holds it cannot be cancelled afterwards.
+     */
+    public function testATokenThePlatformRefusesToCancelAndMayNotKnowStaysRefused(): void
+    {
+        $client = $this->scriptedGateway([
+            'V4/Token/Cancel' => ['status' => 'ERROR', 'answer' => ['errorCode' => 'PSP_077']],
+            'V4/Token/Get' => ['status' => 'SUCCESS', 'answer' => ['paymentMethodToken' => null, 'cancellationDate' => null]],
+        ]);
+
+        try {
+            $client->cancel(self::TOKEN);
+            self::fail('A read that carries no cancellation date does not prove the token gone.');
+        } catch (TokenCancellationFailedException $failure) {
+            self::assertSame('PSP_077', $failure->reason);
+            self::assertSame(['V4/Token/Cancel', 'V4/Token/Get'], array_column($client->sent, 0));
+        }
+    }
+
+    public function testACancellationDateOfAnotherTokenProvesNothing(): void
+    {
+        $client = $this->scriptedGateway([
+            'V4/Token/Cancel' => ['status' => 'ERROR', 'answer' => ['errorCode' => 'PSP_077']],
+            'V4/Token/Get' => ['status' => 'SUCCESS', 'answer' => ['paymentMethodToken' => 'another-token-0123456789', 'cancellationDate' => '2026-10-01T10:00:00+00:00']],
+        ]);
+
+        try {
+            $client->cancel(self::TOKEN);
+            self::fail('A cancellation date on a token that is not the one asked for does not prove it gone.');
+        } catch (TokenCancellationFailedException $failure) {
+            self::assertSame('PSP_077', $failure->reason);
+        }
+    }
+
+    /**
+     * @return iterable<string, array{mixed}>
+     */
+    public static function datesThatAreNoDate(): iterable
+    {
+        yield 'empty string' => [''];
+        yield 'zero' => [0];
+        yield 'null' => [null];
+        yield 'a number' => [20261001];
+        yield 'a list' => [['2026-10-01']];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('datesThatAreNoDate')]
+    public function testACancellationDateThatIsNoDateProvesNothing(mixed $date): void
+    {
+        $client = $this->scriptedGateway([
+            'V4/Token/Cancel' => ['status' => 'ERROR', 'answer' => ['errorCode' => 'PSP_077']],
+            'V4/Token/Get' => ['status' => 'SUCCESS', 'answer' => ['paymentMethodToken' => self::TOKEN, 'cancellationDate' => $date]],
+        ]);
+
+        try {
+            $client->cancel(self::TOKEN);
+            self::fail('Only a non-empty string is a cancellation date.');
+        } catch (TokenCancellationFailedException $failure) {
+            self::assertSame('PSP_077', $failure->reason);
+        }
+    }
+
+    public function testATokenThePlatformRefusesToCancelWhileItIsActiveStaysRefused(): void
+    {
+        $client = $this->scriptedGateway([
+            'V4/Token/Cancel' => ['status' => 'ERROR', 'answer' => ['errorCode' => 'PSP_077']],
+            'V4/Token/Get' => ['status' => 'SUCCESS', 'answer' => ['paymentMethodToken' => self::TOKEN, 'cancellationDate' => null]],
+        ]);
+
+        try {
+            $client->cancel(self::TOKEN);
+            self::fail('A token still active at the platform is not cancelled.');
+        } catch (TokenCancellationFailedException $failure) {
+            self::assertSame('PSP_077', $failure->reason);
+        }
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>|\Throwable}>
+     */
+    public static function readsThatSayNothingAboutTheToken(): iterable
+    {
+        yield 'the read is refused' => [['status' => 'ERROR', 'answer' => ['errorCode' => 'PSP_999']]];
+        yield 'the read cannot be done' => [new \RuntimeException('call failed')];
+        yield 'the read has no answer' => [['status' => 'SUCCESS']];
+        yield 'the read has no status' => [['answer' => ['cancellationDate' => '2026-10-01T10:00:00+00:00']]];
+    }
+
+    /**
+     * @param array<string, mixed>|\Throwable $read
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('readsThatSayNothingAboutTheToken')]
+    public function testATokenThePlatformRefusesToCancelIsNeverCancelledByAReadThatFailed(array|\Throwable $read): void
+    {
+        $client = $this->scriptedGateway([
+            'V4/Token/Cancel' => ['status' => 'ERROR', 'answer' => ['errorCode' => 'PSP_077']],
+            'V4/Token/Get' => $read,
+        ]);
+
+        try {
+            $client->cancel(self::TOKEN);
+            self::fail('Without a read that says the token is gone, the refusal stands.');
+        } catch (TokenCancellationFailedException $failure) {
+            self::assertSame('PSP_077', $failure->reason);
+            self::assertSame(['V4/Token/Cancel', 'V4/Token/Get'], array_column($client->sent, 0));
+        }
+    }
+
+    public function testATokenThePlatformCouldNotBeReachedForIsNotReadAgain(): void
+    {
+        $client = $this->scriptedGateway(['V4/Token/Cancel' => new \RuntimeException('call failed'), 'V4/Token/Get' => ['status' => 'SUCCESS', 'answer' => ['cancellationDate' => '2026-10-01T10:00:00+00:00']]]);
+
+        try {
+            $client->cancel(self::TOKEN);
+            self::fail('An unreachable platform is a failure.');
+        } catch (TokenCancellationFailedException $failure) {
+            self::assertSame('unreachable', $failure->reason);
+            self::assertSame(['V4/Token/Cancel'], array_column($client->sent, 0));
+        }
+    }
+
     public function testThePlatformGatewayHidesWhatAFailedCallQuotes(): void
     {
         $client = $this->gateway(new \RuntimeException('call failed, response {"paymentMethodToken":"' . self::TOKEN . '"}'));
@@ -343,6 +479,39 @@ final class StoredMethodsTest extends PayzenIntegrationTestCase
                 }
 
                 return $this->answer;
+            }
+        };
+    }
+
+    /**
+     * A gateway whose platform answers by endpoint.
+     *
+     * @param array<string, array<string, mixed>|\Throwable> $answers
+     */
+    private function scriptedGateway(array $answers): LyraTokenGateway
+    {
+        return new class($answers) extends LyraTokenGateway {
+            /** @var list<array{string, array<string, mixed>}> */
+            public array $sent = [];
+
+            /**
+             * @param array<string, array<string, mixed>|\Throwable> $answers
+             */
+            public function __construct(private readonly array $answers)
+            {
+                parent::__construct();
+            }
+
+            public function post($target, $array)
+            {
+                $this->sent[] = [$target, $array];
+                $answer = $this->answers[$target] ?? throw new \LogicException('Unexpected call to ' . $target);
+
+                if ($answer instanceof \Throwable) {
+                    throw $answer;
+                }
+
+                return $answer;
             }
         };
     }

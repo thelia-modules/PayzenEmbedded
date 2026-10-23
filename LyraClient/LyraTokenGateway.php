@@ -17,6 +17,11 @@ namespace PayzenEmbedded\LyraClient;
 
 /**
  * The platform side of StoredTokenGateway: Token/Cancel, on the contract in scope.
+ *
+ * A token the platform refuses to cancel is read again (Token/Get): one it says it already cancelled (a cancellation
+ * date) is gone, which is what the shop wanted, so the cancellation succeeded. Any other case, an unknown token
+ * included, or a read that fails, is the refusal of the cancellation: the shape of the platform's answer for an unknown
+ * token is not established, and dropping a card the platform still holds is not worth a guess.
  */
 class LyraTokenGateway extends LyraClientWrapper implements StoredTokenGateway
 {
@@ -40,9 +45,36 @@ class LyraTokenGateway extends LyraClientWrapper implements StoredTokenGateway
         }
 
         if ('SUCCESS' !== ($response['status'] ?? null)) {
+            if ($this->isGone($token)) {
+                return;
+            }
+
             $code = $response['answer']['errorCode'] ?? '';
 
             throw new TokenCancellationFailedException(\is_string($code) && 1 === preg_match('/^[A-Za-z0-9_]{1,16}$/', $code) ? $code : 'refused');
         }
+    }
+
+    /**
+     * Whether the platform says the token is cancelled: a successful answer about that very token that carries a cancellation date.
+     * Whatever else, a failed read included, is "not gone": the refusal stands.
+     */
+    private function isGone(string $token): bool
+    {
+        try {
+            $response = $this->post('V4/Token/Get', ['paymentMethodToken' => $token]);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        if ('SUCCESS' !== ($response['status'] ?? null) || !\is_array($response['answer'] ?? null)) {
+            return false;
+        }
+
+        $cancellationDate = $response['answer']['cancellationDate'] ?? null;
+
+        // The answer must be about the token asked for: a date on another token proves nothing.
+        return $token === ($response['answer']['paymentMethodToken'] ?? null)
+            && \is_string($cancellationDate) && '' !== $cancellationDate;
     }
 }
