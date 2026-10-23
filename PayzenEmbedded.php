@@ -41,6 +41,7 @@ use Thelia\Model\Order;
 use Thelia\Module\AbstractPaymentModule;
 use Thelia\Module\BalanceChargingPaymentModuleInterface;
 use Thelia\Module\BaseModule;
+use Thelia\Module\DeferredStoredMethodForgettingPaymentModuleInterface;
 use Thelia\Module\PaymentModuleWithStoredMethodsInterface;
 
 /**
@@ -48,7 +49,7 @@ use Thelia\Module\PaymentModuleWithStoredMethodsInterface;
  * every amount sent to the platform is getAmountToCharge(), never the total of the order), and keeps the cards
  * PayZen registered among the payment methods of the shop.
  */
-class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPaymentModuleInterface, PaymentModuleWithStoredMethodsInterface
+class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPaymentModuleInterface, PaymentModuleWithStoredMethodsInterface, DeferredStoredMethodForgettingPaymentModuleInterface
 {
     /** @var string */
     const DOMAIN_NAME = 'payzenembedded';
@@ -171,6 +172,28 @@ class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPay
      */
     public function forgetStoredMethod(CustomerPaymentMethod $method): void
     {
+        $this->revokeWith($method, static fn (StoredMethodRevoker $revoker) => $revoker->revoke($method));
+    }
+
+    /**
+     * The anonymization and the deletion of the customer drop the card before PayZen is asked, and its link to the
+     * contract of its sale unit goes with it (foreign key on delete cascade): the contract is read now, while the card
+     * is still there, so that the card is cancelled on it all the same.
+     */
+    public function prepareToForgetStoredMethod(CustomerPaymentMethod $method): \Closure
+    {
+        $saleUnitId = StoredMethodContract::saleUnitToCancelOn($method);
+
+        return fn () => $this->revokeWith($method, static fn (StoredMethodRevoker $revoker) => $revoker->revokeOn($method, $saleUnitId));
+    }
+
+    /**
+     * @param \Closure(StoredMethodRevoker): void $revoke
+     *
+     * @throws StoredMethodRefusedException when PayZen did not cancel the card
+     */
+    private function revokeWith(CustomerPaymentMethod $method, \Closure $revoke): void
+    {
         try {
             // The core builds the instance of a module that is not active with its own container, which does
             // not hold the services of the module: the revoker is then built by hand, on the same gateway.
@@ -178,7 +201,7 @@ class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPay
                 ? $this->getContainer()->get(StoredMethodRevoker::class)
                 : new StoredMethodRevoker(new LyraTokenGateway());
 
-            $revoker->revoke($method);
+            $revoke($revoker);
         } catch (StoredMethodRefusedException $refused) {
             throw $refused;
         } catch (\Throwable $failure) {

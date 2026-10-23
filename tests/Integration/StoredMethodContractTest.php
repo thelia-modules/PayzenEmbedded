@@ -28,6 +28,7 @@ use Thelia\Api\Bridge\Propel\Event\PaymentModuleOptionEvent;
 use Thelia\Api\Resource\PaymentModuleOptionGroup;
 use Thelia\Api\Resource\PaymentModuleStoredMethodOption;
 use Thelia\Core\Event\TheliaEvents;
+use Thelia\Domain\Customer\Service\CustomerAnonymizer;
 use Thelia\Domain\Payment\CustomerPaymentMethodService;
 use Thelia\Domain\Payment\StoredPaymentMethodPayment;
 use Thelia\Domain\SaleUnit\Config\SaleUnitConfigScope;
@@ -208,6 +209,34 @@ final class StoredMethodContractTest extends PayzenIntegrationTestCase
         $this->moduleForgettingWith($gateway)->forgetStoredMethod($card);
 
         self::assertSame([null], $gateway->contractsOfTheCancellations);
+    }
+
+    public function testACardDroppedBeforePayZenIsAskedIsCancelledOnTheContractReadBeforeTheDrop(): void
+    {
+        $unit = $this->factory->saleUnit();
+        $card = $this->card($this->customer(), $unit->getId());
+        $gateway = new RecordingTokenGateway();
+
+        $forget = $this->moduleForgettingWith($gateway)->prepareToForgetStoredMethod($card);
+        $card->delete($this->getPropelConnection());
+        $forget();
+
+        self::assertSame([self::TOKEN], $gateway->cancelled);
+        self::assertSame([$unit->getId()], $gateway->contractsOfTheCancellations, 'PayZen was asked on the contract of the unit of the card, its link gone with it.');
+    }
+
+    public function testTheAnonymizationCancelsACardOnTheContractOfItsSaleUnit(): void
+    {
+        $unit = $this->factory->saleUnit();
+        $customer = $this->customer();
+        $this->card($customer, $unit->getId());
+        $gateway = new RecordingTokenGateway();
+        static::getContainer()->set(StoredMethodRevoker::class, new StoredMethodRevoker($gateway));
+
+        $this->getService(CustomerAnonymizer::class)->anonymize($customer);
+
+        self::assertSame([self::TOKEN], $gateway->cancelled);
+        self::assertSame([$unit->getId()], $gateway->contractsOfTheCancellations, 'The card is cancelled on the contract of its unit once the anonymization has dropped it.');
     }
 
     public function testTheLinkGoesWithTheCard(): void

@@ -44,6 +44,16 @@ class StoredMethodRevoker
      */
     public function revoke(CustomerPaymentMethod $method): void
     {
+        $this->revokeOn($method, StoredMethodContract::saleUnitToCancelOn($method));
+    }
+
+    /**
+     * For a card already dropped, whose link to its contract went with it: the sale unit read before the drop.
+     *
+     * @throws StoredMethodRefusedException when PayZen did not cancel the card, or could not be reached
+     */
+    public function revokeOn(CustomerPaymentMethod $method, ?int $saleUnitId): void
+    {
         if ((int) $method->getPaymentModuleId() !== PayzenEmbedded::getModuleId()) {
             throw new \InvalidArgumentException('This stored payment method was not kept through PayZen.');
         }
@@ -52,7 +62,7 @@ class StoredMethodRevoker
             // On the contract the card was registered on: PayZen knows the token on that one only, whatever sale unit
             // the request that forgets it resolved.
             PayzenEmbedded::runForSaleUnit(
-                StoredMethodContract::saleUnitToCancelOn($method),
+                $saleUnitId,
                 fn () => $this->gateway->cancel((string) $method->getToken())
             );
         } catch (TokenCancellationFailedException $failure) {
