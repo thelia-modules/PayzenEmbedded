@@ -2,7 +2,7 @@
 
 namespace PayzenEmbedded\Loop;
 
-use PayzenEmbedded\Model\PayzenEmbeddedCustomerTokenQuery;
+use PayzenEmbedded\PayzenEmbedded;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistoryQuery;
 use Propel\Runtime\ActiveQuery\Criteria;
 use Thelia\Core\Template\Element\BaseLoop;
@@ -11,6 +11,7 @@ use Thelia\Core\Template\Element\LoopResultRow;
 use Thelia\Core\Template\Element\PropelSearchLoopInterface;
 use Thelia\Core\Template\Loop\Argument\Argument;
 use Thelia\Core\Template\Loop\Argument\ArgumentCollection;
+use Thelia\Model\CustomerPaymentMethodQuery;
 use Thelia\Type;
 use Thelia\Type\TypeCollection;
 
@@ -32,12 +33,15 @@ class OneClickPaymentLoop extends BaseLoop implements PropelSearchLoopInterface
 
     public function buildModelCriteria(): \Propel\Runtime\ActiveQuery\ModelCriteria
     {
-        return PayzenEmbeddedCustomerTokenQuery::create()->filterByCustomerId($this->getCustomerId());
+        // The cards PayZen kept for the customer: the payment methods of the shop, kept through this module.
+        return CustomerPaymentMethodQuery::create()
+            ->filterByCustomerId($this->getCustomerId())
+            ->filterByPaymentModuleId(PayzenEmbedded::getModuleId());
     }
 
     public function parseResults(LoopResult $loopResult): LoopResult
     {
-        /** @var \PayzenEmbedded\Model\PayzenEmbeddedCustomerToken $token */
+        /** @var \Thelia\Model\CustomerPaymentMethod $token */
         foreach ($loopResult->getResultDataCollection() as $token) {
             $loopResult->addRow(
                 (new LoopResultRow($token))

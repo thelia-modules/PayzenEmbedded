@@ -15,6 +15,7 @@ use PayzenEmbedded\PayzenEmbedded;
 use Thelia\Core\HttpKernel\Exception\RedirectException;
 use Thelia\Core\Translation\Translator;
 use Thelia\Log\Tlog;
+use Thelia\Model\CustomerPaymentMethod;
 use Thelia\Model\Order;
 use Thelia\Tools\URL;
 
@@ -30,16 +31,18 @@ class LyraJavascriptClientManagementWrapper extends LyraPaymentManagementWrapper
     /**
      * Request payment of order.
      *
-     * @param Order $order
+     * @param Order                      $order        the order to pay
+     * @param CustomerPaymentMethod|null $storedMethod the card the customer chose among those PayZen
+     *                                                 kept for them, a new card when null
      * @return array an array containing payment result.
      */
-    public function payOrder(Order $order)
+    public function payOrder(Order $order, ?CustomerPaymentMethod $storedMethod = null)
     {
         // On the contract of the sale unit the order was placed on.
-        return $this->forOrder($order, fn () => $this->payOrderOnItsContract($order));
+        return $this->forOrder($order, fn () => $this->payOrderOnItsContract($order, $storedMethod));
     }
 
-    private function payOrderOnItsContract(Order $order)
+    private function payOrderOnItsContract(Order $order, ?CustomerPaymentMethod $storedMethod)
     {
         $resultData = [
             'success' => false,
@@ -52,16 +55,16 @@ class LyraJavascriptClientManagementWrapper extends LyraPaymentManagementWrapper
 
         try {
             // Send the payment request
-            $response = $this->sendCreatePayementRequest($order);
+            $response = $this->sendCreatePayementRequest($order, $storedMethod);
 
             // Process the payment response.
-            $resultData = $this->processCreatePaymentResponse($order, $response, $resultData);
+            $resultData = $this->processCreatePaymentResponse($order, $response, $resultData, $storedMethod);
         } catch (RedirectException $ex) {
             throw $ex;
         } catch (\Exception $ex) {
-            // Generate an error response.
+            // Generate an error response. What goes to the browser never quotes the stored card.
             $resultData['errorCode'] = '0000';
-            $resultData['errorMessage'] = $ex->getMessage();
+            $resultData['errorMessage'] = $this->withoutToken($ex->getMessage(), $storedMethod);
         }
 
         return $resultData;
@@ -73,10 +76,11 @@ class LyraJavascriptClientManagementWrapper extends LyraPaymentManagementWrapper
      * @param Order $order the current order
      * @param array $response the CreatePayement response
      * @param array $resultData the result data to be enriched by response data
+     * @param CustomerPaymentMethod|null $storedMethod the card the payment was asked with, whose token an error must not quote
      * @return array the result data
      * @throws \Exception
      */
-    protected function processCreatePaymentResponse(Order $order, array $response, array $resultData)
+    protected function processCreatePaymentResponse(Order $order, array $response, array $resultData, ?CustomerPaymentMethod $storedMethod = null)
     {
         if ($response['status'] === 'SUCCESS') {
             // This is the Payment response (see https://payzen.io/fr-FR/rest/V4.0/api/playground.html?ws=Payment)
@@ -135,6 +139,11 @@ class LyraJavascriptClientManagementWrapper extends LyraPaymentManagementWrapper
             // We can't display the payment form :(
             $error = $response['answer'];
 
+            // A platform error may quote what it was asked with: the token of a stored card is never shown nor logged.
+            foreach (['errorCode', 'errorMessage', 'detailedErrorCode', 'detailedErrorMessage'] as $field) {
+                $error[$field] = $this->withoutToken((string) ($error[$field] ?? ''), $storedMethod);
+            }
+
             // Pass the error details and the order ID to the payment page.
             $resultData['errorCode'] = $error['errorCode'];
             $resultData['errorMessage'] = $error['errorMessage'];
@@ -152,5 +161,12 @@ class LyraJavascriptClientManagementWrapper extends LyraPaymentManagementWrapper
         }
 
         return $resultData;
+    }
+
+    private function withoutToken(string $text, ?CustomerPaymentMethod $storedMethod): string
+    {
+        $token = null === $storedMethod ? '' : (string) $storedMethod->getToken();
+
+        return '' === $token ? $text : str_replace($token, '[token]', $text);
     }
 }

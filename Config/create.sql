@@ -22,6 +22,22 @@ CREATE TABLE IF NOT EXISTS `payzen_embedded_customer_token`
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------
+-- payzen_embedded_stored_method_contract
+-- ---------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS `payzen_embedded_stored_method_contract`
+(
+    `customer_payment_method_id` INTEGER NOT NULL,
+    `sale_unit_id` INTEGER,
+    PRIMARY KEY (`customer_payment_method_id`),
+    CONSTRAINT `fk_payzen_embedded_stored_method_contract_method`
+        FOREIGN KEY (`customer_payment_method_id`)
+        REFERENCES `customer_payment_method` (`id`)
+        ON UPDATE RESTRICT
+        ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- ---------------------------------------------------------------------
 -- payzen_embedded_transaction_history
 -- ---------------------------------------------------------------------
 

@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <database defaultIdMethod="native" name="TheliaMain">
 
+    <!-- Legacy: the cards of the 1-click payment are payment methods of the shop since 3.6.0 (customer_payment_method).
+         Config/update/3.6.0.sql moved its rows there. Nothing reads or writes it any more, and it is dropped in a later version. -->
     <table name="payzen_embedded_customer_token" namespace="PayzenEmbedded\Model">
         <column autoIncrement="true" name="id" primaryKey="true" required="true" type="INTEGER" />
         <column name="payment_token" type="LONGVARCHAR" />
@@ -8,6 +10,21 @@
 
         <foreign-key foreignTable="customer" name="fk_payzen_embedded_customer_token_customer_id" onDelete="CASCADE" onUpdate="RESTRICT">
             <reference foreign="id" local="customer_id"/>
+        </foreign-key>
+    </table>
+
+    <!-- The contract a stored card was registered on, since 3.6.0. PayZen creates the token on the contract of the sale unit
+         the payment was made on (3.5.0), and the token is only good on that contract: the card is offered, paid with and
+         cancelled on the sale unit it was registered on. sale_unit_id is NULL for the national contract. A card with no row
+         here (a failed write) is unusable until a payment links it again; the update links the cards it migrates to the
+         national contract. No foreign key on the sale unit: a unit deleted must neither delete the link (the card would
+         read as national) nor be refused for it. -->
+    <table name="payzen_embedded_stored_method_contract" namespace="PayzenEmbedded\Model">
+        <column name="customer_payment_method_id" type="INTEGER" required="true" primaryKey="true" />
+        <column name="sale_unit_id" type="INTEGER" required="false" />
+
+        <foreign-key foreignTable="customer_payment_method" name="fk_payzen_embedded_stored_method_contract_method" onDelete="CASCADE" onUpdate="RESTRICT">
+            <reference foreign="id" local="customer_payment_method_id" />
         </foreign-key>
     </table>
 

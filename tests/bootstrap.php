@@ -32,7 +32,17 @@ while (!is_file($directory . '/vendor/autoload.php')) {
 }
 
 $loader = require $directory . '/vendor/autoload.php';
+$loader->addPsr4('PayzenEmbedded\\Tests\\', __DIR__ . '/');
 $loader->addPsr4('PayzenEmbedded\\', \dirname(__DIR__) . '/');
+
+if (is_file($directory . '/tests/bootstrap.php')) {
+    // thelia/thelia: its bootstrap reads the environment, the database of the process (TEST_TOKEN
+    // included) and the models generated for it, which the integration tests need. Pointing at the
+    // models of another environment would hand them the wrong database.
+    require $directory . '/tests/bootstrap.php';
+
+    return;
+}
 
 foreach (glob($directory . '/var/propel/*/model/*', \GLOB_ONLYDIR) ?: [] as $generated) {
     $loader->addPsr4(basename($generated) . '\\', $generated . '/');

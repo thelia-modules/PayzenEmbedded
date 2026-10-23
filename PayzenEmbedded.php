@@ -12,17 +12,26 @@
 
 namespace PayzenEmbedded;
 
+use PayzenEmbedded\Command\CancelLegacyTokensCommand;
 use PayzenEmbedded\Service\CardFormProvider;
+use PayzenEmbedded\LyraClient\LyraTokenGateway;
+use PayzenEmbedded\Service\LegacyTokenCanceller;
+use PayzenEmbedded\Service\StoredMethodContract;
+use PayzenEmbedded\Service\StoredMethodRevoker;
 use Propel\Runtime\Connection\ConnectionInterface;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ServicesConfigurator;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Thelia\Core\Template\Parser\ParserResolver;
 use Thelia\Domain\SaleUnit\Config\SaleUnitConfigScope;
 use Thelia\Core\Translation\Translator;
+use Thelia\Domain\Payment\Exception\StoredMethodRefusedException;
+use Thelia\Log\Tlog;
 use Thelia\Core\Install\Database;
 use Thelia\Model\ConfigQuery;
+use Thelia\Model\CustomerPaymentMethod;
 use Thelia\Model\Lang;
 use Thelia\Model\LangQuery;
 use Thelia\Model\Message;
@@ -30,9 +39,17 @@ use Thelia\Model\MessageQuery;
 use Thelia\Model\ModuleImageQuery;
 use Thelia\Model\Order;
 use Thelia\Module\AbstractPaymentModule;
+use Thelia\Module\BalanceChargingPaymentModuleInterface;
 use Thelia\Module\BaseModule;
+use Thelia\Module\DeferredStoredMethodForgettingPaymentModuleInterface;
+use Thelia\Module\PaymentModuleWithStoredMethodsInterface;
 
-class PayzenEmbedded extends AbstractPaymentModule
+/**
+ * Charges the balance of the order when instant means paid a part of it (BalanceChargingPaymentModuleInterface:
+ * every amount sent to the platform is getAmountToCharge(), never the total of the order), and keeps the cards
+ * PayZen registered among the payment methods of the shop.
+ */
+class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPaymentModuleInterface, PaymentModuleWithStoredMethodsInterface, DeferredStoredMethodForgettingPaymentModuleInterface
 {
     /** @var string */
     const DOMAIN_NAME = 'payzenembedded';
@@ -100,18 +117,108 @@ class PayzenEmbedded extends AbstractPaymentModule
         return SaleUnitConfigScope::runFor($saleUnitId, $callback);
     }
 
+    /**
+     * What this module charges for the order, as the platform counts it once converted: the balance
+     * of its part when instant means paid the rest, the total of the order otherwise. A static entry
+     * for the clients, which are not the module: the module reads its answer from the same event.
+     */
+    public static function amountToCharge(Order $order, EventDispatcherInterface $dispatcher): string
+    {
+        $module = new self();
+        $module->setDispatcher($dispatcher);
+
+        return $module->getAmountToCharge($order);
+    }
+
+    /**
+     * The customer may keep a card as long as the shop allows 1-click payments. A shop showing
+     * the SmartForm never asks for a registration (see PaymentFormAction), and the cards already
+     * kept go on paying.
+     */
+    public function supportsStoredMethods(): bool
+    {
+        return (bool) self::getConfigValue('allow_one_click_payments');
+    }
+
     public function pay(Order $order): ?Response
     {
         // The payment is made on the contract of the sale unit the order was placed on.
-        return self::runForOrder($order, fn (): ?Response => $this->payOnContractOf($order));
+        return self::runForOrder($order, fn (): ?Response => $this->payOnContractOf($order, null));
     }
 
-    private function payOnContractOf(Order $order): ?Response
+    /**
+     * The payment page opens on the card the customer chose: a form token asked with its token, which
+     * the customer confirms in the form (the 3-D Secure challenge included), so the answer is a page,
+     * never a payment made without the customer.
+     */
+    public function payWithStoredMethod(Order $order, CustomerPaymentMethod $method): ?Response
+    {
+        // The core checked it before asking: a card of another customer, or kept through another
+        // module, never pays this order, whoever asks.
+        if ((int) $method->getCustomerId() !== (int) $order->getCustomerId() || (int) $method->getPaymentModuleId() !== self::getModuleId()) {
+            throw new \InvalidArgumentException('This stored payment method cannot pay this order.');
+        }
+
+        // The token is good on the PayZen contract it was registered on, the one of a sale unit: another sale unit's
+        // order would be sent to a contract that does not know it. The checkout does not offer such a card (see
+        // StoredMethodsOfTheSaleUnitListener), this is the refusal for one that still reaches the payment.
+        StoredMethodContract::refuseUnlessUsableForOrder($method, $order);
+
+        return self::runForOrder($order, fn (): ?Response => $this->payOnContractOf($order, $method));
+    }
+
+    /**
+     * @throws \Thelia\Domain\Payment\Exception\StoredMethodRefusedException when PayZen did not cancel the card
+     */
+    public function forgetStoredMethod(CustomerPaymentMethod $method): void
+    {
+        $this->revokeWith($method, static fn (StoredMethodRevoker $revoker) => $revoker->revoke($method));
+    }
+
+    /**
+     * The anonymization and the deletion of the customer drop the card before PayZen is asked, and its link to the
+     * contract of its sale unit goes with it (foreign key on delete cascade): the contract is read now, while the card
+     * is still there, so that the card is cancelled on it all the same.
+     */
+    public function prepareToForgetStoredMethod(CustomerPaymentMethod $method): \Closure
+    {
+        $saleUnitId = StoredMethodContract::saleUnitToCancelOn($method);
+
+        return fn () => $this->revokeWith($method, static fn (StoredMethodRevoker $revoker) => $revoker->revokeOn($method, $saleUnitId));
+    }
+
+    /**
+     * @param \Closure(StoredMethodRevoker): void $revoke
+     *
+     * @throws StoredMethodRefusedException when PayZen did not cancel the card
+     */
+    private function revokeWith(CustomerPaymentMethod $method, \Closure $revoke): void
+    {
+        try {
+            // The core builds the instance of a module that is not active with its own container, which does
+            // not hold the services of the module: the revoker is then built by hand, on the same gateway.
+            $revoker = $this->hasContainer() && $this->getContainer()->has(StoredMethodRevoker::class)
+                ? $this->getContainer()->get(StoredMethodRevoker::class)
+                : new StoredMethodRevoker(new LyraTokenGateway());
+
+            $revoke($revoker);
+        } catch (StoredMethodRefusedException $refused) {
+            throw $refused;
+        } catch (\Throwable $failure) {
+            // The only exception the core answers is a refusal: whatever else goes wrong, the card stays kept
+            // and the customer is told so, never a server error. The class only, a message may quote the token.
+            Tlog::getInstance()->addError(sprintf('PayZen stored payment method %d not forgotten: %s.', (int) $method->getId(), $failure::class));
+
+            throw new StoredMethodRefusedException('error');
+        }
+    }
+
+    private function payOnContractOf(Order $order, ?CustomerPaymentMethod $storedMethod): ?Response
     {
         // Through the provider, not the client: a theme showing the card fields in its own
         // checkout step asks the provider for the same order in the same request, and the answer
         // is held there, so the platform is called once whichever of the two asks first.
-        $payload = $this->getContainer()->get(CardFormProvider::class)->forOrder($order);
+        $payload = $this->getContainer()->get(CardFormProvider::class)->forOrder($order, $storedMethod);
 
         $resultData = [
             'success' => $payload->available,
@@ -376,6 +483,31 @@ class PayzenEmbedded extends AbstractPaymentModule
             if (version_compare($currentVersion, $file->getBasename('.sql'), '<')) {
                 $database->insertSql(null, [$file->getPathname()]);
             }
+        }
+    }
+
+    /**
+     * The cards of the old table that the update did not move (a guest, an anonymized account) are still held by
+     * PayZen. They are NOT cancelled here: each call to the platform may wait for its timeout, and this runs inside
+     * the update of the module from the back office, between the deactivation and the reactivation of the module. The
+     * update counts them and says how to have them cancelled (the command CancelLegacyTokensCommand). Never fails
+     * the update that is done.
+     */
+    public function postUpdate(string $currentVersion, string $newVersion): void
+    {
+        try {
+            $pending = LegacyTokenCanceller::countPending();
+
+            if ($pending > 0) {
+                Tlog::getInstance()->addWarning(sprintf(
+                    'PayZen: %d card(s) of guests or anonymized accounts are still active at PayZen and wait to be cancelled: run "php Thelia payzen-embedded:legacy-tokens:cancel" (--limit %d by default), until no row is left after the last one tried, or only the cards PayZen refused remain.',
+                    $pending,
+                    CancelLegacyTokensCommand::DEFAULT_LIMIT
+                ));
+            }
+        } catch (\Throwable $failure) {
+            // The class only: a message may quote a token.
+            Tlog::getInstance()->addError(sprintf('PayZen cards of the old table not counted: %s.', $failure::class));
         }
     }
 

@@ -23,3 +23,28 @@ parameters:
             message: '#^Call to an undefined static method PayzenEmbedded\\PayzenEmbedded::(deleteConfigValueForSaleUnit|setConfigValueForSaleUnit)\(\)\.$#'
             count: 3
             path: Service/SaleUnitContractSettings.php
+        # Stored payment methods and payment parts of a core newer than the published one (Thelia 3.3.0): the
+        # module implements the two interfaces and reads the payment methods and the parts through the core's own
+        # classes. Every message that names one of these symbols says it is unknown, on a core that predates them.
+        # Limited to the files that name them. No count: the published core could not be installed to count them.
+        -
+            message: '#Thelia\\(Model\\(CustomerPaymentMethod|OrderPaymentPart)(Query)?\b|Domain\\Payment\\|Domain\\SaleUnit\\Config\\SaleUnitConfigScope\b|Api\\Resource\\PaymentModuleStoredMethodOption\b|Module\\(BalanceChargingPaymentModuleInterface|PaymentModuleWithStoredMethodsInterface)\b)#'
+            paths:
+                - PayzenEmbedded.php
+                - EventListener/StoredMethodsOfTheSaleUnitListener.php
+                - Controller/FrontController.php
+                - Form/TransactionUpdateForm.php
+                - Hook/FrontHookManager.php
+                - Loop/OneClickPaymentLoop.php
+                - LyraClient/LyraJavascriptClientManagementWrapper.php
+                - LyraClient/LyraPaymentManagementWrapper.php
+                - Service/CardFormProvider.php
+                - Service/StoredMethodContract.php
+                - Service/StoredMethodOfAnotherContractException.php
+                - Service/StoredMethodRecorder.php
+                - Service/StoredMethodRevoker.php
+        # The refusal of a card of another sale unit extends the core's CustomerPaymentMethodException (Thelia 3.3.0): on a
+        # core that predates it the class has no parent, and PHPStan then reports its call to the parent constructor.
+        -
+            message: '#^PayzenEmbedded\\Service\\StoredMethodOfAnotherContractException::__construct\(\) calls parent::__construct\(\) but PayzenEmbedded\\Service\\StoredMethodOfAnotherContractException does not extend any class\.$#'
+            path: Service/StoredMethodOfAnotherContractException.php
