@@ -7,7 +7,15 @@
     "lyracom/rest-php-sdk": "4.0.*",
     "symfony/lock": "^7.4"
   },
+  "conflict": {
+    "thelia/core": "<3.3.0"
+  },
   "extra": {
     "installer-name": "PayzenEmbedded"
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "PayzenEmbedded\\Tests\\": "tests/"
+    }
   }
 }
