@@ -21,6 +21,7 @@ use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\Routing\RouterInterface;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
+use Thelia\Core\Event\TheliaEvents;
 use Thelia\Model\Customer;
 use Thelia\Model\Map\OrderTableMap;
 use Thelia\Model\Order;
@@ -32,7 +33,7 @@ use Thelia\Test\WebIntegrationTestCase;
 /**
  * The customer gives up paying with PayZen: through the shop's HTTP kernel, the order is cancelled on a POST that
  * carries the token of the session, for an order of the customer that PayZen is to pay and that is not paid yet,
- * and on nothing else. The page PayZen sends a refused payment to changes nothing.
+ * and on nothing else. A GET on the same path, the link of a theme that did not follow, only asks to confirm. The page PayZen sends a refused payment to changes nothing.
  */
 final class AbortPaymentTest extends WebIntegrationTestCase
 {
@@ -91,19 +92,116 @@ final class AbortPaymentTest extends WebIntegrationTestCase
         parent::tearDown();
     }
 
-    public function testTheRouteAnswersAPostOnly(): void
+    public function testTheRouteThatCancelsAnswersAPostOnly(): void
+    {
+        $route = $this->getService(RouterInterface::class)->getRouteCollection()->get('payzen_embedded_front_abort_payment');
+        self::assertNotNull($route);
+        self::assertSame(['POST'], $route->getMethods(), 'A link in a page, a mail or an image must not cancel an order.');
+    }
+
+    /**
+     * A theme that overrides the payment page keeps its link, drawn with the name of the route of 3.6.0: the name still
+     * gives the path, and the path answers a GET with a page that asks to confirm, never a 405.
+     */
+    public function testALinkOfAnOverriddenThemeOpensAConfirmationThatChangesNothing(): void
+    {
+        $customer = $this->signedIn();
+        $order = $this->order($customer);
+        $cancelled = 0;
+        $this->getService(EventDispatcherInterface::class)->addListener(TheliaEvents::ORDER_UPDATE_STATUS, static function () use (&$cancelled): void {
+            ++$cancelled;
+        });
+
+        $crawler = $this->client->request('GET', $this->cancelUrl($order));
+
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame(OrderStatus::CODE_NOT_PAID, $this->statusOf($order));
+        self::assertSame(0, $cancelled, 'Nothing is dispatched by the page that asks to confirm.');
+        self::assertStringContainsString($order->getRef(), (string) $this->client->getResponse()->getContent());
+
+        $form = $crawler->filter('form[method="post"]');
+        self::assertCount(1, $form);
+        self::assertSame($this->cancelUrl($order), $form->attr('action'));
+        self::assertNotSame('', (string) $form->filter('input[name="_token"]')->attr('value'), 'The form carries a token, which the next test posts back.');
+    }
+
+    public function testTheFormOfTheConfirmationCancelsTheOrder(): void
     {
         $customer = $this->signedIn();
         $order = $this->order($customer);
 
-        $route = $this->getService(RouterInterface::class)->getRouteCollection()->get('payzen_embedded_front_abort_payment');
-        self::assertNotNull($route);
-        self::assertSame(['POST'], $route->getMethods(), 'A link in a page, a mail or an image must not cancel an order.');
+        $crawler = $this->client->request('GET', $this->cancelUrl($order));
+        $form = $crawler->filter('form[method="post"]');
+        $this->client->request('POST', (string) $form->attr('action'), ['_token' => (string) $form->filter('input[name="_token"]')->attr('value')]);
+
+        self::assertSame(OrderStatus::CODE_CANCELED, $this->statusOf($order));
+        $this->assertSentToTheFailurePage($order);
+    }
+
+    public function testTheConfirmationIsRefusedToAVisitor(): void
+    {
+        $order = $this->order($this->factory->customer($this->factory->customerTitle()));
 
         $this->client->request('GET', $this->cancelUrl($order));
 
-        self::assertResponseStatusCodeSame(405);
+        self::assertResponseStatusCodeSame(403);
         self::assertSame(OrderStatus::CODE_NOT_PAID, $this->statusOf($order));
+    }
+
+    public function testTheConfirmationOfAnOrderOfAnotherCustomerIsRefused(): void
+    {
+        $this->signedIn();
+        $order = $this->order($this->factory->customer($this->factory->customerTitle()));
+
+        $this->client->request('GET', $this->cancelUrl($order));
+
+        self::assertResponseStatusCodeSame(403);
+        self::assertStringNotContainsString($order->getRef(), (string) $this->client->getResponse()->getContent());
+        self::assertSame(OrderStatus::CODE_NOT_PAID, $this->statusOf($order));
+    }
+
+    public function testTheConfirmationOfAnUnknownOrderIsRefused(): void
+    {
+        $this->signedIn();
+
+        $this->client->request('GET', $this->getService(RouterInterface::class)->generate('payzen_embedded_front_abort_payment', ['orderId' => \PHP_INT_MAX]));
+
+        self::assertResponseStatusCodeSame(403);
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('statusesOfAnOrderAlreadyPaid')]
+    public function testTheConfirmationOfAnOrderAlreadyPaidSendsTheCustomerWhereThePostDoes(string $status): void
+    {
+        $customer = $this->signedIn();
+        $order = $this->order($customer, ['statusCode' => $status]);
+
+        $this->client->request('GET', $this->cancelUrl($order));
+
+        self::assertSame($status, $this->statusOf($order));
+        self::assertResponseRedirects();
+        self::assertSame(parse_url($this->getService(RouterInterface::class)->generate('checkout_confirm', ['order_id' => $order->getId()]), \PHP_URL_PATH), parse_url((string) $this->client->getResponse()->headers->get('Location'), \PHP_URL_PATH));
+    }
+
+    public function testTheConfirmationOfACancelledOrderSendsTheCustomerToTheFailurePage(): void
+    {
+        $customer = $this->signedIn();
+        $order = $this->order($customer, ['statusCode' => OrderStatus::CODE_CANCELED]);
+
+        $this->client->request('GET', $this->cancelUrl($order));
+
+        self::assertSame(OrderStatus::CODE_CANCELED, $this->statusOf($order));
+        $this->assertSentToTheFailurePage($order);
+    }
+
+    public function testTheConfirmationOfAnOrderPaidWithAnotherModuleSendsTheCustomerToTheFailurePage(): void
+    {
+        $customer = $this->signedIn();
+        $order = $this->order($customer, ['paymentModuleCode' => 'Cheque']);
+
+        $this->client->request('GET', $this->cancelUrl($order));
+
+        self::assertSame(OrderStatus::CODE_NOT_PAID, $this->statusOf($order));
+        $this->assertSentToTheFailurePage($order);
     }
 
     public function testAPostWithoutTheTokenChangesNothing(): void

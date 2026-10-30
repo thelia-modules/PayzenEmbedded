@@ -109,4 +109,25 @@ final class FrontTemplatesTest extends TestCase
         $page = (string) file_get_contents(self::DIRECTORY . 'embedded-payment-page.html');
         self::assertSame(2, substr_count($page, '<form method="post" action="{url path="/payzen-embedded/cancel-payment/%order_id" order_id=$order_id}"'));
     }
+
+    /**
+     * The page a link to the cancellation lands on cancels nothing itself: its only way to cancel is the POST form with
+     * the token, and everything it says is translated.
+     */
+    public function testTheConfirmationOfTheCancellationCancelsByAPostThatCarriesTheTokenAndIsTranslated(): void
+    {
+        $template = (string) file_get_contents(self::DIRECTORY . 'abort-payment-confirmation.html.twig');
+        $french = require __DIR__ . '/../I18n/frontOffice/default/fr_FR.php';
+
+        self::assertSame(1, substr_count($template, '<form method="post" action="{{ path(\'payzen_embedded_front_abort_payment\', {orderId: order_id}) }}"'));
+        self::assertSame(1, substr_count($template, '<input type="hidden" name="_token" value="{{ csrf_token(\'payzen_embedded_abort_payment\') }}">'));
+        self::assertStringNotContainsString('<a href="{{ path(\'payzen_embedded_front_abort_payment', $template);
+
+        self::assertGreaterThan(0, preg_match_all("/'((?:[^'\\\\]|\\\\.)*)'\\|trans\\(/", $template, $texts));
+
+        foreach ($texts[1] as $text) {
+            self::assertArrayHasKey($text, $french, 'Not translated: ' . $text);
+            self::assertNotSame('', $french[$text]);
+        }
+    }
 }
