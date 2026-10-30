@@ -47,9 +47,11 @@
                                         <div class="kr-form-error"></div>
                                     </div>
                                 </div>
-                                <div class="pull-right">
-                                    <a href="{url path="/payzen-embedded/cancel-payment/%order_id" order_id=$order_id}" class="btn btn-default">{intl l="Cancel payment" d=$dmn}</a>
-                                </div>
+                                {* Cancelling the order is a POST that carries the token of id payzen_embedded_abort_payment, given by whoever renders this page as $abort_payment_token. *}
+                                <form method="post" action="{url path="/payzen-embedded/cancel-payment/%order_id" order_id=$order_id}" class="pull-right">
+                                    <input type="hidden" name="_token" value="{$abort_payment_token|default:''}">
+                                    <button type="submit" class="btn btn-default">{intl l="Cancel payment" d=$dmn}</button>
+                                </form>
                             {else}
                                 {* Display error information *}
                                 <div class="alert alert-danger">
@@ -65,7 +67,10 @@
                                     <dd>{$errorMessage}{if $detailedErrorMessage|default:null}({$detailedErrorMessage}){/if}</dd>
                                 </dl>
 
-                                <p><a href="{url path="/payzen-embedded/cancel-payment/%order_id" order_id=$order_id}" class="btn btn-primary">{intl l="Try again your payment" d=$dmn}</a></p>
+                                <form method="post" action="{url path="/payzen-embedded/cancel-payment/%order_id" order_id=$order_id}">
+                                    <input type="hidden" name="_token" value="{$abort_payment_token|default:''}">
+                                    <p><button type="submit" class="btn btn-primary">{intl l="Try again your payment" d=$dmn}</button></p>
+                                </form>
 
                                 <p>{intl l='You may also <a href="%url">contact us</a> to get help or more information.' url={url path="/contact"} d=$dmn}</p>
                             {/if}
@@ -84,7 +89,7 @@
             src="https://api.lyra.com/static/js/krypton-client/V4.0/stable/kr-payment-form.min.js"
             kr-public-key="{$public_key|default:null}"
             kr-post-url-success="{url path="/order/placed/%order_id" order_id=$order_id}"
-            kr-post-url-refused="{url path="/payzen-embedded/cancel-payment/%order_id" order_id=$order_id}"
+            kr-post-url-refused="{url path="/payzen-embedded/payment-refused/%order_id" order_id=$order_id}"
             kr-language="{$lang_code|lower|default:null}">
     </script>
 

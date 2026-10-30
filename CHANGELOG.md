@@ -1,3 +1,12 @@
+# 3.7.0
+
+Requires Thelia 3.3.0.
+
+- "Cancel payment" and "Try again your payment" on the payment page are POST forms that carry a token of the session (token id `payzen_embedded_abort_payment`, `FrontController::ABORT_PAYMENT_TOKEN_ID`). `/payzen-embedded/cancel-payment/{orderId}` answers a POST only (a GET gets a 405), and cancels an order only when it belongs to the signed-in customer, is paid with PayZen and is not paid yet. An order already paid, being prepared or sent, cancelled, or paid with another module keeps its status: the customer is sent to the success page for a paid order, to the failure page otherwise. A request without a valid token, a visitor, and an order of another customer get a 403.
+- The refused payment of the PayZen form (`kr-post-url-refused`) is sent to a new route, `/payzen-embedded/payment-refused/{orderId}` (`payzen_embedded_front_payment_refused`), which changes nothing and sends the customer to the failure page. The order is cancelled by the notification PayZen sends for the refused payment, as before.
+- Changed signature of `PayzenEmbedded\Controller\FrontController::abortPayment()`, whose arguments are injected: `abortPayment(EventDispatcherInterface $dispatcher, SecurityContext $securityContext, Translator $translator, $orderId)` becomes `abortPayment(EventDispatcherInterface $dispatcher, SecurityContext $securityContext, CsrfTokenManagerInterface $csrfTokenManager, Translator $translator, int $orderId)`.
+- Upgrade note: a theme that overrides `payzen-embedded/embedded-payment-page.html.twig` has to replace its links to `payzen_embedded_front_abort_payment` with POST forms carrying `<input type="hidden" name="_token" value="{{ csrf_token('payzen_embedded_abort_payment') }}">`, and point `kr-post-url-refused` to `payzen_embedded_front_payment_refused`. A link left as it was now gets a 405.
+
 # 3.6.0
 
 Requires Thelia 3.3.0.
