@@ -78,4 +78,35 @@ final class FrontTemplatesTest extends TestCase
         self::assertMatchesRegularExpression('/<form method="post" action="\{url path=\'\/payzen-embedded\/alias-clear\'\}">/', $template);
         self::assertStringContainsString('name="_token" value="{$csrf_token}"', $template);
     }
+
+    /**
+     * Cancelling the payment cancels the order: the payment page asks for it by POST forms carrying the token of the
+     * session, never by a link, and the payment form sends a refused payment to the page that changes nothing.
+     */
+    public function testThePaymentPageCancelsTheOrderByAPostThatCarriesTheToken(): void
+    {
+        $template = (string) file_get_contents(self::DIRECTORY . 'embedded-payment-page.html.twig');
+
+        self::assertStringNotContainsString('<a href="{{ path(\'payzen_embedded_front_abort_payment\'', $template);
+        self::assertSame(2, substr_count($template, '<form method="post" action="{{ path(\'payzen_embedded_front_abort_payment\', {orderId: order_id}) }}"'), 'Cancel payment and Try again.');
+        self::assertSame(2, substr_count($template, '<input type="hidden" name="_token" value="{{ csrf_token(\'payzen_embedded_abort_payment\') }}">'));
+        self::assertStringContainsString('kr-post-url-refused="{{ url(\'payzen_embedded_front_payment_refused\', {orderId: order_id}) }}"', $template);
+    }
+
+    /**
+     * The Smarty pages of the module say the same: no link cancels an order, and a refused payment lands on the page
+     * that changes nothing.
+     */
+    public function testNoSmartyPageCancelsTheOrderByALink(): void
+    {
+        foreach (['embedded-payment-page.html', 'order-invoice.js.html'] as $file) {
+            $template = (string) file_get_contents(self::DIRECTORY . $file);
+
+            self::assertDoesNotMatchRegularExpression('/(href|kr-post-url-refused)="\{url path="\/payzen-embedded\/cancel-payment/', $template, $file);
+            self::assertStringContainsString('kr-post-url-refused="{url path="/payzen-embedded/payment-refused/', $template, $file);
+        }
+
+        $page = (string) file_get_contents(self::DIRECTORY . 'embedded-payment-page.html');
+        self::assertSame(2, substr_count($page, '<form method="post" action="{url path="/payzen-embedded/cancel-payment/%order_id" order_id=$order_id}"'));
+    }
 }
