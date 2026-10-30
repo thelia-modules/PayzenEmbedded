@@ -1,0 +1,31 @@
+{% extends 'checkout-base.html.twig' %}
+
+{% block title %}
+    {{ 'Cancel payment'|trans({}, 'payzenembedded.fo.default') }}
+{% endblock %}
+
+{% set current = 'payment' %}
+
+{% block checkoutSummary %}{% endblock %}
+
+{# Where a link to the cancellation of a payment lands: nothing is cancelled here, the customer confirms with the form, which carries the token of the session. #}
+{% block checkoutContent %}
+    <div class="flex flex-col items-center justify-center text-center">
+        <h3 class="mt-4 mb-4 h4">{{ 'Cancel the payment of order %ref%?'|trans({'%ref%': order_ref}, 'payzenembedded.fo.default') }}</h3>
+
+        <p class="mb-6 text-sm">{{ 'This order will be cancelled.'|trans({}, 'payzenembedded.fo.default') }}</p>
+
+        <form method="post" action="{{ path('payzen_embedded_front_abort_payment', {orderId: order_id}) }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('payzen_embedded_abort_payment') }}">
+            <button type="submit" class="button">
+                {{ 'Cancel payment'|trans({}, 'payzenembedded.fo.default') }}
+            </button>
+        </form>
+
+        <p class="mt-6">
+            <a href="{{ path('checkout_payment') }}" class="button">
+                {{ 'Back to the payment'|trans({}, 'payzenembedded.fo.default') }}
+            </a>
+        </p>
+    </div>
+{% endblock %}

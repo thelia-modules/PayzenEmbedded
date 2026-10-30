@@ -226,16 +226,74 @@ class FrontController extends BasePaymentModuleController
         Translator $translator,
         int $orderId
     ) {
+        $customer = $this->signedInCustomer($securityContext);
+
+        if (!$csrfTokenManager->isTokenValid(new CsrfToken(self::ABORT_PAYMENT_TOKEN_ID, (string) $this->getRequest()->request->get('_token')))) {
+            throw new AccessDeniedHttpException('The request does not carry the token of the session.');
+        }
+
+        $order = $this->unpaidOrderOf($customer, $orderId, $translator);
+
+        $this->getLog()->addInfo(
+            $translator->trans(
+                "Processing cancelation of payment for order ref. %ref",
+                ['%ref' => $order->getRef()]
+            )
+        );
+
+        $event = (new OrderEvent($order))
+            ->setStatus(OrderStatusQuery::getCancelledStatus()->getId());
+
+        $dispatcher->dispatch($event, TheliaEvents::ORDER_UPDATE_STATUS);
+
+        $this->redirectToFailurePage($orderId, $translator->trans("You canceled the payment", [], PayzenEmbedded::DOMAIN_NAME));
+    }
+
+    /**
+     * Where a link to the cancellation of a payment lands, as the payment page of a theme that has not followed the
+     * POST form of 3.7.0 still draws it: a page that asks the customer to confirm, which changes nothing. The
+     * confirmation is the POST form it holds, with the token of the session.
+     *
+     * The same checks as the POST, so that it tells no more than the POST does: a visitor and an order of another
+     * customer get a 403, and an order that cannot be cancelled sends the customer where the POST would.
+     */
+    #[Route('/cancel-payment/{orderId}', name: 'abort_payment_confirmation', requirements: ['orderId' => '\d+'], methods: ['GET'])]
+    public function confirmAbortPayment(SecurityContext $securityContext, Translator $translator, int $orderId)
+    {
+        $order = $this->unpaidOrderOf($this->signedInCustomer($securityContext), $orderId, $translator);
+
+        return $this->render('payzen-embedded/abort-payment-confirmation.html.twig', ['order_id' => $order->getId(), 'order_ref' => $order->getRef()]);
+    }
+
+    /**
+     * Where the payment form sends the customer once PayZen refused the payment. The form posts it without any
+     * token of the shop, so nothing is changed here: the notification PayZen sends the shop settles the order.
+     */
+    #[Route('/payment-refused/{orderId}', name: 'payment_refused', requirements: ['orderId' => '\d+'], methods: ['GET', 'POST'])]
+    public function paymentRefused(Translator $translator, int $orderId)
+    {
+        $this->getLog()->addInfo(sprintf('PayZen refused the payment of order %d, the customer is sent to the failure page.', $orderId));
+
+        $this->redirectToFailurePage($orderId, $translator->trans('Your payment was not accepted.', [], PayzenEmbedded::DOMAIN_NAME));
+    }
+
+    private function signedInCustomer(SecurityContext $securityContext): Customer
+    {
         $customer = $securityContext->getCustomerUser();
 
         if (!$customer instanceof Customer) {
             throw new AccessDeniedHttpException('Only a customer can cancel the payment of their order.');
         }
 
-        if (!$csrfTokenManager->isTokenValid(new CsrfToken(self::ABORT_PAYMENT_TOKEN_ID, (string) $this->getRequest()->request->get('_token')))) {
-            throw new AccessDeniedHttpException('The request does not carry the token of the session.');
-        }
+        return $customer;
+    }
 
+    /**
+     * The order of the customer that PayZen is to pay and that is not paid yet, read from the database. Any other
+     * order is refused (not the customer's) or sent to the page that tells how it stands, with its status kept.
+     */
+    private function unpaidOrderOf(Customer $customer, int $orderId, Translator $translator): Order
+    {
         // Read from the database, not from what this request may already hold in memory.
         OrderTableMap::removeInstanceFromPool($orderId);
         $order = OrderQuery::create()->findPk($orderId);
@@ -256,30 +314,6 @@ class FrontController extends BasePaymentModuleController
             $this->redirectToFailurePage($orderId, $translator->trans('This order can no longer be cancelled.', [], PayzenEmbedded::DOMAIN_NAME));
         }
 
-        $this->getLog()->addInfo(
-            $translator->trans(
-                "Processing cancelation of payment for order ref. %ref",
-                ['%ref' => $order->getRef()]
-            )
-        );
-
-        $event = (new OrderEvent($order))
-            ->setStatus(OrderStatusQuery::getCancelledStatus()->getId());
-
-        $dispatcher->dispatch($event, TheliaEvents::ORDER_UPDATE_STATUS);
-
-        $this->redirectToFailurePage($orderId, $translator->trans("You canceled the payment", [], PayzenEmbedded::DOMAIN_NAME));
-    }
-
-    /**
-     * Where the payment form sends the customer once PayZen refused the payment. The form posts it without any
-     * token of the shop, so nothing is changed here: the notification PayZen sends the shop settles the order.
-     */
-    #[Route('/payment-refused/{orderId}', name: 'payment_refused', requirements: ['orderId' => '\d+'], methods: ['GET', 'POST'])]
-    public function paymentRefused(Translator $translator, int $orderId)
-    {
-        $this->getLog()->addInfo(sprintf('PayZen refused the payment of order %d, the customer is sent to the failure page.', $orderId));
-
-        $this->redirectToFailurePage($orderId, $translator->trans('Your payment was not accepted.', [], PayzenEmbedded::DOMAIN_NAME));
+        return $order;
     }
 }

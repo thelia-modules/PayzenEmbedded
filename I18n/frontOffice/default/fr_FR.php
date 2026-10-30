@@ -2,6 +2,9 @@
 
 return array(
     'Cancel payment' => 'Annuler le paiement',
+    'Cancel the payment of order %ref%?' => 'Annuler le paiement de la commande %ref% ?',
+    'This order will be cancelled.' => 'Cette commande sera annulée.',
+    'Back to the payment' => 'Retour au paiement',
     'Error code' => 'Code d\'erreur',
     'Error details :' => 'Détail de l\'erreur : ',
     'Error message' => 'Message d\'erreur',
