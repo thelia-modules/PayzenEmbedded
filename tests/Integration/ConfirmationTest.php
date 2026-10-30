@@ -269,6 +269,20 @@ final class ConfirmationTest extends PayzenIntegrationTestCase
         self::assertSame([], $this->getService(CustomerPaymentMethodService::class)->listFor($customer, $this->module));
     }
 
+    /**
+     * The page the payment form sends a refused payment to changes nothing: the notification of the refusal is what
+     * cancels the order that waited for its payment.
+     */
+    public function testTheNotificationOfARefusedPaymentCancelsTheOrderThatWaitedForIt(): void
+    {
+        $order = $this->orderWorth('100.000000', $this->customer());
+
+        $status = $this->wrapper()->processPaymentResponse($this->notificationOfAPaymentOf($order, 10000, ['status' => 'UNPAID', 'detailedStatus' => 'REFUSED']));
+
+        self::assertSame(LyraPaymentManagementWrapper::PAYMENT_STATUS_NOT_PAID, $status);
+        self::assertTrue($this->reread($order)->isCancelled());
+    }
+
     public function testAShopThatStoppedOfferingStoredMethodsKeepsNoCardAndTheOrderIsPaid(): void
     {
         $this->setModuleConfig('allow_one_click_payments', '0');
