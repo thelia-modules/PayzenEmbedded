@@ -205,7 +205,7 @@ class ConfigurationForm extends BaseForm
                     'label' => $this->trans('Allow 1-click payments'),
                     'data' => boolval(PayzenEmbedded::getConfigValue('allow_one_click_payments', true)),
                     'label_attr' => array(
-                        'help' => $this->trans('If this box is checked, your customers could register they card details, and no longer have to fill in bank details during subsequent payments')
+                        'help' => $this->trans('If this box is checked, your customers could register their card details, and no longer have to fill in bank details during subsequent payments')
                     )
                 )
             )
