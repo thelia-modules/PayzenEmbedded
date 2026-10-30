@@ -76,7 +76,7 @@
                                         ' kr-form-token="' + data.form_token + '"' +
                                         ' kr-public-key="' + data.public_key + '"' +
                                         ' kr-post-url-success="{url path="/order/placed/_ORDER_ID_"}"' +
-                                        ' kr-post-url-refused="{url path="/payzen-embedded/cancel-payment/_ORDER_ID_"}"' +
+                                        ' kr-post-url-refused="{url path="/payzen-embedded/payment-refused/_ORDER_ID_"}"' +
                                         ' kr-language="{$lang_code|lower}">' +
                                         '</scr' + 'ipt>').replace(/_ORDER_ID_/g, data.order_id);
 

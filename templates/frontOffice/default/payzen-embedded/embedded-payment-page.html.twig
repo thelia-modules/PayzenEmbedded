@@ -72,7 +72,8 @@
             src="{{ krypton_base_url }}/stable/kr-payment-form.min.js"
             kr-public-key="{{ public_key }}"
             kr-post-url-success="{{ url('checkout_confirm', {order_id: order_id}) }}"
-            kr-post-url-refused="{{ url('payzen_embedded_front_abort_payment', {orderId: order_id}) }}"
+            {# Posted by the payment form, which cannot carry the token of the session: the route changes nothing. #}
+            kr-post-url-refused="{{ url('payzen_embedded_front_payment_refused', {orderId: order_id}) }}"
             {# The client expects a dash separated locale: fr_FR would silently fall back to English. #}
             kr-language="{{ app.request.locale|replace({'_': '-'}) }}">
     </script>

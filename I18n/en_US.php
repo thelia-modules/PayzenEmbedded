@@ -46,6 +46,7 @@ return array(
     'New order total amount' => 'New order total amount',
     'None' => 'None',
     'This order can no longer be cancelled.' => 'This order can no longer be cancelled.',
+    'Your payment was not accepted.' => 'Your payment was not accepted.',
     'Your request could not be checked, please try again.' => 'Your request could not be checked, please try again.',
     'PayZen could not forget %count% of your cards, they are kept: please try again later.' => 'PayZen could not forget %count% of your cards, they are kept: please try again later.',
     'One click payment with PayZen' => 'One click payment with PayZen',

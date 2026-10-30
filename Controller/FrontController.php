@@ -270,4 +270,16 @@ class FrontController extends BasePaymentModuleController
 
         $this->redirectToFailurePage($orderId, $translator->trans("You canceled the payment", [], PayzenEmbedded::DOMAIN_NAME));
     }
+
+    /**
+     * Where the payment form sends the customer once PayZen refused the payment. The form posts it without any
+     * token of the shop, so nothing is changed here: the notification PayZen sends the shop settles the order.
+     */
+    #[Route('/payment-refused/{orderId}', name: 'payment_refused', requirements: ['orderId' => '\d+'], methods: ['GET', 'POST'])]
+    public function paymentRefused(Translator $translator, int $orderId)
+    {
+        $this->getLog()->addInfo(sprintf('PayZen refused the payment of order %d, the customer is sent to the failure page.', $orderId));
+
+        $this->redirectToFailurePage($orderId, $translator->trans('Your payment was not accepted.', [], PayzenEmbedded::DOMAIN_NAME));
+    }
 }
