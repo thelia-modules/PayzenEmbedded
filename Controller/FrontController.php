@@ -217,6 +217,9 @@ class FrontController extends BasePaymentModuleController
      * A POST that carries a token of the session, on an order of the customer that PayZen is to pay and that is
      * not paid yet: a link in a page, a mail or an image must not be able to cancel an order, and an order paid,
      * being prepared or paid with another module keeps its status.
+     *
+     * The one POST without token this route accepts is the refusal of a payment that the form of a theme from before
+     * 3.7.0 still sends here: it changes nothing.
      */
     #[Route('/cancel-payment/{orderId}', name: 'abort_payment', requirements: ['orderId' => '\d+'], methods: ['POST'])]
     public function abortPayment(
@@ -226,9 +229,20 @@ class FrontController extends BasePaymentModuleController
         Translator $translator,
         int $orderId
     ) {
+        $request = $this->getRequest();
+        $tokenIsValid = $csrfTokenManager->isTokenValid(new CsrfToken(self::ABORT_PAYMENT_TOKEN_ID, (string) $request->request->get('_token')));
+
+        // Before 3.7.0 the payment form of a theme (`kr-post-url-refused`) was sent to this route when PayZen refused
+        // the payment, and it posts the answer of PayZen without any token of the shop. Such a request is that
+        // refusal and is answered as the page made for it answers: nothing is changed, nothing is checked, the
+        // customer is sent to the failure page. The answer is not verified for this reason, it is never read.
+        if (!$tokenIsValid && $request->request->has('kr-answer') && $request->request->has('kr-hash')) {
+            return $this->paymentRefused($translator, $orderId);
+        }
+
         $customer = $this->signedInCustomer($securityContext);
 
-        if (!$csrfTokenManager->isTokenValid(new CsrfToken(self::ABORT_PAYMENT_TOKEN_ID, (string) $this->getRequest()->request->get('_token')))) {
+        if (!$tokenIsValid) {
             throw new AccessDeniedHttpException('The request does not carry the token of the session.');
         }
 
