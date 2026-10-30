@@ -45,6 +45,7 @@ return array(
     'National value' => 'Valeur nationale',
     'New order total amount' => 'Nouveau total de commande',
     'None' => 'Aucune',
+    'This order can no longer be cancelled.' => 'Cette commande ne peut plus être annulée.',
     'Your request could not be checked, please try again.' => 'Votre demande n\'a pas pu être vérifiée, merci de réessayer.',
     'PayZen could not forget %count% of your cards, they are kept: please try again later.' => 'PayZen n\'a pas pu oublier %count% de vos cartes, elles sont conservées : merci de réessayer plus tard.',
     'One click payment with PayZen' => 'Paiement en un clic avec PayZen',

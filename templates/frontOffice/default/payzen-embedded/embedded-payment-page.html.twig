@@ -19,11 +19,13 @@
                     : 'payzen-embedded/_card-form.html.twig' %}
             </div>
 
-            <div class="mt-6">
-                <a href="{{ path('payzen_embedded_front_abort_payment', {orderId: order_id}) }}" class="button">
+            {# A form, not a link: cancelling the order is a POST that carries the token of the session. #}
+            <form method="post" action="{{ path('payzen_embedded_front_abort_payment', {orderId: order_id}) }}" class="mt-6">
+                <input type="hidden" name="_token" value="{{ csrf_token('payzen_embedded_abort_payment') }}">
+                <button type="submit" class="button">
                     {{ 'Cancel payment'|trans({}, 'payzenembedded.fo.default') }}
-                </a>
-            </div>
+                </button>
+            </form>
         {% else %}
             <div class="flex flex-col items-center justify-center">
                 <div class="lg:w-[250px] mb-6">
@@ -38,9 +40,12 @@
                     </div>
                 {% endif %}
 
-                <a href="{{ path('payzen_embedded_front_abort_payment', {orderId: order_id}) }}" class="button">
-                    {{ 'Try again your payment'|trans({}, 'payzenembedded.fo.default') }}
-                </a>
+                <form method="post" action="{{ path('payzen_embedded_front_abort_payment', {orderId: order_id}) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('payzen_embedded_abort_payment') }}">
+                    <button type="submit" class="button">
+                        {{ 'Try again your payment'|trans({}, 'payzenembedded.fo.default') }}
+                    </button>
+                </form>
 
                 <p class="mt-4 text-sm">
                     {# No theme route is assumed here: Flexy has no "contact" route, and a missing one turned this page into a 500. #}

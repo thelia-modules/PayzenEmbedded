@@ -30,7 +30,6 @@ use Thelia\Core\Event\Order\OrderEvent;
 use Thelia\Core\Event\TheliaEvents;
 use Symfony\Component\HttpFoundation\Response;
 use Thelia\Core\HttpFoundation\Session\Session;
-use Thelia\Core\Security\Exception\AuthorizationException;
 use Thelia\Core\Security\Exception\TokenAuthenticationException;
 use Thelia\Core\Security\SecurityContext;
 use Thelia\Core\Translation\Translator;
@@ -45,6 +44,9 @@ use Thelia\Module\BasePaymentModuleController;
 use Thelia\Tools\TokenProvider;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Csrf\CsrfToken;
+use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
+use Thelia\Model\Map\OrderTableMap;
 
 /**
  * Payzen payment module
@@ -54,6 +56,9 @@ use Symfony\Component\Routing\Attribute\Route;
 #[Route('/payzen-embedded', name: 'payzen_embedded_front_')]
 class FrontController extends BasePaymentModuleController
 {
+    /** Id of the token the forms that cancel a payment carry. */
+    public const ABORT_PAYMENT_TOKEN_ID = 'payzen_embedded_abort_payment';
+
     protected function getModuleCode(): string
     {
         return PayzenEmbedded::getModuleCode();
@@ -206,42 +211,63 @@ class FrontController extends BasePaymentModuleController
     }
 
     /**
-     * Cancel an order on user request
+     * The customer gives up paying an order with PayZen: the order is cancelled and the customer sent to the
+     * failure page.
+     *
+     * A POST that carries a token of the session, on an order of the customer that PayZen is to pay and that is
+     * not paid yet: a link in a page, a mail or an image must not be able to cancel an order, and an order paid,
+     * being prepared or paid with another module keeps its status.
      */
-    #[Route('/cancel-payment/{orderId}', name: 'abort_payment')]
+    #[Route('/cancel-payment/{orderId}', name: 'abort_payment', requirements: ['orderId' => '\d+'], methods: ['POST'])]
     public function abortPayment(
         EventDispatcherInterface $dispatcher,
         SecurityContext $securityContext,
+        CsrfTokenManagerInterface $csrfTokenManager,
         Translator $translator,
-        $orderId
-    ){
-        // Cancel the order and redirect to failure page.
-        if (null !== $order = $this->getOrder($orderId)) {
-            /** @var Customer $customer */
-            $customer = $securityContext->getCustomerUser();
+        int $orderId
+    ) {
+        $customer = $securityContext->getCustomerUser();
 
-            if ($order->getCustomerId() === $customer->getId()) {
-                $this->getLog()->addInfo(
-                    $translator->trans(
-                        "Processing cancelation of payment for order ref. %ref",
-                        ['%ref' => $order->getRef()]
-                    )
-                );
-
-                $event = (new OrderEvent($order))
-                    ->setStatus(OrderStatusQuery::getCancelledStatus()->getId());
-
-                $dispatcher->dispatch($event,TheliaEvents::ORDER_UPDATE_STATUS);
-
-            } else {
-                $this->getLog()->addError($translator->trans($customer->getRef() . " is not allowed to cancel order " . $order->getRef(), [], PayzenEmbedded::DOMAIN_NAME));
-
-                throw new AuthorizationException("Forbidden");
-            }
+        if (!$customer instanceof Customer) {
+            throw new AccessDeniedHttpException('Only a customer can cancel the payment of their order.');
         }
 
-        $message = $translator->trans("You canceled the payment", [], PayzenEmbedded::DOMAIN_NAME);
+        if (!$csrfTokenManager->isTokenValid(new CsrfToken(self::ABORT_PAYMENT_TOKEN_ID, (string) $this->getRequest()->request->get('_token')))) {
+            throw new AccessDeniedHttpException('The request does not carry the token of the session.');
+        }
 
-        $this->redirectToFailurePage($orderId, $message);
+        // Read from the database, not from what this request may already hold in memory.
+        OrderTableMap::removeInstanceFromPool($orderId);
+        $order = OrderQuery::create()->findPk($orderId);
+
+        if (null === $order || (int) $order->getCustomerId() !== (int) $customer->getId()) {
+            $this->getLog()->addError(sprintf('Customer %d is not allowed to cancel order %d.', (int) $customer->getId(), $orderId));
+
+            throw new AccessDeniedHttpException('This order is not one of the customer.');
+        }
+
+        if (PayzenEmbedded::getModuleId() !== (int) $order->getPaymentModuleId() || !$order->isNotPaid()) {
+            $this->getLog()->addInfo(sprintf('Order %s is not a PayZen order waiting for its payment, its status is kept.', $order->getRef()));
+
+            if ($order->isPaid(false)) {
+                $this->redirectToSuccessPage($orderId);
+            }
+
+            $this->redirectToFailurePage($orderId, $translator->trans('This order can no longer be cancelled.', [], PayzenEmbedded::DOMAIN_NAME));
+        }
+
+        $this->getLog()->addInfo(
+            $translator->trans(
+                "Processing cancelation of payment for order ref. %ref",
+                ['%ref' => $order->getRef()]
+            )
+        );
+
+        $event = (new OrderEvent($order))
+            ->setStatus(OrderStatusQuery::getCancelledStatus()->getId());
+
+        $dispatcher->dispatch($event, TheliaEvents::ORDER_UPDATE_STATUS);
+
+        $this->redirectToFailurePage($orderId, $translator->trans("You canceled the payment", [], PayzenEmbedded::DOMAIN_NAME));
     }
 }
