@@ -313,6 +313,98 @@ final class AbortPaymentTest extends WebIntegrationTestCase
     }
 
     /**
+     * The payment form of a theme from before 3.7.0 posts the refusal of PayZen to this route, with no token of the
+     * shop: it is the refusal, answered as the route made for it answers, and nothing is changed.
+     */
+    public function testTheRefusalPostedByAnOlderThemeWithoutTokenIsAnsweredAsTheRefusalRoute(): void
+    {
+        $customer = $this->signedIn();
+        $order = $this->order($customer);
+
+        $this->client->request('POST', $this->cancelUrl($order), ['kr-answer' => '{}', 'kr-hash' => 'any']);
+
+        self::assertSame(OrderStatus::CODE_NOT_PAID, $this->statusOf($order));
+        $this->assertSentToTheFailurePage($order);
+        $location = (string) $this->client->getResponse()->headers->get('Location');
+        self::assertSame($this->locationOfTheRefusalRoute($order), $location);
+    }
+
+    public function testTheRefusalPostedByAnOlderThemeDispatchesNothing(): void
+    {
+        $customer = $this->signedIn();
+        $order = $this->order($customer);
+        $dispatched = 0;
+        $this->getService(EventDispatcherInterface::class)->addListener(TheliaEvents::ORDER_UPDATE_STATUS, static function () use (&$dispatched): void {
+            ++$dispatched;
+        });
+
+        $this->client->request('POST', $this->cancelUrl($order), ['kr-answer' => '{}', 'kr-hash' => 'any']);
+
+        self::assertSame(0, $dispatched);
+    }
+
+    public function testTheRefusalPostedByAnOlderThemeForAVisitorIsAnsweredAsTheRefusalRoute(): void
+    {
+        $order = $this->order($this->factory->customer($this->factory->customerTitle()));
+
+        $this->client->request('POST', $this->cancelUrl($order), ['kr-answer' => '{}', 'kr-hash' => 'any']);
+
+        self::assertSame(OrderStatus::CODE_NOT_PAID, $this->statusOf($order));
+        self::assertResponseRedirects();
+        $location = (string) $this->client->getResponse()->headers->get('Location');
+        self::assertSame($this->locationOfTheRefusalRoute($order), $location);
+    }
+
+    public function testTheRefusalPostedByAnOlderThemeOnAnOrderOfAnotherCustomerChangesNothing(): void
+    {
+        $this->signedIn();
+        $order = $this->order($this->factory->customer($this->factory->customerTitle()));
+
+        $this->client->request('POST', $this->cancelUrl($order), ['kr-answer' => '{}', 'kr-hash' => 'any']);
+
+        self::assertSame(OrderStatus::CODE_NOT_PAID, $this->statusOf($order));
+        $location = (string) $this->client->getResponse()->headers->get('Location');
+        self::assertSame($this->locationOfTheRefusalRoute($order), $location);
+    }
+
+    /**
+     * @return iterable<string, array{array<string, string>}>
+     */
+    public static function postsThatAreNotTheRefusalOfThePaymentForm(): iterable
+    {
+        yield 'only the answer' => [['kr-answer' => '{}']];
+        yield 'only the hash' => [['kr-hash' => 'any']];
+        yield 'neither' => [[]];
+        yield 'another token' => [['_token' => 'not-the-token-of-the-session', 'foo' => 'bar']];
+    }
+
+    /**
+     * @param array<string, string> $parameters
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('postsThatAreNotTheRefusalOfThePaymentForm')]
+    public function testAPostWithoutTokenThatIsNotTheRefusalOfThePaymentFormIsRefused(array $parameters): void
+    {
+        $customer = $this->signedIn();
+        $order = $this->order($customer);
+
+        $this->client->request('POST', $this->cancelUrl($order), $parameters);
+
+        self::assertResponseStatusCodeSame(403);
+        self::assertSame(OrderStatus::CODE_NOT_PAID, $this->statusOf($order));
+    }
+
+    public function testThePostWithTheTokenStillCancelsWhateverItCarriesBesides(): void
+    {
+        $customer = $this->signedIn();
+        $order = $this->order($customer);
+
+        $this->client->request('POST', $this->cancelUrl($order), ['_token' => $this->tokenOfTheSession(), 'kr-answer' => '{}', 'kr-hash' => 'any']);
+
+        self::assertSame(OrderStatus::CODE_CANCELED, $this->statusOf($order));
+        $this->assertSentToTheFailurePage($order);
+    }
+
+    /**
      * The payment form posts a refused payment without any token of the shop: the page it lands on only sends the
      * customer to the failure page, and the notification of PayZen settles the order.
      */
@@ -336,6 +428,17 @@ final class AbortPaymentTest extends WebIntegrationTestCase
 
         self::assertSame(OrderStatus::CODE_PAID, $this->statusOf($order));
         self::assertResponseRedirects();
+    }
+
+    /**
+     * Where the route made for the refusal sends a POST of the payment form for this order, asked as a visitor
+     * would see it: the answer the cancellation route has to give the same request.
+     */
+    private function locationOfTheRefusalRoute(Order $order): string
+    {
+        $this->client->request('POST', $this->getService(RouterInterface::class)->generate('payzen_embedded_front_payment_refused', ['orderId' => $order->getId()]), ['kr-answer' => '{}', 'kr-hash' => 'any']);
+
+        return (string) $this->client->getResponse()->headers->get('Location');
     }
 
     private function signedIn(): Customer
