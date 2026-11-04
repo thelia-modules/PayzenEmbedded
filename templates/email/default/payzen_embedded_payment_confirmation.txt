@@ -1,7 +1,9 @@
-{default_translation_domain domain='payzen.email.default'}
-{default_locale locale={$locale}}
-{intl l="Dear customer,"}
-{intl l="This is a confirmation of the payment of your order %ref via PayZen on our shop." ref={$order_ref}}
-{intl l="Your invoice is now available in your customer account at %link" link={url path="/account"}}
-{intl l="Thank you again for your purchase."}
-{intl l="The %name team" name={config key="store_name"}}
+{{ 'Dear customer,'|trans({}, 'email', locale) }}
+
+{{ 'This is a confirmation of the payment of your order %ref% via PayZen on our shop.'|trans({'%ref%': order_ref|default('')}, 'email', locale) }}
+
+{{ 'Your invoice is now available in your customer account at %link%'|trans({'%link%': thelia_url('/account')}, 'email', locale) }}
+
+{{ 'Thank you again for your purchase.'|trans({}, 'email', locale) }}
+
+{{ 'The %store_name% team'|trans({'%store_name%': config('store_name')}, 'email', locale) }}
