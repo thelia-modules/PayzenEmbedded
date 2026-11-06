@@ -18,8 +18,8 @@ use PayzenEmbedded\LyraClient\PaymentContract;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The contract a payment is made on: the space (TEST or PRODUCTION) picks the password and the keys,
- * and a sale unit that sets only some of the settings reads the national value for the others.
+ * The contract a payment is made on: the space (TEST or PRODUCTION) picks the password and the keys.
+ * What a sale unit must set for its contract to be paid on is missingSettings().
  */
 final class PaymentContractTest extends TestCase
 {
@@ -62,7 +62,7 @@ final class PaymentContractTest extends TestCase
         self::assertFalse(PaymentContract::read($this->reader(['mode' => null] + self::NATIONAL))->test);
     }
 
-    public function testASaleUnitOwnKeysAreTheOnesReadNotTheNationalOnes(): void
+    public function testAReaderThatMergesTwoConfigurationsReadsWhatItAnswers(): void
     {
         $unit = [
             'site_id' => '22222222',
@@ -75,9 +75,38 @@ final class PaymentContractTest extends TestCase
         self::assertSame('22222222', $contract->siteId);
         self::assertSame('unit-production-password', $contract->password);
         self::assertSame('22222222:unit-production-public', $contract->publicKey);
-        // The unit did not set this one: the national value stands.
+        // read() takes what the reader answers: completing a unit with the national values is the
+        // reader's doing, which the module never does for a sale unit (missingSettings()).
         self::assertSame('national-production-hmac', $contract->signatureKey);
         self::assertSame('https://api.payzen.eu', $contract->endpoint);
+    }
+
+    public function testAContractNeedsItsModeItsShopAndTheKeysOfItsSpace(): void
+    {
+        $test = [
+            'mode' => 'TEST',
+            'site_id' => '22222222',
+            'test_password' => 'unit-test-password',
+            'javascript_test_key' => '22222222:unit-test-public',
+            'signature_test_key' => 'unit-test-hmac',
+        ];
+
+        self::assertSame([], PaymentContract::missingSettings($this->reader($test)), 'The keys of the other space and the web service URL are not needed.');
+        self::assertSame(['signature_test_key'], PaymentContract::missingSettings($this->reader(['signature_test_key' => null] + $test)));
+        self::assertSame(['site_id'], PaymentContract::missingSettings($this->reader(['site_id' => ' '] + $test)), 'A blank value is no value.');
+        self::assertSame(
+            ['production_password', 'javascript_production_key', 'signature_production_key'],
+            PaymentContract::missingSettings($this->reader(['mode' => 'PRODUCTION'] + $test)),
+            'A unit in production needs the production keys, the test ones do not stand in for them.',
+        );
+    }
+
+    public function testAContractWithNoValueLacksEverythingItReads(): void
+    {
+        self::assertSame(
+            ['mode', 'site_id', 'production_password', 'javascript_production_key', 'signature_production_key'],
+            PaymentContract::missingSettings($this->reader([])),
+        );
     }
 
     public function testEverySettingOfAContractIsOneASaleUnitMaySet(): void

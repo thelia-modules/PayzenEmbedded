@@ -135,7 +135,7 @@
             <div class="row">
                 <div class="col-md-12">
                     <p class="help-block">
-                        {intl d=$_d l="A sale unit can be paid on a PayZen contract of its own. What it leaves empty uses the configuration above: with no value of its own, a sale unit is paid on the national contract."}
+                        {intl d=$_d l="A sale unit is paid on a PayZen contract of its own: its mode, its shop identifier, and the password and the keys of the space of its mode. PayZen is not offered on a sale unit that lacks one of them, and nothing is paid on it: the national contract never stands in for it. Only the web service URL may be left to the configuration above."}
                     </p>
 
                     <form method="get" action="{$configuration_url}#payzen-embedded-sale-units" class="form-inline">
@@ -145,13 +145,20 @@
                                 <option value="">{intl d=$_d l="Choose a sale unit"}</option>
                                 {foreach $sale_units as $saleUnit}
                                     <option value="{$saleUnit.id}" {if $saleUnit.id == $selected_sale_unit}selected="selected"{/if}>
-                                        {$saleUnit.label|escape}{if !$saleUnit.active} ({intl d=$_d l="inactive"}){/if}{if $saleUnit.hasContract} - {intl d=$_d l="own contract"}{/if}
+                                        {$saleUnit.label|escape}{if !$saleUnit.active} ({intl d=$_d l="inactive"}){/if}{if empty($saleUnit.missingSettings)} - {intl d=$_d l="own contract"}{else} - {intl d=$_d l="incomplete contract"}{/if}
                                     </option>
                                 {/foreach}
                             </select>
                         </div>
                         <button type="submit" class="btn btn-default">{intl d=$_d l="Show"}</button>
                     </form>
+
+                    {foreach $sale_units as $saleUnit}
+                        {if $saleUnit.id == $selected_sale_unit && !empty($saleUnit.missingSettings)}
+                            {capture name="missing_settings"}{foreach $saleUnit.missingSettings as $setting}{if !$setting@first}, {/if}{$setting}{/foreach}{/capture}
+                            <div class="alert alert-warning">{intl d=$_d l="Incomplete contract: PayZen is not offered on this sale unit. Missing: %settings" settings=$smarty.capture.missing_settings}</div>
+                        {/if}
+                    {/foreach}
 
                     {if $selected_sale_unit > 0}
                     {form name="payzenembedded_form_sale_unit_configuration_form"}

@@ -13,8 +13,11 @@
 namespace PayzenEmbedded;
 
 use PayzenEmbedded\Command\CancelLegacyTokensCommand;
+use PayzenEmbedded\LyraClient\IncompleteSaleUnitContractException;
+use PayzenEmbedded\LyraClient\PaymentContract;
 use PayzenEmbedded\Service\CardFormProvider;
 use PayzenEmbedded\LyraClient\LyraTokenGateway;
+use PayzenEmbedded\Service\SaleUnitContractSettings;
 use PayzenEmbedded\Service\LegacyTokenCanceller;
 use PayzenEmbedded\Service\StoredMethodContract;
 use PayzenEmbedded\Service\StoredMethodRevoker;
@@ -115,6 +118,25 @@ class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPay
         }
 
         return SaleUnitConfigScope::runFor($saleUnitId, $callback);
+    }
+
+    /**
+     * The contract the configuration in scope pays on. Outside a sale unit, the national one. For a
+     * sale unit, its own contract and nothing else: a unit that lacks a setting of it is paid on no
+     * contract, and the national values never complete it, so that a payment, a notification, a
+     * refund or an update of a unit's order never reaches another contract than the unit's.
+     *
+     * @throws IncompleteSaleUnitContractException when the sale unit in scope lacks a setting of its contract
+     */
+    public static function paymentContract(): PaymentContract
+    {
+        $saleUnitId = self::supportsSaleUnits() ? SaleUnitConfigScope::current() : null;
+
+        if (null === $saleUnitId) {
+            return PaymentContract::read(static fn (string $name): ?string => self::getConfigValue($name));
+        }
+
+        return SaleUnitContractSettings::contractOf($saleUnitId);
     }
 
     /**
@@ -364,8 +386,15 @@ class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPay
     {
         $valid = false;
 
+        try {
+            $contract = self::paymentContract();
+        } catch (IncompleteSaleUnitContractException) {
+            // A sale unit whose contract lacks a setting is not offered PayZen.
+            return false;
+        }
+
         // CHeck if the module has been configured.
-        if (! empty(PayzenEmbedded::getConfigValue('site_id'))) {
+        if (! empty($contract->siteId)) {
             $mode = self::getConfigValue('mode', false);
 
             // If we're in test / restricted production mode, do not display module on the front office, except for allowed IP addresses.

@@ -35,6 +35,9 @@ class LyraClientWrapper extends Client
     const PAYMENT_STATUS_IN_PROGRESS = 3;
     const PAYMENT_STATUS_ERROR = 4;
 
+    /** Why the client speaks for no contract: the sale unit in scope lacks a setting of its own. */
+    private ?IncompleteSaleUnitContractException $contractRefusal = null;
+
     public function __construct()
     {
         parent::__construct();
@@ -52,7 +55,15 @@ class LyraClientWrapper extends Client
      */
     protected function useConfiguration(): void
     {
-        $contract = PaymentContract::read(static fn (string $name): ?string => PayzenEmbedded::getConfigValue($name));
+        try {
+            $contract = PayzenEmbedded::paymentContract();
+            $this->contractRefusal = null;
+        } catch (IncompleteSaleUnitContractException $refusal) {
+            // The client is built wherever a service needs it, so it is not refused here: it speaks
+            // for no contract, and refuses whatever would reach the platform (see refuseWithoutContract()).
+            $contract = new PaymentContract(true, null, null, null, null, null);
+            $this->contractRefusal = $refusal;
+        }
 
         // Inilialize PayZen client
         $this->setUsername($contract->siteId);
@@ -81,11 +92,25 @@ class LyraClientWrapper extends Client
         try {
             return PayzenEmbedded::runForOrder($order, function () use ($callback): mixed {
                 $this->useConfiguration();
+                $this->refuseWithoutContract();
 
                 return $callback();
             });
         } finally {
             $this->useConfiguration();
+        }
+    }
+
+    /**
+     * Nothing reaches the platform, and nothing is checked, with the keys of no contract: the sale
+     * unit in scope lacks a setting of its own, and the national contract does not stand in for it.
+     *
+     * @throws IncompleteSaleUnitContractException
+     */
+    protected function refuseWithoutContract(): void
+    {
+        if (null !== $this->contractRefusal) {
+            throw $this->contractRefusal;
         }
     }
 
@@ -101,6 +126,8 @@ class LyraClientWrapper extends Client
      */
     public function post($target, $array)
     {
+        $this->refuseWithoutContract();
+
         try {
             return parent::post($target, $array);
         } finally {

@@ -150,6 +150,10 @@ final class StoredMethodContractTest extends PayzenIntegrationTestCase
     {
         $customer = $this->customer();
         $unit = $this->factory->saleUnit();
+        // A sale unit is paid on a whole contract of its own, never on the national one.
+        foreach (['mode' => 'TEST', 'site_id' => '22222222', 'test_password' => 'unit-test-password', 'javascript_test_key' => '22222222:unit-test-public', 'signature_test_key' => 'unit-test-hmac'] as $name => $value) {
+            PayzenEmbedded::setConfigValueForSaleUnit($unit->getId(), $name, $value);
+        }
         $card = $this->card($customer, $unit->getId());
         $client = new RecordingLyraClient($this->dispatcher());
 
@@ -159,9 +163,8 @@ final class StoredMethodContractTest extends PayzenIntegrationTestCase
     }
 
     /**
-     * A sale unit that leaves its contract empty reads the national one, but a unit may set any of the settings of a
-     * contract (shop identifier, mode, endpoint, keys) and the module does not compare contracts: the national card
-     * is the national orders', and a unit's card its own unit's.
+     * The national card is the national orders', and a unit's card its own unit's, whatever the contracts hold: the
+     * module does not compare them.
      */
     public function testANationalCardPaysNationalOrdersOnlyAndASaleUnitCardNeverPaysANationalOrder(): void
     {

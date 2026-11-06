@@ -29,8 +29,9 @@ use Symfony\Component\Validator\Constraints\Url;
 use Thelia\Form\BaseForm;
 
 /**
- * The PayZen contract of one sale unit: the settings it gives itself, the others being left to the
- * national configuration. Every field may be empty. A password or a key is never shown back.
+ * The PayZen contract of one sale unit, whole: a unit that lacks a setting of its contract is paid on
+ * no contract (see SaleUnitContractSettings::contractOf()). Only the web service URL may be left to the
+ * national configuration. A password or a key is never shown back.
  */
 class SaleUnitConfigurationForm extends BaseForm
 {
@@ -46,7 +47,7 @@ class SaleUnitConfigurationForm extends BaseForm
             ])
             ->add('mode', ChoiceType::class, [
                 'required' => false,
-                'placeholder' => $this->trans('National value'),
+                'placeholder' => $this->trans('Not set'),
                 'constraints' => [new Choice(choices: ['TEST', 'PRODUCTION_RESTRICTED', 'PRODUCTION'])],
                 'choices' => [
                     $this->trans('Test') => 'TEST',
@@ -55,14 +56,14 @@ class SaleUnitConfigurationForm extends BaseForm
                 ],
                 'label' => $this->trans('Operation Mode'),
                 'data' => $own['mode'] ?? null,
-                'label_attr' => ['help' => $this->trans('Empty: the national value is used')],
+                'label_attr' => ['help' => $this->trans('Required: the sale unit is not paid without it')],
             ])
             ->add('site_id', TextType::class, [
                 'required' => false,
                 'constraints' => [new Length(max: 255)],
                 'label' => $this->trans('Username'),
                 'data' => $own['site_id'] ?? null,
-                'label_attr' => ['help' => $this->trans('Empty: the national value is used')],
+                'label_attr' => ['help' => $this->trans('Required: the sale unit is not paid without it')],
             ])
             ->add('webservice_endpoint', TextType::class, [
                 'required' => false,
@@ -92,12 +93,12 @@ class SaleUnitConfigurationForm extends BaseForm
                     'label_attr' => [
                         'help' => isset($own[$setting]) && '' !== $own[$setting]
                             ? $this->trans('Set for this sale unit. Leave empty to keep it, or type a new value.')
-                            : $this->trans('Empty: the national value is used'),
+                            : $this->trans('Required for the space of the mode of the sale unit (test or production)'),
                     ],
                 ])
                 ->add(SaleUnitContractSettings::removalFieldOf($setting), CheckboxType::class, [
                     'required' => false,
-                    'label' => $this->trans('Use the national value'),
+                    'label' => $this->trans('Remove this value'),
                 ]);
         }
     }
