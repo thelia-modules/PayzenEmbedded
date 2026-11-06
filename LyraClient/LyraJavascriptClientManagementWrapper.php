@@ -38,8 +38,24 @@ class LyraJavascriptClientManagementWrapper extends LyraPaymentManagementWrapper
      */
     public function payOrder(Order $order, ?CustomerPaymentMethod $storedMethod = null)
     {
-        // On the contract of the sale unit the order was placed on.
-        return $this->forOrder($order, fn () => $this->payOrderOnItsContract($order, $storedMethod));
+        try {
+            // On the contract of the sale unit the order was placed on.
+            return $this->forOrder($order, fn () => $this->payOrderOnItsContract($order, $storedMethod));
+        } catch (IncompleteSaleUnitContractException $refusal) {
+            // Nothing was sent to the platform: the customer is told to pay another way, the shop
+            // reads why in its log.
+            Tlog::getInstance()->addError(sprintf('Order %s not sent to PayZen: %s', $order->getRef(), $refusal->getMessage()));
+
+            return [
+                'success' => false,
+                'order_id' => $order->getId(),
+                // The payment page shows the message of an error that has a code, see payOrderOnItsContract().
+                'errorCode' => '0000',
+                'errorMessage' => Translator::getInstance()->trans('Card payment is not available in this shop for now. Please choose another payment method.', [], PayzenEmbedded::DOMAIN_NAME),
+                'detailedErrorCode' => '',
+                'detailedErrorMessage' => '',
+            ];
+        }
     }
 
     private function payOrderOnItsContract(Order $order, ?CustomerPaymentMethod $storedMethod)

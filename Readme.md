@@ -65,7 +65,7 @@ rien, et un client qui a dépensé son plafond reçoit un formulaire de carte ne
 PayZen crée le jeton sur le contrat de l'unité de vente de la commande payée, et il n'est valable que sur ce contrat. Chaque
 carte est donc rattachée à l'unité de vente de la commande qui l'a enregistrée (table `payzen_embedded_stored_method_contract`,
 `sale_unit_id` vide pour le contrat national) : elle n'est proposée au checkout, utilisée pour payer et annulée (`Token/Cancel`)
-que sur ce contrat, et jamais sur un autre, même quand une unité sans contrat propre lit le contrat national. Une carte
+que sur ce contrat, et jamais sur un autre. Une carte
 nationale ne paie que les commandes nationales. Une carte d'une autre unité est retirée des cartes proposées au checkout, et
 refusée (422) si elle arrive tout de même au paiement. Une carte sans rattachement (écriture échouée) ne paie nulle part et
 s'annule sur le contrat national. La mise à jour 3.6.0 rattache au contrat national toutes les cartes du module, celles de
@@ -203,10 +203,14 @@ apparaît dans l'historique et laisse le statut de la commande à la boutique.
 
 Sur une boutique qui vend depuis plusieurs points de vente (Thelia qui connaît les points de vente), chaque point de vente peut être payé
 sur son propre contrat PayZen. La page de configuration du module propose, sous le formulaire national, un sélecteur de
-point de vente : identifiant de la boutique, mode, URL du web service, mots de passe et clés (test et production). Ce
-qu'un point de vente laisse vide reprend la valeur nationale ; un point de vente sans valeur propre est donc payé sur le
-contrat national, et une boutique sans point de vente fonctionne comme avant. Les mots de passe et les clés ne sont
-jamais réaffichés : champ vide = valeur conservée, case « Utiliser la valeur nationale » = retour à la valeur nationale.
+point de vente : identifiant de la boutique, mode, URL du web service, mots de passe et clés (test et production). Le
+contrat d'un point de vente est complet ou n'est pas utilisé : le mode, l'identifiant de la boutique, le mot de passe et
+les clés de l'espace (test ou production) de ce mode sont lus sur le point de vente et nulle part ailleurs. À un point de
+vente auquel il en manque un, PayZen n'est pas proposé, et rien n'y est payé, notifié, remboursé ni modifié : le contrat
+national ne le complète jamais, même clé par clé. Seule l'URL du web service, adresse de la plateforme, peut reprendre la
+valeur nationale. Le sélecteur signale un contrat incomplet et la liste de ce qui manque. Une boutique sans point de vente
+fonctionne comme avant. Les mots de passe et les clés ne sont jamais réaffichés : champ vide = valeur conservée, case
+« Supprimer cette valeur » = valeur du point de vente supprimée.
 
 Le paiement, la notification, le remboursement, la modification et l'historique d'une commande utilisent le contrat du
 point de vente où elle a été passée. La notification est authentifiée en deux temps : la référence de commande qu'elle
@@ -306,7 +310,7 @@ when it pays, once per payment: opening the form spends nothing, and a customer 
 PayZen creates the token on the contract of the sale unit of the order that is paid, and it is only good on that contract.
 Each card is therefore tied to the sale unit of the order that registered it (table `payzen_embedded_stored_method_contract`,
 `sale_unit_id` empty for the national contract): it is offered at the checkout, paid with and cancelled (`Token/Cancel`)
-on that contract only, never on another, even when a sale unit with no contract of its own reads the national one. A
+on that contract only, never on another. A
 national card pays national orders only. A card of another sale unit is left out of the cards offered at the checkout, and
 refused (422) when it still reaches the payment. A card with no link (a failed write) pays nowhere and is cancelled on the
 national contract. The update to 3.6.0 ties every card of the module to the national contract, those of the old table
@@ -444,10 +448,13 @@ the history, and leaves the order status to the shop.
 
 On a shop that sells from several sale units (a Thelia that knows sale units), each sale unit can be paid on a PayZen contract of
 its own. Under the national form, the module configuration page offers a sale unit selector: shop identifier, mode, web
-service URL, passwords and keys (test and production). What a sale unit leaves empty reads the national value, so a sale
-unit with no value of its own is paid on the national contract, and a shop with no sale unit works as before. Passwords
-and keys are never shown back: an empty field keeps the stored value, the "Use the national value" box goes back to the
-national one.
+service URL, passwords and keys (test and production). The contract of a sale unit is whole or unused: the mode, the
+shop identifier, and the password and the keys of the space (test or production) of that mode are read from the sale unit
+and from nowhere else. PayZen is not offered on a sale unit that lacks one of them, and nothing is paid, notified,
+refunded or updated on it: the national contract never completes it, not even key by key. Only the web service URL, the
+address of the platform, may be left to the national value. The selector flags an incomplete contract, with what it
+lacks. A shop with no sale unit works as before. Passwords and keys are never shown back: an empty field keeps the stored
+value, the "Remove this value" box drops the value of the sale unit.
 
 The payment, the notification, the refund, the update and the history of an order use the contract of the sale unit it
 was placed on. The notification is authenticated in two steps: the order reference it names only finds the order, hence

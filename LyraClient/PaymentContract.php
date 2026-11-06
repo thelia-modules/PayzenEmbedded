@@ -26,8 +26,8 @@ namespace PayzenEmbedded\LyraClient;
 final readonly class PaymentContract
 {
     /**
-     * The settings that make up a contract. A sale unit may give its own value to each of them; one
-     * it leaves empty keeps the national value.
+     * The settings that make up a contract. A sale unit gives its own value to each of them, see
+     * missingSettings() for the ones it cannot leave empty.
      */
     public const SETTINGS = [
         'mode',
@@ -76,5 +76,26 @@ final readonly class PaymentContract
             $setting('javascript_' . $space . '_key'),
             $setting('signature_' . $space . '_key'),
         );
+    }
+
+    /**
+     * The settings a contract needs and does not have: the mode, the shop identifier, and the
+     * password and the keys of the space the mode picks. The web service URL is the address of the
+     * platform, not a part of the contract, and may be left to the national value. The keys of the
+     * other space are never read.
+     *
+     * @param callable(string): (string|null) $setting answers a setting by name, null or an empty
+     *                                                 string when it has no value
+     *
+     * @return list<string>
+     */
+    public static function missingSettings(callable $setting): array
+    {
+        $space = 'TEST' === $setting('mode') ? 'test' : 'production';
+
+        return array_values(array_filter(
+            ['mode', 'site_id', $space . '_password', 'javascript_' . $space . '_key', 'signature_' . $space . '_key'],
+            static fn (string $name): bool => '' === trim((string) $setting($name)),
+        ));
     }
 }

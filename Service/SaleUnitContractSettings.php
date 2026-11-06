@@ -15,6 +15,7 @@ declare(strict_types=1);
 
 namespace PayzenEmbedded\Service;
 
+use PayzenEmbedded\LyraClient\IncompleteSaleUnitContractException;
 use PayzenEmbedded\LyraClient\PaymentContract;
 use PayzenEmbedded\PayzenEmbedded;
 use Thelia\Domain\SaleUnit\Access\AdminSaleUnitScope;
@@ -25,9 +26,11 @@ use Thelia\Model\SaleUnitQuery;
 /**
  * The PayZen contract of each sale unit, as the back-office edits it.
  *
- * A sale unit gives its own value to the settings of PaymentContract; a setting it leaves empty
- * reads the national value. The passwords and the keys are stored as secrets and never shown back:
- * leaving one empty keeps what is stored, and only a removal asked for puts the national value back.
+ * A sale unit is paid on a contract of its own, whole: the settings PaymentContract::missingSettings()
+ * names are read from the unit and from nowhere else, and a unit that lacks one of them is paid on no
+ * contract, never on the national one (see contractOf()). The passwords and the keys are stored as
+ * secrets and never shown back: leaving one empty keeps what is stored, and only a removal asked for
+ * drops it.
  *
  * Nothing here is reachable on a Thelia that has no sale units: see isAvailable().
  */
@@ -52,7 +55,7 @@ class SaleUnitContractSettings
     /**
      * The sale units the current administrator may configure.
      *
-     * @return list<array{id: int, label: string, active: bool, hasContract: bool}>
+     * @return list<array{id: int, label: string, active: bool, hasContract: bool, missingSettings: list<string>}>
      */
     public function saleUnits(string $locale): array
     {
@@ -75,6 +78,7 @@ class SaleUnitContractSettings
                 'label' => (string) ($saleUnit->setLocale($locale)->getTitle() ?: $saleUnit->getCode()),
                 'active' => (bool) $saleUnit->getActive(),
                 'hasContract' => [] !== array_filter(self::ownValues($id), static fn (?string $value): bool => null !== $value && '' !== $value),
+                'missingSettings' => self::missingSettingsOf($id),
             ];
         }
 
@@ -113,6 +117,39 @@ class SaleUnitContractSettings
     }
 
     /**
+     * The settings the contract of the sale unit lacks, by name: none when it can be paid on.
+     *
+     * @return list<string>
+     */
+    public static function missingSettingsOf(int $saleUnitId): array
+    {
+        $own = self::ownValues($saleUnitId);
+
+        return PaymentContract::missingSettings(static fn (string $name): ?string => $own[$name] ?? null);
+    }
+
+    /**
+     * The contract of the sale unit, read from the unit alone: a setting it does not hold is not
+     * taken from the national configuration, the web service URL aside (the address of the platform,
+     * which the unit may leave to the national value).
+     *
+     * @throws IncompleteSaleUnitContractException when the unit lacks a setting of its contract
+     */
+    public static function contractOf(int $saleUnitId): PaymentContract
+    {
+        $own = self::ownValues($saleUnitId);
+        $missing = PaymentContract::missingSettings(static fn (string $name): ?string => $own[$name] ?? null);
+
+        if ([] !== $missing) {
+            throw new IncompleteSaleUnitContractException($saleUnitId, $missing);
+        }
+
+        return PaymentContract::read(static fn (string $name): ?string => 'webservice_endpoint' === $name
+            ? PayzenEmbedded::getConfigValueForSaleUnit($saleUnitId, $name)
+            : $own[$name] ?? null);
+    }
+
+    /**
      * @param array<string, mixed> $submitted the contract settings as the form sends them, by name
      */
     public function apply(int $saleUnitId, array $submitted): void
@@ -129,7 +166,7 @@ class SaleUnitContractSettings
 
             if ('' === $value) {
                 // A secret left empty is not shown back, so it is not asked to change; any other
-                // setting left empty hands the unit back to the national value.
+                // setting left empty drops the value of the unit.
                 if (!$secret) {
                     PayzenEmbedded::deleteConfigValueForSaleUnit($saleUnitId, $setting);
                 }

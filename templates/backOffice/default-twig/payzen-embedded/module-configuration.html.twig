@@ -198,7 +198,7 @@
 
         <div class="card-body py-3">
             <p class="text-muted small">
-                {{ 'A sale unit can be paid on a PayZen contract of its own. What it leaves empty uses the configuration above: with no value of its own, a sale unit is paid on the national contract.'|trans({}, _d) }}
+                {{ 'A sale unit is paid on a PayZen contract of its own: its mode, its shop identifier, and the password and the keys of the space of its mode. PayZen is not offered on a sale unit that lacks one of them, and nothing is paid on it: the national contract never stands in for it. Only the web service URL may be left to the configuration above.'|trans({}, _d) }}
             </p>
 
             <form method="get" action="{{ configuration_url }}#payzen-embedded-sale-units" class="row g-2 align-items-end mb-3">
@@ -208,7 +208,7 @@
                         <option value="">{{ 'Choose a sale unit'|trans({}, _d) }}</option>
                         {% for saleUnit in sale_units %}
                             <option value="{{ saleUnit.id }}" {{ saleUnit.id == selected_sale_unit ? 'selected' : '' }}>
-                                {{ saleUnit.label }}{{ saleUnit.active ? '' : ' (' ~ 'inactive'|trans({}, _d) ~ ')' }}{{ saleUnit.hasContract ? ' - ' ~ 'own contract'|trans({}, _d) : '' }}
+                                {{ saleUnit.label }}{{ saleUnit.active ? '' : ' (' ~ 'inactive'|trans({}, _d) ~ ')' }}{{ saleUnit.missingSettings is empty ? ' - ' ~ 'own contract'|trans({}, _d) : ' - ' ~ 'incomplete contract'|trans({}, _d) }}
                             </option>
                         {% endfor %}
                     </select>
@@ -217,6 +217,12 @@
                     <button type="submit" class="btn btn-outline-secondary btn-sm">{{ 'Show'|trans({}, _d) }}</button>
                 </div>
             </form>
+
+            {% for saleUnit in sale_units|filter(saleUnit => saleUnit.id == selected_sale_unit and saleUnit.missingSettings is not empty) %}
+                <div class="alert alert-warning py-2 small">
+                    {{ 'Incomplete contract: PayZen is not offered on this sale unit. Missing: %settings'|trans({'%settings': saleUnit.missingSettings|join(', ')}, _d) }}
+                </div>
+            {% endfor %}
 
             {% if sale_unit_form is not null %}
                 {{ form_start(sale_unit_form, {'action': path('payzen_embedded_configure_sale_unit'), 'method': 'post', 'attr': {'class': 'payzen-embedded-sale-unit-form'}}) }}
