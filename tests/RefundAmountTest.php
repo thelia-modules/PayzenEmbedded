@@ -108,15 +108,40 @@ final class RefundAmountTest extends TestCase
     }
 
     /**
-     * Unit prices below a cent produce totals on a half cent (1.005). PHP 8.3 rounds them
-     * up, since round() pre-rounds the binary value 100.4999…; a runtime that stops pre-rounding
-     * would take one cent less from the shopper on every such order. This pins the amount charged.
+     * Unit prices below a cent produce totals on a half cent (1.005). The binary value is
+     * 1.00499999999999989…, and PHP 8.3 rounds it up only through the pre-rounding of round(),
+     * which PHP 8.4 no longer does: the conversion must not depend on the runtime, or the shopper
+     * is charged, or refunded, one cent less on every such order.
+     *
+     * @return iterable<string, array{float|string, string, int}>
      */
-    public function testAHalfCentOfAComputedTotalRoundsUp(): void
+    public static function halfCents(): iterable
     {
-        self::assertSame(101, RefundAmount::fromMajor(1.005, 'EUR'));
-        self::assertSame(909, RefundAmount::fromMajor(9.0850, 'EUR'));
+        yield '1.005' => [1.005, 'EUR', 101];
+        yield '0.015' => [0.015, 'EUR', 2];
+        yield '2.675' => [2.675, 'EUR', 268];
+        yield '9.085' => [9.0850, 'EUR', 909];
+        yield 'a half cent given as text' => ['1.005', 'EUR', 101];
+        yield 'a round amount' => [10.00, 'EUR', 1000];
+        yield 'a half unit of a currency without decimals' => [1000.5, 'JPY', 1001];
+        yield 'a unit of a currency without decimals' => [1000.0, 'JPY', 1000];
+        yield 'a half of the smallest unit of a three decimals currency' => [1.0005, 'KWD', 1001];
+        yield 'below the half cent' => [1.0049, 'EUR', 100];
+        yield 'a legacy total on four decimals, below the half' => [9.0849, 'EUR', 908];
+        yield 'a large total' => [123456.785, 'EUR', 12345679];
+    }
+
+    #[DataProvider('halfCents')]
+    public function testAHalfCentOfAComputedTotalRoundsUp(float|string $major, string $currency, int $expected): void
+    {
+        self::assertSame($expected, RefundAmount::fromMajor($major, $currency));
+    }
+
+    public function testAHalfCentOfAComputedTotalRoundsUpWhateverTheWayItIsRead(): void
+    {
         self::assertSame(101, RefundAmount::fromAmount(1.005, 'EUR'));
+        self::assertTrue(RefundAmount::fitsUnder('1.01', 1.005, 'EUR'));
+        self::assertFalse(RefundAmount::fitsUnder('1.02', 1.005, 'EUR'));
     }
 
     public function testAMajorAmountFromTheShopIsWrittenInMinorUnits(): void
