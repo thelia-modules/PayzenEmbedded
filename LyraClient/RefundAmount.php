@@ -61,7 +61,20 @@ final readonly class RefundAmount
      */
     public static function fromMajor(float|string $amount, string $currencyCode): int
     {
-        return (int) round((float) $amount * 10 ** self::decimals($currencyCode));
+        $decimals = self::decimals($currencyCode);
+        $value = (float) $amount;
+
+        // The decimal expansion of the float, cut at eight digits, then read digit by digit: the half
+        // goes up whatever the runtime. Multiplying the float and calling round() leaves the half cent
+        // 1.005 (binary 1.00499999999999989…) to the pre-rounding of round(), which PHP 8.4 dropped.
+        [$units, $fraction] = explode('.', sprintf('%.8F', abs($value)));
+        $minorUnits = (int) $units * 10 ** $decimals + (int) substr($fraction, 0, $decimals);
+
+        if ($fraction[$decimals] >= '5') {
+            ++$minorUnits;
+        }
+
+        return $value < 0 ? -$minorUnits : $minorUnits;
     }
 
     /**
