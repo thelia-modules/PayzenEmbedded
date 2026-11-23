@@ -10,17 +10,17 @@
 {% block pre_header %}{% endblock %}
 
 {# Subject #}
-{% block email_subject %}{{ 'The payment of your order is confirmed'|trans({}, 'email', locale) }}{% endblock %}
+{% block email_subject %}{{ 'The payment of your order is confirmed'|trans({}, 'payzenembedded.email.default', locale) }}{% endblock %}
 
 {# Title #}
-{% block email_title %}{{ 'The payment of your order is confirmed'|trans({}, 'email', locale) }}{% endblock %}
+{% block email_title %}{{ 'The payment of your order is confirmed'|trans({}, 'payzenembedded.email.default', locale) }}{% endblock %}
 
 {# Content #}
 {% block email_content %}
-    <p>{{ 'Your invoice is now available <a href="%account_url%">in your customer account</a> on %store_name%'|trans({'%account_url%': thelia_url('/account'), '%store_name%': config('store_name')}, 'email', locale)|raw }}</p>
+    <p>{{ 'Your invoice is now available <a href="%account_url">in your customer account</a> on %store_name'|trans({'%account_url': thelia_url('/account')|e('html_attr'), '%store_name': config('store_name')|e}, 'payzenembedded.email.default', locale)|raw }}</p>
 
-    <p>{{ 'Thank you again for your purchase.'|trans({}, 'email', locale) }}</p>
+    <p>{{ 'Thank you again for your purchase.'|trans({}, 'payzenembedded.email.default', locale) }}</p>
 
-    <p>{{ 'The %store_name% team'|trans({'%store_name%': config('store_name')}, 'email', locale) }}</p>
+    <p>{{ 'The %store_name team'|trans({'%store_name': config('store_name')}, 'payzenembedded.email.default', locale) }}</p>
 {% endblock %}
 

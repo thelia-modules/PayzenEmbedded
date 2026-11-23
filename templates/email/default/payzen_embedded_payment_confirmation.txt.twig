@@ -1,0 +1,9 @@
+{{ 'Dear customer,'|trans({}, 'payzenembedded.email.default', locale) }}
+
+{{ 'This is a confirmation of the payment of your order %ref via PayZen on our shop.'|trans({'%ref': order_ref|default('')}, 'payzenembedded.email.default', locale) }}
+
+{{ 'Your invoice is now available in your customer account at %link'|trans({'%link': thelia_url('/account')}, 'payzenembedded.email.default', locale) }}
+
+{{ 'Thank you again for your purchase.'|trans({}, 'payzenembedded.email.default', locale) }}
+
+{{ 'The %store_name team'|trans({'%store_name': config('store_name')}, 'payzenembedded.email.default', locale) }}
