@@ -179,6 +179,8 @@ class BackHookManager extends BaseHook
         $ledger = (new TransactionHistoryReader())->ledgerOf($order);
         $currencyCode = strtoupper((string) $order->getCurrency()?->getCode());
         $canAct = $this->securityContext->isGranted(['ADMIN'], [AdminResources::MODULE, AdminResources::ORDER], ['PayzenEmbedded'], [AccessManager::UPDATE]);
+        // The screen offers what its route allows: giving money back needs the refund right of Thelia.
+        $canRefund = $canAct && $this->securityContext->isGranted(['ADMIN'], [AdminResources::ORDER_PAYMENT_REFUND], [], [AccessManager::CREATE]);
 
         $getForm = $this->formFactory->createForm(TransactionGetForm::getName());
         $updateForm = $this->formFactory->createForm(TransactionUpdateForm::getName());
@@ -201,6 +203,7 @@ class BackHookManager extends BaseHook
                 'can_give_back' => '' !== $reference && $ledger->maximumAmount() > 0,
                 'other_payments_left' => $ledger->otherPaymentsLeft > 0 ? RefundAmount::format($ledger->otherPaymentsLeft, $currencyCode) : null,
                 'can_act' => $canAct,
+                'can_refund' => $canRefund,
                 'currency_symbol' => $order->getCurrency()?->getSymbol() ?? '',
                 'get_form' => $getForm->createView()->getView(),
                 'update_form' => $updateForm->createView()->getView(),

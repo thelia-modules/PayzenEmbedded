@@ -13,6 +13,7 @@ namespace PayzenEmbedded\LyraClient;
 use Lyra\Exceptions\LyraException;
 use Propel\Runtime\ActiveQuery\Criteria;
 use Propel\Runtime\Propel;
+use PayzenEmbedded\Event\RefundReportedEvent;
 use PayzenEmbedded\Model\Map\PayzenEmbeddedTransactionHistoryTableMap;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistoryQuery;
 use PayzenEmbedded\PayzenEmbedded;
@@ -374,6 +375,12 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
 
             $this->updateTransactionHistory($answer, $order);
 
+            // Written to Thelia's journal before the order moves: a refund in full sets it refunded,
+            // and the core, which deduces a refund from that status when its journal holds none,
+            // would otherwise write a line of its own beside this one. A notification replayed
+            // reports again, which the journal answers with the line it already holds.
+            $this->reportRefund($order, $answer);
+
             $this->log->addInfo(
                 Translator::getInstance()->trans(
                     "Order %ref: refund transaction %uuid (%status) recorded.",
@@ -581,6 +588,21 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         }
 
         return $status;
+    }
+
+    /**
+     * Lets Thelia's payment journal learn a refund the platform made or refused, once the history
+     * holds it; see EventListener\RefundJournalListener. Any other transaction is none of its business.
+     *
+     * @param array<string, mixed> $answer the transaction as the platform describes it
+     */
+    protected function reportRefund(Order $order, array $answer): void
+    {
+        if (!TransactionOutcome::fromAnswer($answer)->isCredit()) {
+            return;
+        }
+
+        $this->dispatcher->dispatch(new RefundReportedEvent($order, $answer), PayzenEmbedded::REFUND_REPORTED_EVENT);
     }
 
     /**

@@ -1,3 +1,12 @@
+# 3.9.0
+
+## Refund from Thelia
+- Requires Thelia 3.5: the module implements `Thelia\Module\PaymentModuleWithRefundInterface`, which the releases before 3.5 do not have.
+- The refund route of the module's order sheet (`refund-transaction`) needs Thelia's refund right (`admin.order.payment-refund`) on top of the module and order rights, and answers 404 for an order of a sale unit the administrator is restricted away from, before that right is asked; the order page offers the refund form to the administrators who hold the right. The refund of that form is written to Thelia's payment journal as soon as PayZen answers.
+- The module implements `Thelia\Module\PaymentModuleWithRefundInterface`: Thelia's refund dialog gives money back through PayZen (`Transaction/CancelOrRefund`, as the module's own refund form does), with the reason and the merchant's comment written beside it in the PayZen back-office. The refund is filed in Thelia's payment journal under the uuid of the transaction PayZen made it with; one PayZen still processes is settled by its notification. A payment PayZen has not remitted yet can only be cancelled whole: the module says so (`PaymentModuleRefundingInFullInterface`), and Thelia's dialog offers the whole amount alone.
+- A refund made from the PayZen back-office, or refused there, is written to Thelia's payment journal by the notification, whatever the validation mode. The notification of a refund Thelia already wrote, or replayed, writes no second line, and a refund in full is written before the order is set refunded, so that Thelia does not deduce a line of its own from that status.
+- `LyraTransactionRefundWrapper::refundRecorded()` returns the outcome with that transaction; `refundTransaction()` is unchanged. `OrderStatusNotUpdatedException` carries the transaction too.
+
 # 3.8.1
 
 - An amount the shop computes is converted to the smallest unit of the currency without depending on the PHP version. On PHP 8.4, a total on a half cent (1.005, a unit price below a cent sold by weight) was read as 100 cents instead of 101, and the payment, the capture and the refund took one cent less. The conversion now reads the decimal expansion of the amount and rounds the half up, on PHP 8.3 and 8.4 alike.

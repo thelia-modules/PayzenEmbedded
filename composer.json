@@ -8,7 +8,7 @@
     "symfony/lock": "^7.4"
   },
   "conflict": {
-    "thelia/core": "<3.3.0"
+    "thelia/core": "<3.5.0"
   },
   "extra": {
     "installer-name": "PayzenEmbedded"

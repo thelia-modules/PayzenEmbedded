@@ -153,6 +153,20 @@ La commande passe au statut « remboursée » quand PayZen a confirmé chaque re
 transaction a été annulée, et reste inchangée après un remboursement partiel. Chaque remboursement apparaît dans
 l'historique des transactions, avec un montant négatif.
 
+### Remboursement depuis Thelia
+
+Le module exige Thelia 3.5 : il suit le contrat de remboursement de Thelia. Le dialogue de remboursement du bloc de
+paiement de la fiche commande de Thelia (droit « Remboursement du paiement d'une commande ») rend l'argent par PayZen,
+avec le même appel que le formulaire du module (`Transaction/CancelOrRefund`), le motif et le commentaire du marchand
+étant inscrits sur le remboursement dans le Back Office PayZen. Un paiement que PayZen n'a pas encore remis en banque
+est annulé en totalité : le dialogue de Thelia ne propose alors que le montant total.
+
+Le remboursement est noté dans le journal de paiement de Thelia sous la référence de la transaction de remboursement
+PayZen ; un remboursement que PayZen traite encore est soldé par sa notification. Un remboursement fait depuis le
+back-office PayZen, ou refusé par PayZen, y est noté par la notification, quel que soit le mode de validation. Le
+formulaire de remboursement du module, sur la même fiche, reste un chemin à part : il exige lui aussi le droit de
+remboursement de Thelia, n'est proposé qu'aux administrateurs qui l'ont, et informe le journal dès la réponse de PayZen.
+
 ### Évènement de remboursement
 
 Nom de l'évènement : `PayzenEmbedded::TRANSACTION_REFUND_EVENT`
@@ -395,6 +409,19 @@ lets PayZen choose the operation:
 The order moves to the refunded status once the platform confirmed every refund and nothing is left to refund, to the
 cancelled status when the transaction was cancelled, and stays as it is after a partial or a pending refund. Each refund shows in the transaction history, with a negative
 amount.
+
+### Refund from Thelia
+
+The module requires Thelia 3.5: it follows Thelia's refund contract. The refund dialog of the payment card of Thelia's
+order page (right "Order payment refund") gives the money back through PayZen, with the same call as the module's form
+(`Transaction/CancelOrRefund`); the merchant's reason and comment are written on the refund in the PayZen back-office.
+A payment PayZen has not remitted yet is cancelled in full: Thelia's dialog then offers the whole amount alone.
+
+The refund is written to Thelia's payment journal under the reference of PayZen's refund transaction; a refund PayZen is
+still processing is settled by its notification. A refund made from the PayZen back-office, or refused by PayZen, is
+written there by the notification, whatever the validation mode. The module's own refund form, on the same page, stays
+a path of its own: it needs Thelia's refund right too, is only offered to the administrators who hold it, and informs the
+journal as soon as PayZen answers.
 
 ### Transaction refund event
 

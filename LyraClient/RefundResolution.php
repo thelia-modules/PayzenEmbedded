@@ -60,10 +60,12 @@ final readonly class RefundResolution
         if ($transaction->isCredit()) {
             // A credit the platform refused gives nothing back; one still running is on its way.
             if (TransactionOutcome::STATUS_UNPAID === $transaction->status) {
-                throw new TheliaProcessException($translate('The refund was refused: %message (code %code)', [
-                    '%code' => (string) ($answer['errorCode'] ?? $answer['detailedStatus'] ?? $transaction->status),
+                $code = (string) ($answer['errorCode'] ?? $answer['detailedStatus'] ?? $transaction->status);
+
+                throw new PlatformRefusalException($translate('The refund was refused: %message (code %code)', [
+                    '%code' => $code,
                     '%message' => (string) ($answer['errorMessage'] ?? $answer['detailedErrorMessage'] ?? ''),
-                ]));
+                ]), $code);
             }
 
             // Any other state is not one the module knows how to count: the money may have moved.

@@ -15,10 +15,12 @@ namespace PayzenEmbedded;
 use PayzenEmbedded\Command\CancelLegacyTokensCommand;
 use PayzenEmbedded\LyraClient\IncompleteSaleUnitContractException;
 use PayzenEmbedded\LyraClient\PaymentContract;
+use PayzenEmbedded\LyraClient\TransactionHistoryReader;
 use PayzenEmbedded\Service\CardFormProvider;
 use PayzenEmbedded\LyraClient\LyraTokenGateway;
 use PayzenEmbedded\Service\SaleUnitContractSettings;
 use PayzenEmbedded\Service\LegacyTokenCanceller;
+use PayzenEmbedded\Service\RefundFromThelia;
 use PayzenEmbedded\Service\StoredMethodContract;
 use PayzenEmbedded\Service\StoredMethodRevoker;
 use Propel\Runtime\Connection\ConnectionInterface;
@@ -30,6 +32,8 @@ use Symfony\Component\HttpFoundation\Response;
 use Thelia\Core\Template\Parser\ParserResolver;
 use Thelia\Domain\SaleUnit\Config\SaleUnitConfigScope;
 use Thelia\Core\Translation\Translator;
+use Thelia\Domain\Payment\DTO\PaymentOperationResult;
+use Thelia\Domain\Payment\Enum\RefundReason;
 use Thelia\Domain\Payment\Exception\StoredMethodRefusedException;
 use Thelia\Log\Tlog;
 use Thelia\Core\Install\Database;
@@ -41,18 +45,21 @@ use Thelia\Model\Message;
 use Thelia\Model\MessageQuery;
 use Thelia\Model\ModuleImageQuery;
 use Thelia\Model\Order;
+use Thelia\Model\OrderPaymentTransaction;
 use Thelia\Module\AbstractPaymentModule;
 use Thelia\Module\BalanceChargingPaymentModuleInterface;
 use Thelia\Module\BaseModule;
 use Thelia\Module\DeferredStoredMethodForgettingPaymentModuleInterface;
+use Thelia\Module\PaymentModuleRefundingInFullInterface;
 use Thelia\Module\PaymentModuleWithStoredMethodsInterface;
 
 /**
  * Charges the balance of the order when instant means paid a part of it (BalanceChargingPaymentModuleInterface:
  * every amount sent to the platform is getAmountToCharge(), never the total of the order), and keeps the cards
- * PayZen registered among the payment methods of the shop.
+ * PayZen registered among the payment methods of the shop. It gives money back through the refund contract of
+ * Thelia (PaymentModuleRefundingInFullInterface), on the same call as its own refund form.
  */
-class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPaymentModuleInterface, PaymentModuleWithStoredMethodsInterface, DeferredStoredMethodForgettingPaymentModuleInterface
+class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPaymentModuleInterface, PaymentModuleWithStoredMethodsInterface, DeferredStoredMethodForgettingPaymentModuleInterface, PaymentModuleRefundingInFullInterface
 {
     /** @var string */
     const DOMAIN_NAME = 'payzenembedded';
@@ -65,6 +72,9 @@ class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPay
 
     /** The transaction refund event identifier, see Event\TransactionRefundEvent */
     const TRANSACTION_REFUND_EVENT = "payzenembedded.transaction_refund_event";
+
+    /** The refund reported event identifier, see Event\RefundReportedEvent */
+    const REFUND_REPORTED_EVENT = "payzenembedded.refund_reported_event";
 
     /** Payment form types, see the form_type configuration variable */
     const FORM_TYPE_CARD = 'CARD';
@@ -233,6 +243,23 @@ class PayzenEmbedded extends AbstractPaymentModule implements BalanceChargingPay
 
             throw new StoredMethodRefusedException('error');
         }
+    }
+
+    /** A payment PayZen has not remitted yet is cancelled whole, never refunded in part. */
+    public function refundsOnlyInFull(Order $order): bool
+    {
+        return (new TransactionHistoryReader())->ledgerOf($order)->isCancellable();
+    }
+
+    /** PayZen gives money back on any payment it took, in full or in part. */
+    public function supportsRefund(): bool
+    {
+        return true;
+    }
+
+    public function refund(Order $order, float $amount, OrderPaymentTransaction $transaction, RefundReason $reason, ?string $comment): PaymentOperationResult
+    {
+        return $this->getContainer()->get(RefundFromThelia::class)->refund($order, $amount, $reason, $comment);
     }
 
     private function payOnContractOf(Order $order, ?CustomerPaymentMethod $storedMethod): ?Response

@@ -33,7 +33,9 @@ use PayzenEmbedded\LyraClient\LyraClientWrapper;
 use PayzenEmbedded\LyraClient\LyraTransactionGetWrapper;
 use PayzenEmbedded\PayzenEmbedded;
 use PayzenEmbedded\Service\OrderEditMessages;
+use PayzenEmbedded\Service\RefundOrderReach;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Thelia\Controller\Admin\BaseAdminController;
 use Thelia\Core\Security\AccessManager;
 use Thelia\Core\Security\Resource\AdminResources;
@@ -138,10 +140,20 @@ class OrderEditController extends BaseAdminController
     }
 
     #[Route('/refund-transaction/{orderId}', name: 'refund_transaction', requirements: ['orderId' => '\d+'], methods: 'POST')]
-    public function refundTransaction(EventDispatcherInterface $dispatcher, Translator $translator, int $orderId)
+    public function refundTransaction(EventDispatcherInterface $dispatcher, Translator $translator, RefundOrderReach $orderReach, int $orderId)
     {
         // Giving money back is an operation on the order, not only on the module.
         if (null !== $response = $this->checkAuth([AdminResources::MODULE, AdminResources::ORDER], 'PayzenEmbedded', AccessManager::UPDATE)) {
+            return $response;
+        }
+
+        // An order out of the administrator's sale units answers 404 before any right of its own.
+        if (!$orderReach->reaches($orderId)) {
+            throw new NotFoundHttpException();
+        }
+
+        // Giving money back is a right of its own in the core, distinct from editing orders.
+        if (null !== $response = $this->checkAuth(AdminResources::ORDER_PAYMENT_REFUND, [], AccessManager::CREATE)) {
             return $response;
         }
 
