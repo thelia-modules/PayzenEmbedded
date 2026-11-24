@@ -179,6 +179,18 @@ class BackHookManager extends BaseHook
         $ledger = (new TransactionHistoryReader())->ledgerOf($order);
         $currencyCode = strtoupper((string) $order->getCurrency()?->getCode());
         $canAct = $this->securityContext->isGranted(['ADMIN'], [AdminResources::MODULE, AdminResources::ORDER], ['PayzenEmbedded'], [AccessManager::UPDATE]);
+        // The mode the order was paid in, as the update route reads it.
+        $authorizesFirst = PayzenEmbedded::authorizesFirstFor($order);
+        // The screen offers what its routes allow: moving what the order takes needs the capture
+        // right of Thelia, moving only the capture date of an authorization does not; cancelling
+        // an authorization needs it too.
+        $mayCapture = $this->securityContext->isGranted(['ADMIN'], [AdminResources::ORDER_PAYMENT_CAPTURE], [], [AccessManager::CREATE]);
+        // Authorizing first, the form only moves the capture date, which a capture asked already set.
+        $canUpdate = $canAct && ($authorizesFirst ? !PayzenEmbedded::journalHoldsACapture($order) : $mayCapture);
+        // As PayzenEmbedded::givingBackReleasesTheAuthorization(), on the ledger read above.
+        // Cancelling also needs no capture asked meanwhile, which the cancellation would take with it.
+        $cancels = $authorizesFirst && $ledger->isCancellable();
+        $canRefund = $canAct && (!$cancels || ($mayCapture && !PayzenEmbedded::journalHoldsACapture($order)));
 
         $getForm = $this->formFactory->createForm(TransactionGetForm::getName());
         $updateForm = $this->formFactory->createForm(TransactionUpdateForm::getName());
@@ -201,6 +213,12 @@ class BackHookManager extends BaseHook
                 'can_give_back' => '' !== $reference && $ledger->maximumAmount() > 0,
                 'other_payments_left' => $ledger->otherPaymentsLeft > 0 ? RefundAmount::format($ledger->otherPaymentsLeft, $currencyCode) : null,
                 'can_act' => $canAct,
+                'can_update' => $canUpdate,
+                'can_refund' => $canRefund,
+                // Authorizing first, the capture is Thelia's: the form only moves its date.
+                'authorizes_first' => $authorizesFirst,
+                // Taken at once, the amount is the journal's once it holds the capture.
+                'amount_locked' => !$authorizesFirst && PayzenEmbedded::journalHoldsTheCapture($order),
                 'currency_symbol' => $order->getCurrency()?->getSymbol() ?? '',
                 'get_form' => $getForm->createView()->getView(),
                 'update_form' => $updateForm->createView()->getView(),

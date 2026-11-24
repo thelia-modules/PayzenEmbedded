@@ -318,10 +318,12 @@ class FrontController extends BasePaymentModuleController
             throw new AccessDeniedHttpException('This order is not one of the customer.');
         }
 
-        if (PayzenEmbedded::getModuleId() !== (int) $order->getPaymentModuleId() || !$order->isNotPaid()) {
+        // An authorized order still stands for "not paid", but its payment went through: the
+        // link that stays in the browser history leaves it as it is.
+        if (PayzenEmbedded::getModuleId() !== (int) $order->getPaymentModuleId() || !$order->isNotPaid() || $order->isPaymentSecured()) {
             $this->getLog()->addInfo(sprintf('Order %s is not a PayZen order waiting for its payment, its status is kept.', $order->getRef()));
 
-            if ($order->isPaid(false)) {
+            if ($order->isPaymentSecured()) {
                 $this->redirectToSuccessPage($orderId);
             }
 

@@ -156,6 +156,17 @@ final readonly class TransactionOutcome
         return self::STATUS_PAID === $this->status;
     }
 
+    /** Whether the transaction waits for its validation: created with manual validation. */
+    public function waitsForValidation(): bool
+    {
+        return \in_array($this->detailedStatus, ['AUTHORISED_TO_VALIDATE', 'WAITING_AUTHORISATION_TO_VALIDATE'], true);
+    }
+
+    public function isUnpaid(): bool
+    {
+        return self::STATUS_UNPAID === $this->status;
+    }
+
     public function isRunning(): bool
     {
         return self::STATUS_RUNNING === $this->status;
@@ -174,5 +185,29 @@ final readonly class TransactionOutcome
     public function isCaptured(): bool
     {
         return $this->isPaid() && !\in_array($this->detailedStatus, self::NOT_CAPTURED, true);
+    }
+
+    /**
+     * Whether the bank granted the authorization and has not captured it yet: waiting for the
+     * shop's validation, or validated and waiting for the remittance. A payment still waiting for
+     * its authorization has none.
+     */
+    public function isAuthorized(): bool
+    {
+        return !$this->isCredit()
+            && \in_array($this->status, [self::STATUS_RUNNING, self::STATUS_PAID], true)
+            && \in_array($this->detailedStatus, ['AUTHORISED', 'AUTHORISED_TO_VALIDATE'], true);
+    }
+
+    /** Whether the authorization was cancelled before its capture, by the shop or the platform. */
+    public function isCancelled(): bool
+    {
+        return self::STATUS_UNPAID === $this->status && 'CANCELLED' === $this->detailedStatus;
+    }
+
+    /** Whether the authorization lapsed before it was captured. */
+    public function isExpired(): bool
+    {
+        return self::STATUS_UNPAID === $this->status && 'EXPIRED' === $this->detailedStatus;
     }
 }

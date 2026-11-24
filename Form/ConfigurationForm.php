@@ -296,7 +296,7 @@ class ConfigurationForm extends BaseForm
                     'data' => PayzenEmbedded::getConfigValue('validation_mode', ''),
                     'label_attr' => array(
                         'help' => $this->trans(
-                            'If manual is selected, you will have to confirm payments manually in your bank back-office'
+                            'If manual is selected, payments are only authorized: capture them from the payment card of the order page, or with the admin API'
                         )
                     )
                 )

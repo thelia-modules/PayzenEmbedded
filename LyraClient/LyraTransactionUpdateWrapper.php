@@ -65,6 +65,15 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
     }
 
     /**
+     * What the platform holds for the debit the order stands on, in the smallest unit: null when
+     * the history does not know it.
+     */
+    public function heldAmountOf(Order $order): ?int
+    {
+        return (new TransactionHistoryReader())->heldAmountOf($order);
+    }
+
+    /**
      * Build the Transaction/Update parameters, and call te service.
      *
      * @param Order $order the order to process
@@ -105,7 +114,7 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
         // authorisation taken before 3.4.0 truncated a legacy total to the cent below, where the
         // total is now rounded, and a capture one cent above the authorisation would be refused.
         if (null !== $minorAmount && !\is_string($amount)) {
-            $capped = RefundAmount::cappedTo($minorAmount, (new TransactionHistoryReader())->heldAmountOf($order));
+            $capped = RefundAmount::cappedTo($minorAmount, $this->heldAmountOf($order));
 
             // The cent of the older rounding is expected; more is money the shop will not take, said out loud.
             if ($minorAmount - $capped > 1) {
@@ -160,8 +169,19 @@ class LyraTransactionUpdateWrapper extends LyraPaymentManagementWrapper
                 // the shop's own call is then recorded as the platform's word, as its listing is,
                 // where the arbiter left the transaction alone (an amount lowered on a payment
                 // waiting for its capture).
-                $paymentStatus = $this->processOrderStatus($order, $response['answer']);
-                $this->updateTransactionHistory($response['answer'], $order);
+                // A cancelled or lapsed transaction reaches Thelia's journal before the order is cancelled,
+                // as for a notification.
+                // The history after the order, as below: written first, it would show the transaction
+                // applied, and the order would not be moved.
+                if (TransactionOutcome::fromAnswer($response['answer'])->isUnpaid()) {
+                    $this->reportTransaction($order, $response['answer']);
+                    $paymentStatus = $this->processOrderStatus($order, $response['answer']);
+                    $this->updateTransactionHistory($response['answer'], $order);
+                } else {
+                    $paymentStatus = $this->processOrderStatus($order, $response['answer']);
+                    $this->updateTransactionHistory($response['answer'], $order);
+                    $this->reportTransaction($order, $response['answer']);
+                }
 
                 $this->log->info(Translator::getInstance()->trans("PayZen response for order %ref processing teminated.", ['%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
             }

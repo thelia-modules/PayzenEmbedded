@@ -13,6 +13,7 @@ namespace PayzenEmbedded\LyraClient;
 use Lyra\Exceptions\LyraException;
 use Propel\Runtime\ActiveQuery\Criteria;
 use Propel\Runtime\Propel;
+use PayzenEmbedded\Event\TransactionReportedEvent;
 use PayzenEmbedded\Model\Map\PayzenEmbeddedTransactionHistoryTableMap;
 use PayzenEmbedded\Model\PayzenEmbeddedTransactionHistoryQuery;
 use PayzenEmbedded\PayzenEmbedded;
@@ -315,7 +316,17 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
                         continue;
                     }
 
-                    $lastStatus = $this->processOrderStatus($order, $answer, true);
+                    // A cancelled or lapsed transaction reaches Thelia's journal before the order is
+                    // cancelled: the cancellation would otherwise find the authorization still held
+                    // and ask the platform to release it again. Any other moves the order first, as
+                    // the capture after picking expects.
+                    if ($incoming->isUnpaid()) {
+                        $this->reportTransaction($order, $answer);
+                        $lastStatus = $this->processOrderStatus($order, $answer, true);
+                    } else {
+                        $lastStatus = $this->processOrderStatus($order, $answer, true);
+                        $this->reportTransaction($order, $answer);
+                    }
                 }
 
                 $governing = $this->governingTransaction($order);
@@ -440,7 +451,7 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         $versionAfterRef = $versionBefore;
 
         try {
-            $status = $this->applyTransaction($order, $orderStatus, $transactionUuid, $versionAfterRef);
+            $status = $this->applyTransaction($order, $incoming, $orderStatus, $transactionUuid, $versionAfterRef);
         } catch (\Throwable $failure) {
             $storedState = $failure instanceof OrderStatusTransitionRefusedException
                 && \in_array($orderStatus, [TransactionOutcome::STATUS_PAID, TransactionOutcome::STATUS_RUNNING], true)
@@ -530,9 +541,13 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
      *
      * @return int one of the PAYMENT_STATUS_* constants
      */
-    private function applyTransaction(Order $order, mixed $orderStatus, mixed $transactionUuid, int &$versionAfterRef): int
+    private function applyTransaction(Order $order, TransactionOutcome $incoming, mixed $orderStatus, mixed $transactionUuid, int &$versionAfterRef): int
     {
         $status = self::PAYMENT_STATUS_NOT_PAID;
+        // Authorizing first, an authorization not captured yet leaves the order to Thelia's payment
+        // journal, which holds it for its capture; see OrderMove. Read on the order and the
+        // transaction, not on the configuration, which may have changed since the payment.
+        $move = OrderMove::for($incoming, PayzenEmbedded::authorizesFirstFor($order, $incoming));
 
         // Store the transaction ID
         $event = new OrderEvent($order);
@@ -553,12 +568,14 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
 
             // Payment OK ! Unless every cent of it was already given back: a refund notified or
             // listed before its payment settles the order as soon as the order stands on that payment.
-            $this->setOrderStatus(
-                $order,
-                (new TransactionHistoryReader())->ledgerOf($order)->isFullyRefunded()
-                    ? OrderStatusQuery::getRefundedStatus()
-                    : OrderStatusQuery::getPaidStatus()
-            );
+            if (OrderMove::Paid === $move) {
+                $this->setOrderStatus(
+                    $order,
+                    (new TransactionHistoryReader())->ledgerOf($order)->isFullyRefunded()
+                        ? OrderStatusQuery::getRefundedStatus()
+                        : OrderStatusQuery::getPaidStatus()
+                );
+            }
 
             $status = self::PAYMENT_STATUS_PAID;
         } else if ($orderStatus === 'UNPAID') {
@@ -569,8 +586,10 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         } else if ($orderStatus === 'RUNNING') {
             $this->log->addInfo(Translator::getInstance()->trans("Order %ref payment is in progress (%status).", ['%status' => $orderStatus, '%ref' => $order->getRef()], PayzenEmbedded::DOMAIN_NAME));
 
-            // Consider order as paid.
-            $this->setOrderStatus($order, OrderStatusQuery::getPaidStatus());
+            // Consider order as paid, unless it waits for its capture.
+            if (OrderMove::Paid === $move) {
+                $this->setOrderStatus($order, OrderStatusQuery::getPaidStatus());
+            }
 
             $status = self::PAYMENT_STATUS_IN_PROGRESS;
         } else {
@@ -581,6 +600,37 @@ class LyraPaymentManagementWrapper extends LyraClientWrapper
         }
 
         return $status;
+    }
+
+    /**
+     * Runs $work with the lock of the order held, waited for, and the order read again under it.
+     *
+     * @template T
+     *
+     * @param callable(): T $work
+     *
+     * @return T
+     */
+    public function withOrderLock(Order $order, callable $work): mixed
+    {
+        $lock = $this->acquireOrderLock($order, true);
+
+        try {
+            $order->reload();
+
+            return $work();
+        } finally {
+            $this->releaseOrderLock($lock, $order);
+        }
+    }
+
+    /**
+     * Lets Thelia's payment journal learn what the platform reported, once the history holds it and
+     * the order moved on it; see EventListener\PaymentJournalListener.
+     */
+    protected function reportTransaction(Order $order, array $answer): void
+    {
+        $this->dispatcher->dispatch(new TransactionReportedEvent($order, $answer), PayzenEmbedded::TRANSACTION_REPORTED_EVENT);
     }
 
     /**
